@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
-from local_server import routes_projects, routes_process_files, routes_study_bubble
+from local_server import routes_projects, routes_process_files, routes_study_bubble, routes_user
 from cerebrum_core.file_manager_inator import CerebrumPaths, FileRegisterInator
 
 @asynccontextmanager
@@ -14,9 +14,10 @@ async def lifespan(app: FastAPI):
     registry = FileRegisterInator()
     app.state.registry = registry
 
+    app.include_router(routes_process_files.router)
     app.include_router(routes_projects.project_router)
     app.include_router(routes_study_bubble.bubble_router)
-    app.include_router(routes_process_files.router)
+    app.include_router(routes_user.configs_router)
     yield
 
 

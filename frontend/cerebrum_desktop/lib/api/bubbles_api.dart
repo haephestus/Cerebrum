@@ -57,39 +57,68 @@ class BubblesApi {
 class BubbleNotesApi {
   static const baseUrl = "http://localhost:8000";
 
-  static String notesEndpoint(String bubbleId) {
-    return "$baseUrl/bubbles/$bubbleId";
+  static String notesEndpoint(String bubbleId) => "$baseUrl/bubbles/$bubbleId";
+
+  // List all notes
+  static Future<List<Map<String, dynamic>>> fetchNotes(String bubbleId) async {
+    final response = await http.get(
+      Uri.parse("${notesEndpoint(bubbleId)}/notes"),
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> body = jsonDecode(response.body);
+      return body.map((e) => e as Map<String, dynamic>).map((note) {
+        // Convert bubble_id to bubbleId for consistency
+        if (note.containsKey('bubble_id')) {
+          note['bubbleId'] = note['bubble_id'];
+          note.remove('bubble_id');
+        } else {
+          note['bubbleId'] = bubbleId;
+        }
+        return note;
+      }).toList();
+    }
+
+    throw Exception("Failed to fetch notes: ${response.statusCode}");
   }
 
-  // List notes
-  static Future<List<dynamic>> fetchNotes(String bubbleId) async {
-    final endpoint = "${notesEndpoint(bubbleId)}/notes";
-    final response = await http.get(Uri.parse(endpoint));
-
-    if (response.statusCode == 200) return jsonDecode(response.body);
-    throw Exception("Failed to fetch notes");
-  }
-
-  // Get a note
+  // Get a single note
   static Future<Map<String, dynamic>> fetchNoteByFileName(
     String bubbleId,
     String filename,
   ) async {
-    final endpoint = "${notesEndpoint(bubbleId)}/notes/get/$filename";
+    final response = await http.get(
+      Uri.parse("${notesEndpoint(bubbleId)}/notes/get/$filename"),
+    );
 
-    final response = await http.get(Uri.parse(endpoint));
-    if (response.statusCode == 200) return jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      final note = jsonDecode(response.body) as Map<String, dynamic>;
+      // Convert bubble_id to bubbleId for consistency
+      if (note.containsKey('bubble_id')) {
+        note['bubbleId'] = note['bubble_id'];
+        note.remove('bubble_id');
+      } else {
+        note['bubbleId'] = bubbleId;
+      }
+      return note;
+    }
 
-    throw Exception("Note not found");
+    throw Exception("Note not found: ${response.statusCode}");
   }
 
   // Create note
   static Future<Map<String, dynamic>> createNote({
     required String bubbleId,
     required String title,
-    required String content,
+    required Map<String, dynamic> content, // must include "document"
+    List<Map<String, dynamic>>? ink,
   }) async {
-    final note = {"title": title, "content": content};
+    // Ensure content has document key
+    if (!content.containsKey('document')) {
+      content = {'document': content};
+    }
+
+    final note = {"title": title, "content": content, "ink": ink ?? []};
 
     final response = await http.post(
       Uri.parse("${notesEndpoint(bubbleId)}/create/notes"),
@@ -98,9 +127,18 @@ class BubbleNotesApi {
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body);
+      final result = jsonDecode(response.body) as Map<String, dynamic>;
+      // Convert bubble_id to bubbleId for consistency
+      if (result.containsKey('bubble_id')) {
+        result['bubbleId'] = result['bubble_id'];
+        result.remove('bubble_id');
+      } else {
+        result['bubbleId'] = bubbleId;
+      }
+      return result;
     }
-    throw Exception("Failed to create note");
+
+    throw Exception("Failed to create note: ${response.statusCode}");
   }
 
   // Update note
@@ -108,9 +146,15 @@ class BubbleNotesApi {
     required String bubbleId,
     required String filename,
     required String title,
-    required String content,
+    required Map<String, dynamic> content, // must include "document"
+    List<Map<String, dynamic>>? ink,
   }) async {
-    final note = {"title": title, "content": content};
+    // Ensure content has document key
+    if (!content.containsKey('document')) {
+      content = {'document': content};
+    }
+
+    final note = {"title": title, "content": content, "ink": ink ?? []};
 
     final response = await http.put(
       Uri.parse("${notesEndpoint(bubbleId)}/notes/update/$filename"),
@@ -118,8 +162,19 @@ class BubbleNotesApi {
       body: jsonEncode(note),
     );
 
-    if (response.statusCode == 200) return jsonDecode(response.body);
-    throw Exception("Failed to update note");
+    if (response.statusCode == 200) {
+      final result = jsonDecode(response.body) as Map<String, dynamic>;
+      // Convert bubble_id to bubbleId for consistency
+      if (result.containsKey('bubble_id')) {
+        result['bubbleId'] = result['bubble_id'];
+        result.remove('bubble_id');
+      } else {
+        result['bubbleId'] = bubbleId;
+      }
+      return result;
+    }
+
+    throw Exception("Failed to update note: ${response.statusCode}");
   }
 
   // Delete note
@@ -129,7 +184,7 @@ class BubbleNotesApi {
     );
 
     if (response.statusCode != 200) {
-      throw Exception("Failed to delete note");
+      throw Exception("Failed to delete note: ${response.statusCode}");
     }
   }
 }
@@ -186,4 +241,3 @@ class ProjectChatApi {
     }
   }
 }
-

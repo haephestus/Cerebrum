@@ -1,6 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel, Field
-from typing import Optional, List 
+from typing import Optional, List, Any, Dict
 
 class Subtopic(BaseModel):
     name: str
@@ -45,6 +45,7 @@ class KnowledgeBase(BaseModel):
         domain = Domain(name=domain_name, description=description) 
         self.domains.append(domain)
         return domain
+
 #############################################################################
 #                                                                           #
 #                        USER CONFIG MODELS                                 #
@@ -56,6 +57,19 @@ class User(BaseModel):
     password: str
     selected_chat_model: str = ""
     selected_embedding_model: str = ""
+
+class ModelConfig(BaseModel):
+    chat_model: Optional[str] = None
+    embedding_model: Optional[str] = None
+
+class OllamaConfig(BaseModel):
+    url: str = ""
+
+class UserConfig(BaseModel):
+    models: ModelConfig = Field(default_factory=ModelConfig)
+    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
+
+
 
 #############################################################################
 #                                                                           #
@@ -93,13 +107,18 @@ class Chunk(BaseModel):
 #############################################################################
 
 
+class NoteContent(BaseModel):
+    # This is exactly the "document" wrapper AppFlowy expects
+    document: Dict[str, Any]  # The full JSON of the document
+
 class NoteBase(BaseModel):
     title: str
-    content: str
+    content: NoteContent  # AppFlowy expects a "document" key here
+    ink: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
 class NoteOut(NoteBase):
     filename: str
-
+    bubble_id: str
 
 
 #############################################################################

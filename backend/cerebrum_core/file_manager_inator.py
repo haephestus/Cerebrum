@@ -9,11 +9,11 @@ class CerebrumPaths():
     def __init__(self, app_name: str = "cerebrum"):
         dirs = PlatformDirs(app_name)
         self.DATA_DIR = Path(dirs.user_data_dir)
-        self.CONFIG_DIR = Path(dirs.user_config_dir)
+        self.CONFIG_FILE = Path(dirs.user_config_dir)
 
     def init_cerebrum_dirs(self):
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        self.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        self.CONFIG_FILE.mkdir(parents=True, exist_ok=True)
 
         for sub in ["knowledgebase", "projects", "study_bubbles" , "logs"]:
             (self.DATA_DIR / sub).mkdir(exist_ok=True)
@@ -33,6 +33,9 @@ class CerebrumPaths():
     def get_logs_dir(self):
         LOGS_DIR = self.DATA_DIR / "logs" 
         return LOGS_DIR
+    
+    def get_config_dir(self):
+         return self.CONFIG_FILE
 
 # init so functions in this file can use it
 path = CerebrumPaths()

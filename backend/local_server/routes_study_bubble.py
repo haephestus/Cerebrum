@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 
 from cerebrum_core.retriever_inator import RetrieverInator
 from cerebrum_core.file_manager_inator import CerebrumPaths
-from cerebrum_core.model_inator import CreateStudyBubble, NoteOut, NoteBase, StudyBubble
+from cerebrum_core.model_inator import CreateStudyBubble, NoteOut, NoteBase, StudyBubble, NoteContent
 
 
 bubble_router = APIRouter(prefix="/bubbles", tags=["Study Bubble API"])
@@ -51,14 +51,12 @@ def get_notes_dir(bubble_id: str) -> Path:
     return notes_path
 
 
-def list_notes(notes_dir: Path) -> List[NoteOut]:
+def list_notes(notes_dir: Path):
     notes = []
-    for file in notes_dir.glob("*.md"):
-        content = file.read_text(encoding="utf-8")
-        title = content.splitlines()[0] if content else file.stem
-        notes.append(NoteOut(title=title, content=content, filename=file.name))
+    for file in notes_dir.glob("*.json"):
+        note_data = json.loads(file.read_text(encoding="utf-8"))
+        notes.append({**note_data, "filename": file.name})
     return notes
-
 
 # --------------------------- STUDY BUBBLE CRUD -------------------------- #
 
@@ -146,32 +144,68 @@ def delete_study_bubble(bubble_id: str):
 
 # ------------------------------- NOTES CRUD ------------------------------ #
 
-@bubble_router.get("/{bubble_id}/notes")
+def list_notes_in_dir(notes_dir: Path, bubble_id: str) -> List[NoteOut]:
+    notes = []
+    for file in notes_dir.glob("*.json"):
+        note_data = json.loads(file.read_text(encoding="utf-8"))
+        content_obj = NoteContent(**note_data["content"])
+        notes.append(
+            NoteOut(
+                title=note_data["title"],
+                content=content_obj,
+                ink=note_data.get("ink", []),
+                filename=file.name,
+                bubble_id=note_data.get("bubble_id", bubble_id)
+            )
+        )
+    return notes
+
+# List notes
+@bubble_router.get("/{bubble_id}/notes", response_model=List[NoteOut])
 def list_notes_in_bubble(bubble_id: str):
     notes_dir = get_notes_dir(bubble_id)
-    return list_notes(notes_dir)
+    return list_notes_in_dir(notes_dir, bubble_id)
 
-
+# Create a new note
 @bubble_router.post("/{bubble_id}/create/notes", response_model=NoteOut)
 def create_note(bubble_id: str, note: NoteBase):
     notes_dir = get_notes_dir(bubble_id)
 
+    # Auto-initialize empty content if missing
+    if not note.content or not note.content.document:
+        note.content = NoteContent(document={"type": "page", "children": []})
+
     safe_title = note.title.replace(" ", "_")
-    filename = f"{safe_title}.md"
+    filename = f"{safe_title}.json"
     file_path = notes_dir / filename
 
     # Avoid collisions
     counter = 1
     while file_path.exists():
-        filename = f"{safe_title}_{counter}.md"
+        filename = f"{safe_title}_{counter}.json"
         file_path = notes_dir / filename
         counter += 1
 
-    file_path.write_text(note.content, encoding="utf-8")
+    # Save note WITH bubble_id
+    file_path.write_text(
+        json.dumps({
+            "title": note.title,
+            "content": note.content.dict(),
+            "ink": note.ink or [],
+            "bubble_id": bubble_id  # ADD THIS LINE
+        }, indent=2),
+        encoding="utf-8"
+    )
 
-    return NoteOut(title=note.title, content=note.content, filename=filename)
+    return NoteOut(
+        title=note.title, 
+        content=note.content, 
+        ink=note.ink or [], 
+        filename=filename, 
+        bubble_id=bubble_id
+    )
 
-
+# Get a single note
 @bubble_router.get("/{bubble_id}/notes/get/{filename}", response_model=NoteOut)
 def get_note(bubble_id: str, filename: str):
     notes_dir = get_notes_dir(bubble_id)
@@ -180,12 +214,18 @@ def get_note(bubble_id: str, filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
-    content = file_path.read_text(encoding="utf-8")
-    title = content.splitlines()[0] if content else file_path.stem
+    note_data = json.loads(file_path.read_text(encoding="utf-8"))
+    content_obj = NoteContent(**note_data["content"])
 
-    return NoteOut(title=title, content=content, filename=filename)
+    return NoteOut(
+        title=note_data["title"],
+        content=content_obj,
+        ink=note_data.get("ink", []),
+        filename=filename,
+        bubble_id=note_data.get("bubble_id", bubble_id)  # Try to get from file, fallback to URL param
+    )
 
-
+# Update a note
 @bubble_router.put("/{bubble_id}/notes/update/{filename}", response_model=NoteOut)
 def update_note(bubble_id: str, filename: str, note: NoteBase):
     notes_dir = get_notes_dir(bubble_id)
@@ -194,11 +234,29 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
-    file_path.write_text(note.content, encoding="utf-8")
+    # Ensure content has document key
+    if not note.content or not note.content.document:
+        note.content = NoteContent(document={"type": "page", "children": []})
 
-    return NoteOut(title=note.title, content=note.content, filename=filename)
+    file_path.write_text(
+        json.dumps({
+            "title": note.title,
+            "content": note.content.dict(),
+            "ink": note.ink or [],
+            "bubble_id": bubble_id  # ADD THIS LINE
+        }, indent=2),
+        encoding="utf-8"
+    )
 
+    return NoteOut(
+        title=note.title, 
+        content=note.content, 
+        ink=note.ink or [], 
+        filename=filename, 
+        bubble_id=bubble_id
+    )
 
+# Delete a note
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
 def delete_note(bubble_id: str, filename: str):
     notes_dir = get_notes_dir(bubble_id)
@@ -208,7 +266,6 @@ def delete_note(bubble_id: str, filename: str):
         raise HTTPException(status_code=404, detail="Note not found")
 
     file_path.unlink()
-
     return {"detail": "Note deleted successfully"}
 
 

@@ -1,7 +1,8 @@
-import 'package:cerebrum_app/features/chat/chat.dart';
-import 'package:cerebrum_app/features/notes/note_page.dart';
 import 'package:flutter/material.dart';
 import '/features/home/home_page.dart';
+import 'package:cerebrum_app/ui/desktop/widgets/sidebar_button.dart';
+import 'package:cerebrum_app/ui/desktop/screens/study_bubble/d_study_bubble_page.dart';
+import 'package:cerebrum_app/ui/desktop/screens/study_bubble/d_study_bubble_home.dart';
 
 class DesktopUI extends StatefulWidget {
   const DesktopUI({super.key});
@@ -12,6 +13,7 @@ class DesktopUI extends StatefulWidget {
 
 class _DesktopUIState extends State<DesktopUI> {
   int selectedPage = 0;
+  Map<String, dynamic>? payload;
 
   void changePage(int page) {
     setState(() {
@@ -23,11 +25,20 @@ class _DesktopUIState extends State<DesktopUI> {
     if (selectedPage == 0) {
       return HomePage();
     } else if (selectedPage == 1) {
-      return Center(child: Text('Learn'));
+      return DStudyBubbleHome(
+        onOpenBubble: (bubble) {
+          setState(() {
+            selectedPage = 4;
+            payload = bubble;
+          });
+        },
+      );
     } else if (selectedPage == 2) {
-      return NotesPage();
+      return Text("data");
     } else if (selectedPage == 3) {
-      return ChatPage();
+      return Text("settings");
+    } else if (selectedPage == 4) {
+      return DStudyBubblePage(addMode: false, bubble: payload);
     }
 
     return Center(child: Text('Unknown Page'));
@@ -40,65 +51,45 @@ class _DesktopUIState extends State<DesktopUI> {
       home: Scaffold(
         backgroundColor: Colors.black,
         body: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.only(left: 2),
           child: Row(
             children: [
               // Left side: buttons
               Column(
-                mainAxisAlignment: MainAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  TextButton(
-                    style: ButtonStyle(
-                      foregroundColor: WidgetStateProperty.all<Color>(
-                        Colors.blue,
-                      ),
-                    ),
+                  SidebarButton(
+                    icon: Icons.home,
+                    label: 'Home',
+                    selected: selectedPage == 0,
                     onPressed: () => changePage(0),
-                    child: Text('Home'),
                   ),
-                  TextButton(
-                    style: ButtonStyle(
-                      foregroundColor: WidgetStateProperty.all<Color>(
-                        Colors.blue,
-                      ),
-                    ),
+                  SidebarButton(
+                    icon: Icons.bubble_chart,
+                    label: 'Study Bubble',
+                    selected: selectedPage == 1,
                     onPressed: () => changePage(1),
-                    child: Text('Study Bubble'),
                   ),
-                  TextButton(
-                    style: ButtonStyle(
-                      foregroundColor: WidgetStateProperty.all<Color>(
-                        Colors.blue,
-                      ),
-                    ),
+                  SidebarButton(
+                    icon: Icons.folder,
+                    label: 'Projects',
+                    selected: selectedPage == 2,
                     onPressed: () => changePage(2),
-                    child: Text("Projects"),
                   ),
-                  TextButton(
-                    style: ButtonStyle(
-                      foregroundColor: WidgetStateProperty.all<Color>(
-                        Colors.blue,
-                      ),
-                    ),
+                  SidebarButton(
+                    icon: Icons.settings,
+                    label: 'Settings',
+                    selected: selectedPage == 3,
                     onPressed: () => changePage(3),
-                    child: Text("Chat"),
                   ),
                 ],
               ),
-
               SizedBox(width: 12), // spacing between buttons and window
               // Right side: main window
               Expanded(
                 child: Container(
-                  height: MediaQuery.of(context).size.height * 1.2,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: _buildPage(),
-                  ),
+                  decoration: BoxDecoration(color: Colors.white),
+                  child: Container(child: _buildPage()),
                 ),
               ),
             ],
