@@ -58,7 +58,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         docJson = {
           "type": "page",
           "children": [
-            {"type": "paragraph", "data": {}},
+            {
+              "type": "paragraph",
+              "data": {
+                "delta": [
+                  {"insert": ""},
+                ],
+              },
+            },
           ],
         };
       }
@@ -66,7 +73,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       docJson = {
         "type": "page",
         "children": [
-          {"type": "paragraph", "data": {}},
+          {
+            "type": "paragraph",
+            "data": {
+              "delta": [
+                {"insert": ""},
+              ],
+            },
+          },
         ],
       };
     }

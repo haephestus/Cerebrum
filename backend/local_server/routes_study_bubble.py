@@ -58,6 +58,44 @@ def list_notes(notes_dir: Path):
         notes.append({**note_data, "filename": file.name})
     return notes
 
+
+def ensure_valid_document(document: dict) -> dict:
+    """
+    Ensure the document has valid AppFlowy structure with delta fields.
+    """
+    if not document:
+        return {
+            "type": "page",
+            "children": [{
+                "type": "paragraph",
+                "data": {
+                    "delta": [{"insert": ""}]
+                }
+            }]
+        }
+    
+    # Ensure children exist
+    if "children" not in document or not isinstance(document["children"], list):
+        document["children"] = [{
+            "type": "paragraph",
+            "data": {
+                "delta": [{"insert": ""}]
+            }
+        }]
+        return document
+    
+    # Validate each child has delta
+    for child in document["children"]:
+        if isinstance(child, dict):
+            if child.get("type") == "paragraph":
+                if "data" not in child:
+                    child["data"] = {}
+                if isinstance(child["data"], dict) and "delta" not in child["data"]:
+                    child["data"]["delta"] = [{"insert": ""}]
+    
+    return document
+
+
 # --------------------------- STUDY BUBBLE CRUD -------------------------- #
 
 @bubble_router.get("/", response_model=List[StudyBubble])
@@ -99,7 +137,7 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
 
     bubble_data = StudyBubble(
         id=bubble_id,
-        name = data.name,
+        name=data.name,
         description=data.description,
         domains=data.domains,
         user_goals=data.user_goals,
@@ -110,6 +148,7 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
     info_file.write_text(bubble_data.model_dump_json(indent=4), encoding="utf-8")
 
     return bubble_data
+
 
 @bubble_router.get("/{bubble_id}")
 def get_study_bubble(bubble_id: str) -> StudyBubble:
@@ -160,20 +199,33 @@ def list_notes_in_dir(notes_dir: Path, bubble_id: str) -> List[NoteOut]:
         )
     return notes
 
+
 # List notes
 @bubble_router.get("/{bubble_id}/notes", response_model=List[NoteOut])
 def list_notes_in_bubble(bubble_id: str):
     notes_dir = get_notes_dir(bubble_id)
     return list_notes_in_dir(notes_dir, bubble_id)
 
+
 # Create a new note
 @bubble_router.post("/{bubble_id}/create/notes", response_model=NoteOut)
 def create_note(bubble_id: str, note: NoteBase):
     notes_dir = get_notes_dir(bubble_id)
 
-    # Auto-initialize empty content if missing
+    # Ensure content is valid with delta fields
     if not note.content or not note.content.document:
-        note.content = NoteContent(document={"type": "page", "children": []})
+        note.content = NoteContent(document={
+            "type": "page",
+            "children": [{
+                "type": "paragraph",
+                "data": {
+                    "delta": [{"insert": ""}]
+                }
+            }]
+        })
+    else:
+        # Validate and fix existing document structure
+        note.content.document = ensure_valid_document(note.content.document)
 
     safe_title = note.title.replace(" ", "_")
     filename = f"{safe_title}.json"
@@ -186,24 +238,25 @@ def create_note(bubble_id: str, note: NoteBase):
         file_path = notes_dir / filename
         counter += 1
 
-    # Save note WITH bubble_id
+    # Save note with bubble_id
     file_path.write_text(
         json.dumps({
             "title": note.title,
             "content": note.content.dict(),
             "ink": note.ink or [],
-            "bubble_id": bubble_id  # ADD THIS LINE
+            "bubble_id": bubble_id
         }, indent=2),
         encoding="utf-8"
     )
 
     return NoteOut(
-        title=note.title, 
-        content=note.content, 
-        ink=note.ink or [], 
-        filename=filename, 
+        title=note.title,
+        content=note.content,
+        ink=note.ink or [],
+        filename=filename,
         bubble_id=bubble_id
     )
+
 
 # Get a single note
 @bubble_router.get("/{bubble_id}/notes/get/{filename}", response_model=NoteOut)
@@ -215,6 +268,13 @@ def get_note(bubble_id: str, filename: str):
         raise HTTPException(status_code=404, detail="Note not found")
 
     note_data = json.loads(file_path.read_text(encoding="utf-8"))
+    
+    # Ensure the document is valid before returning
+    if "content" in note_data and "document" in note_data["content"]:
+        note_data["content"]["document"] = ensure_valid_document(
+            note_data["content"]["document"]
+        )
+    
     content_obj = NoteContent(**note_data["content"])
 
     return NoteOut(
@@ -222,8 +282,9 @@ def get_note(bubble_id: str, filename: str):
         content=content_obj,
         ink=note_data.get("ink", []),
         filename=filename,
-        bubble_id=note_data.get("bubble_id", bubble_id)  # Try to get from file, fallback to URL param
+        bubble_id=note_data.get("bubble_id", bubble_id)
     )
+
 
 # Update a note
 @bubble_router.put("/{bubble_id}/notes/update/{filename}", response_model=NoteOut)
@@ -234,27 +295,39 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Ensure content has document key
+    # Ensure content is valid with delta fields
     if not note.content or not note.content.document:
-        note.content = NoteContent(document={"type": "page", "children": []})
+        note.content = NoteContent(document={
+            "type": "page",
+            "children": [{
+                "type": "paragraph",
+                "data": {
+                    "delta": [{"insert": ""}]
+                }
+            }]
+        })
+    else:
+        # Validate and fix existing document structure
+        note.content.document = ensure_valid_document(note.content.document)
 
     file_path.write_text(
         json.dumps({
             "title": note.title,
             "content": note.content.dict(),
             "ink": note.ink or [],
-            "bubble_id": bubble_id  # ADD THIS LINE
+            "bubble_id": bubble_id
         }, indent=2),
         encoding="utf-8"
     )
 
     return NoteOut(
-        title=note.title, 
-        content=note.content, 
-        ink=note.ink or [], 
-        filename=filename, 
+        title=note.title,
+        content=note.content,
+        ink=note.ink or [],
+        filename=filename,
         bubble_id=bubble_id
     )
+
 
 # Delete a note
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
@@ -304,4 +377,3 @@ async def chat_in_bubble(bubble_id: str, query: Query):
     response = processor.generate_inator(user_query=query.text)
 
     return {"reply": response}
-

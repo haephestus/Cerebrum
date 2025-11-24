@@ -39,6 +39,7 @@ dependencies:
       path: packages/appflowy-editor
   table_calendar: ^3.0.9
   cupertino_icons: ^1.0.8
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
