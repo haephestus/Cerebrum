@@ -1,17 +1,24 @@
 import json
-import shutil
 import logging
-from typing import List
-from pathlib import Path
+import shutil
 from datetime import datetime
+from pathlib import Path
+from typing import List
 
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
 
-from cerebrum_core.retriever_inator import RetrieverInator
 from cerebrum_core.file_manager_inator import CerebrumPaths
-from cerebrum_core.model_inator import CreateStudyBubble, NoteOut, NoteBase, StudyBubble, NoteContent
-
+from cerebrum_core.model_inator import (
+    CreateStudyBubble,
+    NoteBase,
+    NoteContent,
+    NoteOut,
+    StudyBubble,
+    UserConfig,
+)
+from cerebrum_core.retriever_inator import RetrieverInator
+from cerebrum_core.user_inator import ConfigManager
 
 bubble_router = APIRouter(prefix="/bubbles", tags=["Study Bubble API"])
 
@@ -34,6 +41,9 @@ VECTORSTORES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ------------------------------ UTILITIES ------------------------------ #
+def get_user_config():
+    return ConfigManager().load_config()
+
 
 def get_bubble_path(bubble_id: str) -> Path:
     path = STUDY_BUBBLES_DIR / bubble_id
@@ -66,24 +76,16 @@ def ensure_valid_document(document: dict) -> dict:
     if not document:
         return {
             "type": "page",
-            "children": [{
-                "type": "paragraph",
-                "data": {
-                    "delta": [{"insert": ""}]
-                }
-            }]
+            "children": [{"type": "paragraph", "data": {"delta": [{"insert": ""}]}}],
         }
-    
+
     # Ensure children exist
     if "children" not in document or not isinstance(document["children"], list):
-        document["children"] = [{
-            "type": "paragraph",
-            "data": {
-                "delta": [{"insert": ""}]
-            }
-        }]
+        document["children"] = [
+            {"type": "paragraph", "data": {"delta": [{"insert": ""}]}}
+        ]
         return document
-    
+
     # Validate each child has delta
     for child in document["children"]:
         if isinstance(child, dict):
@@ -92,11 +94,12 @@ def ensure_valid_document(document: dict) -> dict:
                     child["data"] = {}
                 if isinstance(child["data"], dict) and "delta" not in child["data"]:
                     child["data"]["delta"] = [{"insert": ""}]
-    
+
     return document
 
 
 # --------------------------- STUDY BUBBLE CRUD -------------------------- #
+
 
 @bubble_router.get("/", response_model=List[StudyBubble])
 def list_study_bubbles():
@@ -183,6 +186,7 @@ def delete_study_bubble(bubble_id: str):
 
 # ------------------------------- NOTES CRUD ------------------------------ #
 
+
 def list_notes_in_dir(notes_dir: Path, bubble_id: str) -> List[NoteOut]:
     notes = []
     for file in notes_dir.glob("*.json"):
@@ -194,7 +198,7 @@ def list_notes_in_dir(notes_dir: Path, bubble_id: str) -> List[NoteOut]:
                 content=content_obj,
                 ink=note_data.get("ink", []),
                 filename=file.name,
-                bubble_id=note_data.get("bubble_id", bubble_id)
+                bubble_id=note_data.get("bubble_id", bubble_id),
             )
         )
     return notes
@@ -214,15 +218,14 @@ def create_note(bubble_id: str, note: NoteBase):
 
     # Ensure content is valid with delta fields
     if not note.content or not note.content.document:
-        note.content = NoteContent(document={
-            "type": "page",
-            "children": [{
-                "type": "paragraph",
-                "data": {
-                    "delta": [{"insert": ""}]
-                }
-            }]
-        })
+        note.content = NoteContent(
+            document={
+                "type": "page",
+                "children": [
+                    {"type": "paragraph", "data": {"delta": [{"insert": ""}]}}
+                ],
+            }
+        )
     else:
         # Validate and fix existing document structure
         note.content.document = ensure_valid_document(note.content.document)
@@ -240,13 +243,16 @@ def create_note(bubble_id: str, note: NoteBase):
 
     # Save note with bubble_id
     file_path.write_text(
-        json.dumps({
-            "title": note.title,
-            "content": note.content.dict(),
-            "ink": note.ink or [],
-            "bubble_id": bubble_id
-        }, indent=2),
-        encoding="utf-8"
+        json.dumps(
+            {
+                "title": note.title,
+                "content": note.content.model_dump(),
+                "ink": note.ink or [],
+                "bubble_id": bubble_id,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
     )
 
     return NoteOut(
@@ -254,7 +260,7 @@ def create_note(bubble_id: str, note: NoteBase):
         content=note.content,
         ink=note.ink or [],
         filename=filename,
-        bubble_id=bubble_id
+        bubble_id=bubble_id,
     )
 
 
@@ -268,13 +274,13 @@ def get_note(bubble_id: str, filename: str):
         raise HTTPException(status_code=404, detail="Note not found")
 
     note_data = json.loads(file_path.read_text(encoding="utf-8"))
-    
+
     # Ensure the document is valid before returning
     if "content" in note_data and "document" in note_data["content"]:
         note_data["content"]["document"] = ensure_valid_document(
             note_data["content"]["document"]
         )
-    
+
     content_obj = NoteContent(**note_data["content"])
 
     return NoteOut(
@@ -282,7 +288,7 @@ def get_note(bubble_id: str, filename: str):
         content=content_obj,
         ink=note_data.get("ink", []),
         filename=filename,
-        bubble_id=note_data.get("bubble_id", bubble_id)
+        bubble_id=note_data.get("bubble_id", bubble_id),
     )
 
 
@@ -297,27 +303,29 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
 
     # Ensure content is valid with delta fields
     if not note.content or not note.content.document:
-        note.content = NoteContent(document={
-            "type": "page",
-            "children": [{
-                "type": "paragraph",
-                "data": {
-                    "delta": [{"insert": ""}]
-                }
-            }]
-        })
+        note.content = NoteContent(
+            document={
+                "type": "page",
+                "children": [
+                    {"type": "paragraph", "data": {"delta": [{"insert": ""}]}}
+                ],
+            }
+        )
     else:
         # Validate and fix existing document structure
         note.content.document = ensure_valid_document(note.content.document)
 
     file_path.write_text(
-        json.dumps({
-            "title": note.title,
-            "content": note.content.dict(),
-            "ink": note.ink or [],
-            "bubble_id": bubble_id
-        }, indent=2),
-        encoding="utf-8"
+        json.dumps(
+            {
+                "title": note.title,
+                "content": note.content.model_dump(),
+                "ink": note.ink or [],
+                "bubble_id": bubble_id,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
     )
 
     return NoteOut(
@@ -325,7 +333,7 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
         content=note.content,
         ink=note.ink or [],
         filename=filename,
-        bubble_id=bubble_id
+        bubble_id=bubble_id,
     )
 
 
@@ -344,27 +352,31 @@ def delete_note(bubble_id: str, filename: str):
 
 # ---------------------------- CHAT ENDPOINT ------------------------------ #
 
+
 class Query(BaseModel):
     text: str
 
 
+# TODO: index notes directly linked to the current bubbleid
 @bubble_router.post("/{bubble_id}/chat")
-async def chat_in_bubble(bubble_id: str, query: Query):
+async def chat_in_bubble(
+    bubble_id: str, query: Query, config: UserConfig = Depends(get_user_config)
+):
     """
     Chat inside a specific study bubble.
     """
     vectorstore_root = VECTORSTORES_DIR
+    chat_model = config.models.chat_model or "llama3.2:3b"
+    embedding_model = config.models.embedding_model or "mxbai-embed-large:latest"
 
     processor = RetrieverInator(
         vectorstores_root=str(vectorstore_root),
         embedding_model=embedding_model,
-        llm_model=llm_model,
+        llm_model=chat_model,
     )
 
     # TRANSLATE USER QUERY
-    translated_query = processor.translator_inator(
-        user_query=query.text
-    )
+    translated_query = processor.translator_inator(user_query=query.text)
     logger.info("Translated Query: %s", translated_query)
 
     # CONSTRUCT CONTEXT

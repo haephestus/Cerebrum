@@ -1,115 +1,162 @@
-#############################################################################
-#                                                                           #
-#                        USER CONFIG CLASSES                                #
-#                                                                           #
-#############################################################################
-
-import re
 import json
-import requests
+import re
 import subprocess
 
+import requests
+from bs4 import BeautifulSoup
+
 from cerebrum_core.file_manager_inator import CerebrumPaths
-from cerebrum_core.model_inator import ModelConfig, OllamaConfig, User, UserConfig
+from cerebrum_core.model_inator import ModelConfig, UserConfig
 
-#############################################################################
-#                           CONSTANTS & PATTERNS
-#############################################################################
-
+# ─────────────────────────────────────────────────────────────
+# Constants
+# ─────────────────────────────────────────────────────────────
 CEREBRUM_PATHS = CerebrumPaths()
-OLLAMA_LOCAL_URL = "http://127.0.0.1:11434"
+
+OLLAMA_URL = "http://127.0.0.1:11434"
+LIBRARY_URL = "https://ollama.com/library"
 
 CONFIG_DIR = CEREBRUM_PATHS.get_config_dir()
 CONFIG_FILE = CONFIG_DIR / "user_config.json"
 
-EMBEDDING_PATTERN = re.compile(r"(embed|embedding)", re.IGNORECASE)
+EMBED_PATTERN = re.compile(r"(embed|embedding)", re.IGNORECASE)
+
+DEFAULT_CHAT_MODEL = "llama3.1"
+DEFAULT_EMBED_MODEL = "mxbai-embed-large"
 
 
-#############################################################################
-#                           CONFIG WRITER / FETCHER
-#############################################################################
-
-class ConfigWriterInator:
+# ─────────────────────────────────────────────────────────────
+# Unified Config Manager
+# ─────────────────────────────────────────────────────────────
+class ConfigManager:
     """
     Handles:
-    - fetching Ollama models
-    - running ollama commands
-    - creating default config
+    - loading/saving user config
+    - generating default config
+    - detecting Ollama
+    - fetching installed & online models
+    - pulling models programmatically
     """
-    def __init__(self):
-        pass
 
-    def fetch_models(self):
-        chat_models = []
-        embedding_models = []
-
-        response = requests.get(f"{OLLAMA_LOCAL_URL}/api/tags")
-        response.raise_for_status()
-        models_dict = response.json()
-
-        for model in models_dict.get("models", []):
-            name = model.get("name", "")
-
-            if EMBEDDING_PATTERN.search(name):
-                embedding_models.append(name)
-            else:
-                chat_models.append(name)
-
-        return chat_models, embedding_models
-
-    def run_ollama(self, chat_model: str):
-        return subprocess.run(
-            ["ollama", "run", chat_model],
-            check=False
-        )
-
-    def generate_default_config(self):
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-        chat_models, embedding_models = self.fetch_models()
-
-        config = UserConfig(
-            models=ModelConfig(
-                chat_model=chat_models[0] if chat_models else None,
-                embedding_model=embedding_models[0] if embedding_models else None,
-            )
-        )
-
-        ConfigReaderInator().save_config(config)
-        return config
-
-
-#############################################################################
-#                           CONFIG READER / MANAGER
-#############################################################################
-
-class ConfigReaderInator:
-    """
-    Handles:
-    - loading config
-    - saving config
-    - updating config
-    """
-    def __init__(self):
-        pass
-
+    # ─────────────────────────────────────────────────────────
+    #  BASIC FILE OPERATIONS
+    # ─────────────────────────────────────────────────────────
     def load_config(self) -> UserConfig:
-
+        """Load config or generate defaults if missing."""
         if not CONFIG_FILE.exists():
-            print("[UserInator] Config file missing — generating defaults...")
-            return ConfigWriterInator().generate_default_config()
+            return self.generate_default_config()
 
-        with open(CONFIG_FILE, "r") as file:
-            data = json.load(file)
-
-        return UserConfig(**data)
+        with open(CONFIG_FILE, "r") as f:
+            return UserConfig(**json.load(f))
 
     def save_config(self, config: UserConfig):
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(config.model_dump(), f, indent=4)
 
-        with open(CONFIG_FILE, "w") as file:
-            json.dump(config.model_dump(), file, indent=4)
+    # ─────────────────────────────────────────────────────────
+    #  DEFAULT CONFIG
+    # ─────────────────────────────────────────────────────────
+    def generate_default_config(self):
+        chat, emb = self.get_installed_models()
 
+        # fallback if no models installed yet
+        chat = chat or [DEFAULT_CHAT_MODEL]
+        emb = emb or [DEFAULT_EMBED_MODEL]
+
+        config = UserConfig(
+            models=ModelConfig(
+                chat_model=chat[0],
+                embedding_model=emb[0],
+            )
+        )
+
+        self.save_config(config)
+        return config
+
+    # ─────────────────────────────────────────────────────────
+    #  OLLAMA SYSTEM CHECKS
+    # ─────────────────────────────────────────────────────────
+    def is_ollama_installed(self):
+        try:
+            subprocess.run(["ollama", "--version"], stdout=subprocess.PIPE, check=True)
+            return True
+        except FileNotFoundError:
+            return False
+
+    def is_ollama_running(self):
+        try:
+            r = requests.get(f"{OLLAMA_URL}/api/version", timeout=1)
+            return r.status_code == 200
+        except Exception:
+            return False
+
+    def get_ollama_status(self):
+        installed = self.is_ollama_installed()
+        running = self.is_ollama_running()
+
+        return {
+            "installed": installed,
+            "running": running,
+            "message": (
+                "Ollama is ready"
+                if installed and running
+                else "Ollama is not installed or not running"
+            ),
+            "install_url": "https://ollama.com/download",
+        }
+
+    # ─────────────────────────────────────────────────────────
+    #  MODEL OPERATIONS
+    # ─────────────────────────────────────────────────────────
+    def get_installed_models(self):
+        """Return installed models split into chat + embedding."""
+        try:
+            response = requests.get(f"{OLLAMA_URL}/api/tags")
+            response.raise_for_status()
+        except Exception:
+            return [], []  # if service unavailable
+
+        chat_models = []
+        emb_models = []
+
+        for m in response.json().get("models", []):
+            name = m.get("name", "")
+            (emb_models if EMBED_PATTERN.search(name) else chat_models).append(name)
+
+        return chat_models, emb_models
+
+    # TODO: EXPAND ON THIS, AND RETURN A MORE DETAILED LIST OF MODELS AND TAGS
+    def get_available_online_models(self):
+        """Fetch full model list available on Ollama.com"""
+        response = requests.get(LIBRARY_URL)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        models = set()
+        for _ in soup.find_all("_", href=True):
+            href = _["href"]
+            if href.startswith("/library"):
+                model = href.split("/library/")[-1]
+                models.add(model)
+
+        online_chat = []
+        online_embed = []
+
+        for m in models:
+            (online_embed if EMBED_PATTERN.search(m) else online_chat).append(m)
+
+        return {
+            "online_chat_models": online_chat,
+            "online_embedding_models": online_embed,
+        }
+
+    def download_model(self, model_name: str):
+        return subprocess.run(["ollama", "pull", model_name], check=False)
+
+    # ─────────────────────────────────────────────────────────
+    #  UPDATE USER SETTINGS
+    # ─────────────────────────────────────────────────────────
     def update_model_settings(self, chat=None, embedding=None):
         config = self.load_config()
 
@@ -121,4 +168,3 @@ class ConfigReaderInator:
 
         self.save_config(config)
         return config
-

@@ -4,8 +4,9 @@ import sqlite3
 from pathlib import Path
 from platformdirs import PlatformDirs
 
+
 # init dirs for server
-class CerebrumPaths():
+class CerebrumPaths:
     def __init__(self, app_name: str = "cerebrum"):
         dirs = PlatformDirs(app_name)
         self.DATA_DIR = Path(dirs.user_data_dir)
@@ -15,7 +16,7 @@ class CerebrumPaths():
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.CONFIG_FILE.mkdir(parents=True, exist_ok=True)
 
-        for sub in ["knowledgebase", "projects", "study_bubbles" , "logs"]:
+        for sub in ["knowledgebase", "projects", "study_bubbles", "logs"]:
             (self.DATA_DIR / sub).mkdir(exist_ok=True)
 
     def get_kb_dir(self):
@@ -25,28 +26,29 @@ class CerebrumPaths():
     def get_projects_dir(self):
         PROJECTS_DIR = self.DATA_DIR / "projects"
         return PROJECTS_DIR
-    
+
     def get_bubbles_dir(self):
         BUBBLE_DIR = self.DATA_DIR / "study_bubbles"
         return BUBBLE_DIR
 
     def get_logs_dir(self):
-        LOGS_DIR = self.DATA_DIR / "logs" 
+        LOGS_DIR = self.DATA_DIR / "logs"
         return LOGS_DIR
-    
+
     def get_config_dir(self):
-         return self.CONFIG_FILE
+        return self.CONFIG_FILE
+
 
 # init so functions in this file can use it
 path = CerebrumPaths()
 
 
-
 def file_walker_inator(root: Path, max_depth: int = 4):
     """
-        walk the through knowledgebase_dir, identify files at 
+    walk the through knowledgebase_dir, identify files at
 
     """
+
     def recurse_inator(path: Path, parts: list[str]):
         for file in path.glob("*"):
             if file.is_file():
@@ -66,7 +68,10 @@ def file_walker_inator(root: Path, max_depth: int = 4):
     yield from recurse_inator(root, [])
 
 
-UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+
 
 def knowledgebase_index_inator(root: Path):
     domains, subjects, topics, subtopics = set(), set(), set(), set()
@@ -83,10 +88,14 @@ def knowledgebase_index_inator(root: Path):
             continue
 
         available_files.append(info["filestem"])
-        if info["domain"]: domains.add(info["domain"])
-        if info["subject"]: subjects.add(info["subject"])
-        if info["topic"]: topics.add(info["topic"])
-        if info["subtopic"]: subtopics.add(info["subtopic"])
+        if info["domain"]:
+            domains.add(info["domain"])
+        if info["subject"]:
+            subjects.add(info["subject"])
+        if info["topic"]:
+            topics.add(info["topic"])
+        if info["subtopic"]:
+            subtopics.add(info["subtopic"])
 
     return {
         "domains": sorted(domains),
@@ -96,7 +105,7 @@ def knowledgebase_index_inator(root: Path):
     }, available_files
 
 
-class FileRegisterInator():
+class FileRegisterInator:
     def __init__(self, db_path: str = "registry/registry.db"):
         self.DB_PATH = path.get_kb_dir() / db_path
         self.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -119,63 +128,74 @@ class FileRegisterInator():
         )
         """)
 
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_original_name ON registry(original_name)")
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_hash ON registry(hash_id)")
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_original_name ON registry(original_name)"
+        )
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_hash ON registry(hash_id)"
+        )
 
         conn.commit()
         conn.close()
-
 
     def hash_inator(self, filename: str):
         """Generate a determinstic hash_id from filename"""
         return hashlib.sha256(filename.encode("utf-8")).hexdigest()
 
-    def register_inator(self, original_name:str, sanitized_name:str):
-
+    def register_inator(self, original_name: str, sanitized_name: str):
         hash_id = self.hash_inator(sanitized_name)
         conn = sqlite3.connect(self.DB_PATH)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
         INSERT INTO registry (original_name, sanitized_name, hash_id)
         VALUES (?,?, ?)
         ON CONFLICT(hash_id) DO UPDATE SET
             last_updated = CURRENT_TIMESTAMP
-        """, (original_name, sanitized_name, hash_id))
+        """,
+            (original_name, sanitized_name, hash_id),
+        )
 
         conn.commit()
         conn.close()
 
         return hash_id
 
-    def updater_inator(self, status: str , hash_id: str):
+    def updater_inator(self, status: str, hash_id: str):
         conn = sqlite3.connect(self.DB_PATH)
         cursor = conn.cursor()
 
         if status in ("converted", "embedded"):
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
             UPDATE registry
             SET {status} = 1,
                 last_updated = CURRENT_TIMESTAMP
             WHERE hash_id = ?
-            """, (hash_id,))
+            """,
+                (hash_id,),
+            )
 
-            print(f"[DEBUG] Updated {status} for hash_id={hash_id} → {cursor.rowcount} rows affected")
+            print(
+                f"[DEBUG] Updated {status} for hash_id={hash_id} → {cursor.rowcount} rows affected"
+            )
 
         conn.commit()
         conn.close()
 
     def check_inator(self, hash_id: str, field: str = "") -> bool:
-
         """
-            Check if a file exists or if a flag is set.
+        Check if a file exists or if a flag is set.
         """
 
         conn = sqlite3.connect(self.DB_PATH)
         cursor = conn.cursor()
 
         if field:
-            cursor.execute(f"SELECT {field} FROM registry WHERE hash_id = ?",(hash_id,))
+            cursor.execute(
+                f"SELECT {field} FROM registry WHERE hash_id = ?", (hash_id,)
+            )
         else:
             cursor.execute("SELECT 1 FROM registry WHERE hash_id = ?", (hash_id,))
 
@@ -191,13 +211,20 @@ class FileRegisterInator():
         rows = cursor.fetchall()
         conn.close()
 
-        columns = ["ids", "original_name", "sanitized_name","hash_id", "converted", "embedded"]
-        data = [dict(zip(columns,row)) for row in rows]
+        columns = [
+            "ids",
+            "original_name",
+            "sanitized_name",
+            "hash_id",
+            "converted",
+            "embedded",
+        ]
+        data = [dict(zip(columns, row)) for row in rows]
         return data
 
     def reset_inator(self, status, hash_id=None):
         VALID_COLUMNS = {"embedded", "converted"}
-        
+
         if status not in VALID_COLUMNS:
             raise ValueError("Invalid status field")
 
@@ -205,11 +232,14 @@ class FileRegisterInator():
         cursor = conn.cursor()
         try:
             if hash_id:
-                cursor.execute(f"""
+                cursor.execute(
+                    f"""
                 UPDATE registry
                 SET {status} = 0
                 WHERE hash_id = ?
-                """,(hash_id))
+                """,
+                    (hash_id),
+                )
             else:
                 cursor.execute(f"UPDATE registry SET {status} = 0")
             conn.commit()
