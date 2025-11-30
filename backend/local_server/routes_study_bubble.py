@@ -1,24 +1,33 @@
+import hashlib
 import json
 import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException
+import jsonpatch
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from cerebrum_core.file_manager_inator import CerebrumPaths
 from cerebrum_core.model_inator import (
+    ContentDiff,
     CreateStudyBubble,
+    InkDiff,
     NoteBase,
     NoteContent,
     NoteOut,
+    NoteStorage,
     StudyBubble,
     UserConfig,
 )
 from cerebrum_core.retriever_inator import RetrieverInator
-from cerebrum_core.user_inator import ConfigManager
+from cerebrum_core.user_inator import (
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_EMBED_MODEL,
+    ConfigManager,
+)
 
 bubble_router = APIRouter(prefix="/bubbles", tags=["Study Bubble API"])
 
@@ -41,12 +50,22 @@ VECTORSTORES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ------------------------------ UTILITIES ------------------------------ #
+def hash_obj(obj: Any) -> str:
+    """Return MD5 hash of object JSON strin."""
+    return hashlib.md5(json.dumps(obj, sort_keys=True).encode()).hexdigest()
+
+
 def get_user_config():
     return ConfigManager().load_config()
 
 
 def get_bubble_path(bubble_id: str) -> Path:
     path = STUDY_BUBBLES_DIR / bubble_id
+    return path
+
+
+def get_notes_tracker_path(bubble_id: str) -> Path:
+    path = STUDY_BUBBLES_DIR / bubble_id / "tracker"
     return path
 
 
@@ -61,15 +80,7 @@ def get_notes_dir(bubble_id: str) -> Path:
     return notes_path
 
 
-def list_notes(notes_dir: Path):
-    notes = []
-    for file in notes_dir.glob("*.json"):
-        note_data = json.loads(file.read_text(encoding="utf-8"))
-        notes.append({**note_data, "filename": file.name})
-    return notes
-
-
-def ensure_valid_document(document: dict) -> dict:
+def ensure_valid_document(document: Dict[str, Any]) -> Dict[str, Any]:
     """
     Ensure the document has valid AppFlowy structure with delta fields.
     """
@@ -133,11 +144,14 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
     if bubble_path.exists():
         raise HTTPException(status_code=400, detail="Bubble already exists")
 
+    # Initialize study bubble associated dirs
     bubble_path.mkdir(parents=True, exist_ok=True)
     (bubble_path / "chat").mkdir(parents=True, exist_ok=True)
     (bubble_path / "notes").mkdir(parents=True, exist_ok=True)
     (bubble_path / "quizzes").mkdir(parents=True, exist_ok=True)
+    (bubble_path / "notes" / "tracker").mkdir(parents=True, exist_ok=True)
 
+    # TODO: initiate study bubble vectorstore
     bubble_data = StudyBubble(
         id=bubble_id,
         name=data.name,
@@ -187,48 +201,30 @@ def delete_study_bubble(bubble_id: str):
 # ------------------------------- NOTES CRUD ------------------------------ #
 
 
-def list_notes_in_dir(notes_dir: Path, bubble_id: str) -> List[NoteOut]:
-    notes = []
-    for file in notes_dir.glob("*.json"):
-        note_data = json.loads(file.read_text(encoding="utf-8"))
-        content_obj = NoteContent(**note_data["content"])
-        notes.append(
-            NoteOut(
-                title=note_data["title"],
-                content=content_obj,
-                ink=note_data.get("ink", []),
-                filename=file.name,
-                bubble_id=note_data.get("bubble_id", bubble_id),
-            )
-        )
-    return notes
-
-
 # List notes
 @bubble_router.get("/{bubble_id}/notes", response_model=List[NoteOut])
 def list_notes_in_bubble(bubble_id: str):
     notes_dir = get_notes_dir(bubble_id)
-    return list_notes_in_dir(notes_dir, bubble_id)
+    notes = []
+    for file in notes_dir.glob("*.json"):
+        storage_data = json.loads(file.read_text(encoding="utf-8"))
+        content_obj = NoteContent(**storage_data["content"])
+        notes.append(
+            NoteOut(
+                title=storage_data["title"],
+                content=content_obj,
+                ink=storage_data.get("ink", []),
+                filename=file.name,
+            )
+        )
+    return notes
 
 
 # Create a new note
 @bubble_router.post("/{bubble_id}/create/notes", response_model=NoteOut)
 def create_note(bubble_id: str, note: NoteBase):
     notes_dir = get_notes_dir(bubble_id)
-
-    # Ensure content is valid with delta fields
-    if not note.content or not note.content.document:
-        note.content = NoteContent(
-            document={
-                "type": "page",
-                "children": [
-                    {"type": "paragraph", "data": {"delta": [{"insert": ""}]}}
-                ],
-            }
-        )
-    else:
-        # Validate and fix existing document structure
-        note.content.document = ensure_valid_document(note.content.document)
+    note.content.document = ensure_valid_document(note.content.document)
 
     safe_title = note.title.replace(" ", "_")
     filename = f"{safe_title}.json"
@@ -241,26 +237,22 @@ def create_note(bubble_id: str, note: NoteBase):
         file_path = notes_dir / filename
         counter += 1
 
-    # Save note with bubble_id
-    file_path.write_text(
-        json.dumps(
-            {
-                "title": note.title,
-                "content": note.content.model_dump(),
-                "ink": note.ink or [],
-                "bubble_id": bubble_id,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-
-    return NoteOut(
+    storage = NoteStorage(
         title=note.title,
         content=note.content,
         ink=note.ink or [],
-        filename=filename,
         bubble_id=bubble_id,
+    )
+    storage.metadata.content_hash = hash_obj(storage.content.model_dump())
+    storage.metadata.ink_hash = hash_obj([s.dict() for s in storage.ink])
+
+    file_path.write_text(storage.model_dump_json(indent=2), encoding="utf-8")
+
+    return NoteOut(
+        title=storage.title,
+        content=storage.content,
+        ink=storage.ink or [],
+        filename=filename,
     )
 
 
@@ -273,23 +265,30 @@ def get_note(bubble_id: str, filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
-    note_data = json.loads(file_path.read_text(encoding="utf-8"))
+    storage_data = json.loads(file_path.read_text(encoding="utf-8"))
 
     # Ensure the document is valid before returning
-    if "content" in note_data and "document" in note_data["content"]:
-        note_data["content"]["document"] = ensure_valid_document(
-            note_data["content"]["document"]
+    if "content" in storage_data and "document" in storage_data["content"]:
+        storage_data["content"]["document"] = ensure_valid_document(
+            storage_data["content"]["document"]
         )
 
-    content_obj = NoteContent(**note_data["content"])
+    content_obj = NoteContent(**storage_data["content"])
 
     return NoteOut(
-        title=note_data["title"],
+        title=storage_data["title"],
         content=content_obj,
-        ink=note_data.get("ink", []),
+        ink=storage_data.get("ink", []),
         filename=filename,
-        bubble_id=note_data.get("bubble_id", bubble_id),
     )
+
+
+@bubble_router.post("/{bubble_id}/debug/notes")
+async def debug_create_note(bubble_id: str, request: Request):
+    """Temporary debug endpoint"""
+    body = await request.json()
+    logger.info(f"Received body: {json.dumps(body, indent=2)}")
+    return {"received": body}
 
 
 # Update a note
@@ -297,47 +296,56 @@ def get_note(bubble_id: str, filename: str):
 def update_note(bubble_id: str, filename: str, note: NoteBase):
     notes_dir = get_notes_dir(bubble_id)
     file_path = notes_dir / filename
-
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Ensure content is valid with delta fields
-    if not note.content or not note.content.document:
-        note.content = NoteContent(
-            document={
-                "type": "page",
-                "children": [
-                    {"type": "paragraph", "data": {"delta": [{"insert": ""}]}}
-                ],
-            }
-        )
-    else:
-        # Validate and fix existing document structure
-        note.content.document = ensure_valid_document(note.content.document)
+    # Load existing storage
+    storage_data = json.loads(file_path.read_text(encoding="utf-8"))
+    storage = NoteStorage(**storage_data)
 
-    file_path.write_text(
-        json.dumps(
-            {
-                "title": note.title,
-                "content": note.content.model_dump(),
-                "ink": note.ink or [],
-                "bubble_id": bubble_id,
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    # Ensure document valid
+    note.content.document = ensure_valid_document(note.content.document)
+
+    # ---------- CONTENT DIFF ----------
+    old_content = storage.content.dict()
+    new_content = note.content.dict()
+    if old_content != new_content:
+        patch_ops = jsonpatch.make_patch(old_content, new_content).patch
+        storage.history.content.append(
+            ContentDiff(
+                version=storage.metadata.content_version,
+                ts=datetime.now(),
+                ops=patch_ops,
+            )
+        )
+        storage.metadata.content_version += 1
+        storage.content = note.content
+        storage.metadata.content_hash = hash_obj(new_content)
+
+    # ---------- INK DIFF ----------
+    old_ink = [s.dict() for s in storage.ink]
+    new_ink = [s.dict() for s in note.ink or []]
+    if old_ink != new_ink:
+        # Simple full replace diff for now
+        ops = [{"op": "replace", "strokes": new_ink}]
+        storage.history.ink.append(
+            InkDiff(version=storage.metadata.ink_version, ts=datetime.now(), ops=ops)
+        )
+        storage.metadata.ink_version += 1
+        storage.ink = note.ink or []
+        storage.metadata.ink_hash = hash_obj(new_ink)
+
+    # Save updated note
+    file_path.write_text(storage.model_dump_json(indent=2), encoding="utf-8")
 
     return NoteOut(
-        title=note.title,
-        content=note.content,
-        ink=note.ink or [],
+        title=storage.title,
+        content=storage.content,
+        ink=storage.ink,
         filename=filename,
-        bubble_id=bubble_id,
-    )
+    )  # Delete a note
 
 
-# Delete a note
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
 def delete_note(bubble_id: str, filename: str):
     notes_dir = get_notes_dir(bubble_id)
@@ -366,8 +374,8 @@ async def chat_in_bubble(
     Chat inside a specific study bubble.
     """
     vectorstore_root = VECTORSTORES_DIR
-    chat_model = config.models.chat_model or "llama3.2:3b"
-    embedding_model = config.models.embedding_model or "mxbai-embed-large:latest"
+    chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
+    embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
 
     processor = RetrieverInator(
         vectorstores_root=str(vectorstore_root),

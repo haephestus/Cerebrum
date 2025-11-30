@@ -21,8 +21,8 @@ CONFIG_FILE = CONFIG_DIR / "user_config.json"
 
 EMBED_PATTERN = re.compile(r"(embed|embedding)", re.IGNORECASE)
 
-DEFAULT_CHAT_MODEL = "llama3.1"
-DEFAULT_EMBED_MODEL = "mxbai-embed-large"
+DEFAULT_CHAT_MODEL = "llama3.2:3b"
+DEFAULT_EMBED_MODEL = "mxbai-embed-large:335m"
 
 
 # ─────────────────────────────────────────────────────────────

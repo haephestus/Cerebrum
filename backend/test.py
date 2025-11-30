@@ -1,6 +1,6 @@
 import pathlib
 import pymupdf
-from pymupdf.mupdf import pdf_metadata
+from pymupdf.mupdf import pdfmetadatadata
 import tiktoken
 import pymupdf4llm
 from langchain_chroma import Chroma

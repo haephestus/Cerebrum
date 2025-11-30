@@ -1,7 +1,8 @@
-import re
 import hashlib
+import re
 import sqlite3
 from pathlib import Path
+
 from platformdirs import PlatformDirs
 
 
@@ -16,7 +17,12 @@ class CerebrumPaths:
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.CONFIG_FILE.mkdir(parents=True, exist_ok=True)
 
-        for sub in ["knowledgebase", "projects", "study_bubbles", "logs"]:
+        for sub in [
+            "knowledgebase",
+            "projects",
+            "study_bubbles",
+            "logs",
+        ]:
             (self.DATA_DIR / sub).mkdir(exist_ok=True)
 
     def get_kb_dir(self):
@@ -40,7 +46,7 @@ class CerebrumPaths:
 
 
 # init so functions in this file can use it
-path = CerebrumPaths()
+CEREBRUM_PATHS = CerebrumPaths()
 
 
 def file_walker_inator(root: Path, max_depth: int = 4):
@@ -107,7 +113,7 @@ def knowledgebase_index_inator(root: Path):
 
 class FileRegisterInator:
     def __init__(self, db_path: str = "registry/registry.db"):
-        self.DB_PATH = path.get_kb_dir() / db_path
+        self.DB_PATH = CEREBRUM_PATHS.get_kb_dir() / db_path
         self.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         self._table_iniatior_inator()
 
@@ -116,7 +122,8 @@ class FileRegisterInator:
         cursor = conn.cursor()
 
         # table if none exists
-        cursor.execute("""
+        cursor.execute(
+            """
         CREATE TABLE IF NOT EXISTS registry (
             id INTEGER PRIMARY KEY,
             original_name TEXT UNIQUE,
@@ -126,7 +133,8 @@ class FileRegisterInator:
             embedded INTEGER DEFAULT 0,
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
+        """
+        )
 
         cursor.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_original_name ON registry(original_name)"

@@ -15,7 +15,11 @@ from fastapi import (
 from cerebrum_core.file_manager_inator import CerebrumPaths, file_walker_inator
 from cerebrum_core.ingest_inator import IngestInator
 from cerebrum_core.model_inator import UserConfig
-from cerebrum_core.user_inator import ConfigManager
+from cerebrum_core.user_inator import (
+    DEFAULT_CHAT_MODEL,
+    DEFAULT_EMBED_MODEL,
+    ConfigManager,
+)
 from cerebrum_core.utils.progress_bar import progress_bar
 
 router = APIRouter(prefix="/process")
@@ -47,19 +51,19 @@ def markdown_converter_inator(knowledgebase_dir: Path, llm_model: str, registry)
                 metadata = pdf.metadata
 
             markdown_files = IngestInator(filepath=file_info["filepath"])
-            sanitized_metadata = markdown_files.sanitize_inator(
+            sanitizedmetadatadata = markdown_files.sanitize_inator(
                 filename=file_info["filestem"], metadata=metadata, llm_model=llm_model
             )
 
-            hash_id = registry.hash_inator(filename=sanitized_metadata.title)
+            hash_id = registry.hash_inator(filename=sanitizedmetadatadata.title)
             registry.register_inator(
                 original_name=file_info["filestem"],
-                sanitized_name=sanitized_metadata.title,
+                sanitized_name=sanitizedmetadatadata.title,
             )
             is_converted = registry.check_inator(field="converted", hash_id=hash_id)
             if is_converted:
                 continue
-            markdown_files.markdown_inator(metadata=sanitized_metadata)
+            markdown_files.markdown_inator(metadata=sanitizedmetadatadata)
             registry.updater_inator(status="converted", hash_id=hash_id)
 
         except Exception as e:
@@ -79,31 +83,31 @@ def process_single_pdf(file_path: Path, llm_model: str, embedding_model: str, re
             metadata = pdf.metadata
 
         markdown_files = IngestInator(filepath=file_path)
-        sanitized_metadata = markdown_files.sanitize_inator(
+        sanitizedmetadatadata = markdown_files.sanitize_inator(
             filename=file_path.stem, metadata=metadata, llm_model=llm_model
         )
 
-        hash_id = registry.hash_inator(filename=sanitized_metadata.title)
+        hash_id = registry.hash_inator(filename=sanitizedmetadatadata.title)
         registry.register_inator(
-            original_name=file_path.stem, sanitized_name=sanitized_metadata.title
+            original_name=file_path.stem, sanitized_name=sanitizedmetadatadata.title
         )
 
         # Convert to markdown
-        markdown_files.markdown_inator(metadata=sanitized_metadata)
+        markdown_files.markdown_inator(metadata=sanitizedmetadatadata)
         registry.updater_inator(status="converted", hash_id=hash_id)
         print(f" Converted: {file_path.name}")
 
         # Step 2: Find the generated markdown file and embed it
         markdown_file_path = (
             markdown_files_dir
-            / sanitized_metadata.domain
-            / sanitized_metadata.subject
-            / f"{sanitized_metadata.title}.md"
+            / sanitizedmetadatadata.domain
+            / sanitizedmetadatadata.subject
+            / f"{sanitizedmetadatadata.title}.md"
         )
 
         if markdown_file_path.exists():
             vectorstores_path = Path(
-                f"../data/storage/vectorstores/{sanitized_metadata.domain}/{sanitized_metadata.subject}"
+                f"../data/storage/vectorstores/{sanitizedmetadatadata.domain}/{sanitizedmetadatadata.subject}"
             )
             vectorstores_path.mkdir(parents=True, exist_ok=True)
 
@@ -118,7 +122,7 @@ def process_single_pdf(file_path: Path, llm_model: str, embedding_model: str, re
 
             for idx, chunk in enumerate(chunks, start=1):
                 markdown_chunks.embedd_inator(
-                    chunk=chunk, collection_name=sanitized_metadata.subject
+                    chunk=chunk, collection_name=sanitizedmetadatadata.subject
                 )
                 progress_bar(idx, total)
 
@@ -166,6 +170,7 @@ def markdown_embedder_inator(markdown_files_dir: Path, embedding_model: str, reg
                 )
                 progress_bar(idx, total)
 
+                # TODO: implement chunk saving during embedding
                 # last updated chunk
                 # registry.update_last_embedded_chunk(hash_id, idx)
 
@@ -200,7 +205,7 @@ async def convert_files(
     config: UserConfig = Depends(get_user_config),
 ):
     """Queue Markdown conversion in background"""
-    chat_model = config.models.chat_model or "llama3.2:3b"
+    chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
     reg = request.app.state.registry
     background_tasks.add_task(
         markdown_converter_inator, knowledgebase_dir, chat_model, reg
@@ -214,7 +219,7 @@ async def embedd_files(
     request: Request,
     config: UserConfig = Depends(get_user_config),
 ):
-    embedding_model = config.models.embedding_model or "mxbai-embed-large:latest"
+    embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
     """Queue Markdown embedding in background"""
     reg = request.app.state.registry
     background_tasks.add_task(
@@ -230,8 +235,8 @@ async def upload_pdf(
     file: UploadFile = File(...),
     config: UserConfig = Depends(get_user_config),
 ):
-    chat_model = config.models.chat_model or "llama3.2:3b"
-    embedding_model = config.models.embedding_model or "mxbai-embed-large:latest"
+    chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
+    embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
     """Upload a PDF file and auto-process it"""
     # Validate file type
     if not file.filename or not file.filename.lower().endswith(".pdf"):

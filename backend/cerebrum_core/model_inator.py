@@ -1,10 +1,15 @@
+import uuid
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any, Dict
+
 
 class Subtopic(BaseModel):
     name: str
     description: str
+
 
 class Topic(BaseModel):
     name: str
@@ -16,15 +21,17 @@ class Topic(BaseModel):
         self.subtopics.append(subtopic)
         return subtopic
 
+
 class Subject(BaseModel):
     name: str
     description: str
     topics: List[Topic] = []
-    
+
     def add_topic(self, topic_name: str, description: str):
         topic = Topic(name=topic_name, description=description)
         self.topics.append(topic)
         return topic
+
 
 class Domain(BaseModel):
     name: str
@@ -36,15 +43,17 @@ class Domain(BaseModel):
         self.subjects.append(subject)
         return subject
 
+
 class KnowledgeBase(BaseModel):
     name: str
     description: str
     domains: List[Domain] = []
 
     def add_domain(self, domain_name: str, description: str):
-        domain = Domain(name=domain_name, description=description) 
+        domain = Domain(name=domain_name, description=description)
         self.domains.append(domain)
         return domain
+
 
 #############################################################################
 #                                                                           #
@@ -52,23 +61,26 @@ class KnowledgeBase(BaseModel):
 #                                                                           #
 #############################################################################
 
+
 class User(BaseModel):
     name: str
     password: str
     selected_chat_model: str = ""
     selected_embedding_model: str = ""
 
+
 class ModelConfig(BaseModel):
     chat_model: Optional[str] = None
     embedding_model: Optional[str] = None
 
+
 class OllamaConfig(BaseModel):
     url: str = ""
+
 
 class UserConfig(BaseModel):
     models: ModelConfig = Field(default_factory=ModelConfig)
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
-
 
 
 #############################################################################
@@ -77,16 +89,19 @@ class UserConfig(BaseModel):
 #                                                                           #
 #############################################################################
 
+
 class Subquery(BaseModel):
     text: str
     domain: Optional[str] = None
     subject: Optional[str] = None
+
 
 class TranslatedQuery(BaseModel):
     rewritten: str
     domain: Optional[str | List[str]] = None
     subject: Optional[str | List[str]] = None
     subqueries: List[Subquery]
+
 
 class FileMetadata(BaseModel):
     title: str
@@ -95,9 +110,9 @@ class FileMetadata(BaseModel):
     authors: str | List[str]
     keywords: str | List[str]
 
-class Chunk(BaseModel):
-     pass
 
+class Chunk(BaseModel):
+    pass
 
 
 #############################################################################
@@ -111,14 +126,64 @@ class NoteContent(BaseModel):
     # This is exactly the "document" wrapper AppFlowy expects
     document: Dict[str, Any]  # The full JSON of the document
 
+
+class InkStroke(BaseModel):
+    id: str
+    points: List[Dict[str, float]]
+    color: str
+    thickness: float
+
+
 class NoteBase(BaseModel):
     title: str
-    content: NoteContent  # AppFlowy expects a "document" key here
-    ink: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    # AppFlowy expects a "document" key here
+    content: NoteContent
+    ink: List[InkStroke] = Field(default_factory=list)
+
+
+class NoteMetadata(BaseModel):
+    content_hash: str = ""
+    content_version: int = 1
+    ink_hash: str = ""
+    ink_version: int = 1
+    last_modified: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class ContentDiff(BaseModel):
+    version: int
+    ts: datetime
+    ops: List[Dict[str, Any]]
+
+
+class InkDiffOp(str, Enum):
+    ADD = "add"
+    REMOVE = "remove"
+    MODIFTY = "modify"
+
+
+class InkDiff(BaseModel):
+    version: int
+    ts: datetime
+    ops: List[Dict[str, Any]]
+
+
+class NoteHistory(BaseModel):
+    content: List[ContentDiff] = Field(default_factory=list)
+    ink: List[InkDiff] = Field(default_factory=list)
+
+
+class NoteStorage(BaseModel):
+    title: str
+    content: NoteContent
+    ink: List[InkStroke]
+    bubble_id: str
+
+    metadata: NoteMetadata = Field(default_factory=NoteMetadata)
+    history: NoteHistory = Field(default_factory=NoteHistory)
+
 
 class NoteOut(NoteBase):
     filename: str
-    bubble_id: str
 
 
 #############################################################################
@@ -127,13 +192,10 @@ class NoteOut(NoteBase):
 #                                                                           #
 #############################################################################
 
-class Quiz(BaseModel):
-    question: str
-    answer: str
-    options: List[str] = []
 
 class Review(BaseModel):
     misconception: str
+
 
 class CreateStudyBubble(BaseModel):
     name: str
@@ -141,9 +203,11 @@ class CreateStudyBubble(BaseModel):
     domains: List[str] = Field(default_factory=list)
     user_goals: List[str] = Field(default_factory=list)
 
+
 class StudyBubble(CreateStudyBubble):
     id: str
     created_at: datetime
+
 
 class CreateResearchProject(BaseModel):
     name: str
@@ -151,10 +215,14 @@ class CreateResearchProject(BaseModel):
     domains: List[str] = Field(default_factory=list)
     user_goals: List[str] = Field(default_factory=list)
 
+
 class ResearchProject(CreateResearchProject):
     id: str
     created_at: datetime
 
 
-
-
+#############################################################################
+#                                                                           #
+#                            LEARNING MODELS                                #
+#                                                                           #
+#############################################################################
