@@ -106,19 +106,22 @@ class BubbleNotesApi {
     throw Exception("Note not found: ${response.statusCode}");
   }
 
-  // Create note
+  // Create note - FIXED VERSION
   static Future<Map<String, dynamic>> createNote({
     required String bubbleId,
     required String title,
-    required Map<String, dynamic> content, // must include "document"
+    required Map<String, dynamic> content, // should already have "document" key
     List<Map<String, dynamic>>? ink,
   }) async {
-    // Ensure content has document key
-    if (!content.containsKey('document')) {
-      content = {'document': content};
-    }
+    // Remove this wrapper - it's creating double nesting
+    // The content parameter should already be structured correctly
+    // from the calling code
 
-    final note = {"title": title, "content": content, "ink": ink ?? []};
+    final note = {
+      "title": title,
+      "content": content, // This should already contain {"document": {...}}
+      "ink": ink ?? [],
+    };
 
     final response = await http.post(
       Uri.parse("${notesEndpoint(bubbleId)}/create/notes"),
@@ -128,7 +131,6 @@ class BubbleNotesApi {
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       final result = jsonDecode(response.body) as Map<String, dynamic>;
-      // Convert bubble_id to bubbleId for consistency
       if (result.containsKey('bubble_id')) {
         result['bubbleId'] = result['bubble_id'];
         result.remove('bubble_id');
@@ -138,10 +140,11 @@ class BubbleNotesApi {
       return result;
     }
 
-    throw Exception("Failed to create note: ${response.statusCode}");
-  }
+    throw Exception(
+      "Failed to create note: ${response.statusCode} - ${response.body}",
+    );
+  } // Update note
 
-  // Update note
   static Future<Map<String, dynamic>> updateNote({
     required String bubbleId,
     required String filename,

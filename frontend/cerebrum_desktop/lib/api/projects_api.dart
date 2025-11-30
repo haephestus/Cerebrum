@@ -5,27 +5,21 @@ class ProjectsApi {
   static const baseUrl = "http://localhost:8000";
   static const String projectsEndpoint = "$baseUrl/projects";
 
-  // list all projects
+  // List all projects
   static Future<List<dynamic>> fetchProjects() async {
     final response = await http.get(Uri.parse("$projectsEndpoint/"));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Failed to fetch projects");
-    }
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception("Failed to fetch projects");
   }
 
-  // fetch a project
+  // Fetch a project
   static Future<Map<String, dynamic>> fetchProjectById(String projectId) async {
     final response = await http.get(Uri.parse("$projectsEndpoint/$projectId"));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Project not found");
-    }
+    if (response.statusCode == 200) return jsonDecode(response.body);
+    throw Exception("Project not found");
   }
 
-  // create a new project
+  // Create a new project
   static Future<Map<String, dynamic>> createProject({
     required String name,
     required String description,
@@ -41,19 +35,18 @@ class ProjectsApi {
 
     final response = await http.post(
       Uri.parse("$projectsEndpoint/create"),
-
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(project),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
-    } else {
-      throw Exception("Failed to create project ${response.statusCode}");
     }
+
+    throw Exception("Failed to create project ${response.statusCode}");
   }
 
-  // delete a project
+  // Delete a project
   static Future<void> deleteProject(String projectId) async {
     final response = await http.delete(
       Uri.parse("$projectsEndpoint/$projectId"),
@@ -70,90 +63,142 @@ class ProjectsApi {
 class ProjectNotesApi {
   static const baseUrl = "http://localhost:8000";
 
-  static String notesApi(String projectId) {
-    return "$baseUrl/projects/$projectId/notes";
-  }
+  static String notesEndpoint(String projectId) =>
+      "$baseUrl/projects/$projectId";
 
-  // list all notes
-  static Future<List<dynamic>> fetchNotes(String projectId) async {
-    final response = await http.get(Uri.parse(notesApi(projectId)));
+  // List all notes
+  static Future<List<Map<String, dynamic>>> fetchNotes(String projectId) async {
+    final response = await http.get(
+      Uri.parse("${notesEndpoint(projectId)}/notes"),
+    );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Failed to fetch notes");
+      final List<dynamic> body = jsonDecode(response.body);
+
+      return body.map((e) => e as Map<String, dynamic>).map((note) {
+        // Convert project_id → projectId
+        if (note.containsKey('project_id')) {
+          note['projectId'] = note['project_id'];
+          note.remove('project_id');
+        } else {
+          note['projectId'] = projectId;
+        }
+        return note;
+      }).toList();
     }
+
+    throw Exception("Failed to fetch notes (${response.statusCode})");
   }
 
-  // fetch a note
+  // Fetch a single note
   static Future<Map<String, dynamic>> fetchNoteByFileName(
     String projectId,
     String filename,
   ) async {
     final response = await http.get(
-      Uri.parse("${notesApi(projectId)}/get/$filename"),
+      Uri.parse("${notesEndpoint(projectId)}/notes/get/$filename"),
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Note not found");
+      final note = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (note.containsKey('project_id')) {
+        note['projectId'] = note['project_id'];
+        note.remove('project_id');
+      } else {
+        note['projectId'] = projectId;
+      }
+
+      return note;
     }
+
+    throw Exception("Note not found: ${response.statusCode}");
   }
 
-  // create a new note
+  // Create a new note
   static Future<Map<String, dynamic>> createNote({
     required String projectId,
     required String title,
-    required String content,
+    required Map<String, dynamic> content,
+    List<Map<String, dynamic>>? ink,
   }) async {
-    final note = {"title": title, "content": content};
+    // Ensure document key exists
+    if (!content.containsKey('document')) {
+      content = {'document': content};
+    }
+
+    final note = {"title": title, "content": content, "ink": ink ?? []};
 
     final response = await http.post(
-      Uri.parse("${notesApi(projectId)}/create"),
+      Uri.parse("${notesEndpoint(projectId)}/create/notes"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(note),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Failed to create note");
+      final result = jsonDecode(response.body);
+
+      // Convert project_id → projectId
+      if (result.containsKey('project_id')) {
+        result['projectId'] = result['project_id'];
+        result.remove('project_id');
+      } else {
+        result['projectId'] = projectId;
+      }
+
+      return result;
     }
+
+    throw Exception("Failed to create note (${response.statusCode})");
   }
 
-  // update a note
+  // Update a note
   static Future<Map<String, dynamic>> updateNote({
     required String projectId,
     required String filename,
     required String title,
-    required String content,
+    required Map<String, dynamic> content,
+    List<Map<String, dynamic>>? ink,
   }) async {
-    final note = {"title": title, "content": content};
+    // Ensure document key exists
+    if (!content.containsKey('document')) {
+      content = {'document': content};
+    }
+
+    final note = {"title": title, "content": content, "ink": ink ?? []};
 
     final response = await http.put(
-      Uri.parse("${notesApi(projectId)}/update/$filename"),
+      Uri.parse("${notesEndpoint(projectId)}/notes/update/$filename"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode(note),
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception("Failed to update note");
+      final result = jsonDecode(response.body);
+
+      if (result.containsKey('project_id')) {
+        result['projectId'] = result['project_id'];
+        result.remove('project_id');
+      } else {
+        result['projectId'] = projectId;
+      }
+
+      return result;
     }
+
+    throw Exception("Failed to update note (${response.statusCode})");
   }
 
-  // delete a note
+  // Delete a note
   static Future<void> deleteNote(String projectId, String filename) async {
     final response = await http.delete(
-      Uri.parse("${notesApi(projectId)}/delete/$filename"),
+      Uri.parse("${notesEndpoint(projectId)}/notes/delete/$filename"),
     );
 
     if (response.statusCode != 200 &&
         response.statusCode != 204 &&
         response.statusCode != 202) {
-      throw Exception("Failed to delete note");
+      throw Exception("Failed to delete note (${response.statusCode})");
     }
   }
 }
@@ -161,12 +206,11 @@ class ProjectNotesApi {
 class ProjectChatApi {
   static const baseUrl = "http://localhost:8000";
 
-  /// Helper to build the base project chat endpoint
   static String chatApi(String projectId) {
     return "$baseUrl/projects/$projectId/chat";
   }
 
-  /// Send a chat query to the LLM for this project
+  // Send chat message
   static Future<Map<String, dynamic>> sendMessage({
     required String projectId,
     required String message,
@@ -188,18 +232,16 @@ class ProjectChatApi {
     );
   }
 
-  /// Retrieve past chat history for a project
+  // Fetch chat history
   static Future<List<dynamic>> fetchChatHistory(String projectId) async {
     final response = await http.get(Uri.parse("${chatApi(projectId)}/history"));
 
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    }
+    if (response.statusCode == 200) return jsonDecode(response.body);
 
     throw Exception("Failed to fetch chat history (${response.statusCode})");
   }
 
-  /// Clear the chat history for a project
+  // Clear chat history
   static Future<void> clearChatHistory(String projectId) async {
     final response = await http.delete(
       Uri.parse("${chatApi(projectId)}/clear"),

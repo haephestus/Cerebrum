@@ -63,44 +63,59 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   // -----------------------
   Future<void> addNote() async {
     try {
-      // Blank AppFlowy document structure
-      final blankDoc = {
+      // 1️⃣ Blank AppFlowy document structure
+      final Map<String, dynamic> blankDoc = {
         "document": {
           "type": "page",
           "children": [
-            {"type": "paragraph", "data": {}},
+            {
+              "type": "paragraph",
+              "data": {
+                "delta": [
+                  {"insert": ""},
+                ],
+              },
+            },
           ],
         },
       };
 
-      Map<String, dynamic> newNote = {
+      // 2️⃣ Payload for backend - only include fields backend expects
+      final Map<String, dynamic> notePayload = {
         "title": "Untitled Note",
         "content": blankDoc,
         "ink": <Map<String, dynamic>>[],
-        "bubbleId": bubbleId,
-        "filename": null,
       };
 
-      // Create note in backend
-      final createdNote = await BubbleNotesApi.createNote(
+      // 3️⃣ Create note in backend with proper type casts
+      final Map<String, dynamic> createdNote = await BubbleNotesApi.createNote(
         bubbleId: bubbleId,
-        title: newNote['title']!,
-        content: newNote['content']!,
-        ink: newNote['ink']!,
+        title: notePayload['title'] as String,
+        content: notePayload['content'] as Map<String, dynamic>,
+        ink:
+            (notePayload['ink'] as List<dynamic>)
+                .map((e) => e as Map<String, dynamic>)
+                .toList(),
       );
 
-      // Update newNote with backend data
-      newNote['filename'] = createdNote['filename'];
-      newNote['title'] = createdNote['title'];
-      newNote['content'] = createdNote['content'];
-      newNote['ink'] = createdNote['ink'];
-      newNote['bubbleId'] = bubbleId; // Ensure bubbleId is set
+      // 4️⃣ Build frontend note object
+      final Map<String, dynamic> newNote = {
+        "title": createdNote['title'] as String,
+        "content": createdNote['content'] as Map<String, dynamic>,
+        "ink":
+            (createdNote['ink'] as List<dynamic>)
+                .map((e) => e as Map<String, dynamic>)
+                .toList(),
+        "filename": createdNote['filename'] as String,
+        "bubbleId": bubbleId,
+      };
 
+      // 5️⃣ Insert into local notes list
       setState(() {
         notes.insert(0, newNote);
       });
 
-      // Open editor
+      // 6️⃣ Open editor
       if (mounted) {
         Navigator.push(
           context,
@@ -115,7 +130,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
                 ),
           ),
         ).then((_) {
-          // Reload notes when returning from editor
+          // Reload notes after returning from editor
           loadNotes(bubbleId);
         });
       }
@@ -324,4 +339,3 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
     );
   }
 }
-
