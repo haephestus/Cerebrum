@@ -1,3 +1,4 @@
+import 'package:cerebrum_app/ui/desktop/screens/settings.dart';
 import 'package:flutter/material.dart';
 import '/features/home/home_page.dart';
 import 'package:cerebrum_app/ui/desktop/widgets/sidebar_button.dart';
@@ -36,7 +37,7 @@ class _DesktopUIState extends State<DesktopUI> {
     } else if (selectedPage == 2) {
       return Text("data");
     } else if (selectedPage == 3) {
-      return Text("settings");
+      return Setting();
     } else if (selectedPage == 4) {
       return DStudyBubblePage(addMode: false, bubble: payload);
     }

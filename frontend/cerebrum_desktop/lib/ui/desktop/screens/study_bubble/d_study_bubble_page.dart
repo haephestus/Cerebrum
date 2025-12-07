@@ -144,6 +144,26 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   }
 
   // -----------------------
+  // Add a new note
+  // -----------------------
+  Future<void> renameNote(
+    String bubbleId,
+    String oldFilename,
+    String newFilename,
+  ) async {
+    try {
+      await BubbleNotesApi.renameNote(bubbleId, oldFilename, newFilename);
+      await loadNotes(bubbleId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("$e")));
+      }
+    }
+  }
+
+  // -----------------------
   // Delete note
   // -----------------------
   Future<void> deleteNote(String bubbleId, String filename) async {
@@ -231,6 +251,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
                 itemCount: notes.length + 1,
                 itemBuilder: (context, index) {
                   if (index == 0) {
+                    // TODO: add rename buttom
                     return ListTile(
                       leading: const Icon(Icons.add, color: Colors.blue),
                       title: const Text(

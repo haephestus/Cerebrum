@@ -113,10 +113,6 @@ class BubbleNotesApi {
     required Map<String, dynamic> content, // should already have "document" key
     List<Map<String, dynamic>>? ink,
   }) async {
-    // Remove this wrapper - it's creating double nesting
-    // The content parameter should already be structured correctly
-    // from the calling code
-
     final note = {
       "title": title,
       "content": content, // This should already contain {"document": {...}}
@@ -143,8 +139,9 @@ class BubbleNotesApi {
     throw Exception(
       "Failed to create note: ${response.statusCode} - ${response.body}",
     );
-  } // Update note
+  }
 
+  // Update note
   static Future<Map<String, dynamic>> updateNote({
     required String bubbleId,
     required String filename,
@@ -178,6 +175,22 @@ class BubbleNotesApi {
     }
 
     throw Exception("Failed to update note: ${response.statusCode}");
+  }
+
+  // Rename note
+  static Future<void> renameNote(
+    String bubbleId,
+    String oldFilename,
+    String newFilename,
+  ) async {
+    final response = await http.put(
+      Uri.parse("${notesEndpoint(bubbleId)}/notes/rename/$oldFilename"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"title": newFilename}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception("Failed to rename note: ${response.body}");
+    }
   }
 
   // Delete note

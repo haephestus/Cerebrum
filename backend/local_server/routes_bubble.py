@@ -7,14 +7,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import jsonpatch
-from fastapi import APIRouter, Depends, HTTPException, Request
+import ulid
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from cerebrum_core.file_manager_inator import CerebrumPaths
+from cerebrum_core.model_inator import ContentDiff  # InkDiff,
 from cerebrum_core.model_inator import (
-    ContentDiff,
     CreateStudyBubble,
-    InkDiff,
     NoteBase,
     NoteContent,
     NoteOut,
@@ -28,15 +27,17 @@ from cerebrum_core.user_inator import (
     DEFAULT_EMBED_MODEL,
     ConfigManager,
 )
+from cerebrum_core.utils.file_manager_inator import CerebrumPaths
+from cerebrum_core.utils.note_util_inator import (
+    NoteArchiveInator,
+    diff_collapser_inator,
+)
 
 bubble_router = APIRouter(prefix="/bubbles", tags=["Study Bubble API"])
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Config
-llm_model = "granite4:micro"
-embedding_model = "qwen3-embedding:4b-q4_K_M"
 
 CEREBRUM_PATHS = CerebrumPaths()
 ROOT_KB_DIR = CEREBRUM_PATHS.get_kb_dir()
@@ -109,6 +110,43 @@ def ensure_valid_document(document: Dict[str, Any]) -> Dict[str, Any]:
     return document
 
 
+def extract_total_text(doc):
+    text_chunks = []
+    for child in doc.get("children", []):
+        for op in child["data"].get("delta", []):
+            text_chunks.append(op.get("insert", ""))
+    return "".join(text_chunks)
+
+
+def calculate_version_increment(old_doc: dict, new_doc: dict) -> float:
+    """
+    Rules:
+      - If text added > 100 chars OR new children > 10 → major bump (+1)
+      - Else → minor bump (+0.01)
+    """
+    # Entire text
+    old_text = extract_total_text(old_doc)
+    new_text = extract_total_text(new_doc)
+
+    added_chars = len(new_text) - len(old_text)
+
+    # Child changes (block additions)
+    old_children = old_doc.get("children", [])
+    new_children = new_doc.get("children", [])
+    added_children = max(0, len(new_children) - len(old_children))
+
+    # ----- Decision -----
+
+    if added_chars > 100 or added_children > 10:
+        return 1.0  # major bump
+    elif added_chars > 50 or added_children > 5:
+        return 0.1  # medium bump
+    elif added_chars > 0:
+        return 0.01  # minor bump
+    else:
+        return 0.0  # unchanged
+
+
 # --------------------------- STUDY BUBBLE CRUD -------------------------- #
 
 
@@ -146,10 +184,15 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
 
     # Initialize study bubble associated dirs
     bubble_path.mkdir(parents=True, exist_ok=True)
+
     (bubble_path / "chat").mkdir(parents=True, exist_ok=True)
+    (bubble_path / "chat" / ".embeds").mkdir(parents=True, exist_ok=True)
+
     (bubble_path / "notes").mkdir(parents=True, exist_ok=True)
-    (bubble_path / "quizzes").mkdir(parents=True, exist_ok=True)
-    (bubble_path / "notes" / "tracker").mkdir(parents=True, exist_ok=True)
+    (bubble_path / "notes" / ".embeds").mkdir(parents=True, exist_ok=True)
+
+    (bubble_path / "assesments").mkdir(parents=True, exist_ok=True)
+    (bubble_path / "assesments" / ".embeds").mkdir(parents=True, exist_ok=True)
 
     # TODO: initiate study bubble vectorstore
     bubble_data = StudyBubble(
@@ -229,6 +272,7 @@ def create_note(bubble_id: str, note: NoteBase):
     safe_title = note.title.replace(" ", "_")
     filename = f"{safe_title}.json"
     file_path = notes_dir / filename
+    note_id = ulid.ulid()
 
     # Avoid collisions
     counter = 1
@@ -238,13 +282,14 @@ def create_note(bubble_id: str, note: NoteBase):
         counter += 1
 
     storage = NoteStorage(
+        note_id=note_id,
         title=note.title,
+        bubble_id=bubble_id,
         content=note.content,
         ink=note.ink or [],
-        bubble_id=bubble_id,
     )
     storage.metadata.content_hash = hash_obj(storage.content.model_dump())
-    storage.metadata.ink_hash = hash_obj([s.dict() for s in storage.ink])
+    storage.metadata.ink_hash = hash_obj([s.model_dump() for s in storage.ink])
 
     file_path.write_text(storage.model_dump_json(indent=2), encoding="utf-8")
 
@@ -283,69 +328,121 @@ def get_note(bubble_id: str, filename: str):
     )
 
 
+'''
 @bubble_router.post("/{bubble_id}/debug/notes")
 async def debug_create_note(bubble_id: str, request: Request):
     """Temporary debug endpoint"""
     body = await request.json()
     logger.info(f"Received body: {json.dumps(body, indent=2)}")
     return {"received": body}
+'''
 
 
 # Update a note
 @bubble_router.put("/{bubble_id}/notes/update/{filename}", response_model=NoteOut)
 def update_note(bubble_id: str, filename: str, note: NoteBase):
     notes_dir = get_notes_dir(bubble_id)
+    vectorestore = notes_dir / "notes" / ".embeds"
     file_path = notes_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
     # Load existing storage
-    storage_data = json.loads(file_path.read_text(encoding="utf-8"))
-    storage = NoteStorage(**storage_data)
+    stored_note_data = json.loads(file_path.read_text(encoding="utf-8"))
+    stored_note = NoteStorage(**stored_note_data)
 
     # Ensure document valid
     note.content.document = ensure_valid_document(note.content.document)
 
+    # ---------- CREATE DIFFS -------------
     # ---------- CONTENT DIFF ----------
-    old_content = storage.content.dict()
-    new_content = note.content.dict()
+    old_content = stored_note.content.model_dump()
+    new_content = note.content.model_dump()
     if old_content != new_content:
         patch_ops = jsonpatch.make_patch(old_content, new_content).patch
-        storage.history.content.append(
+        stored_note.history.content.append(
             ContentDiff(
-                version=storage.metadata.content_version,
+                version=stored_note.metadata.content_version,
                 ts=datetime.now(),
                 ops=patch_ops,
             )
         )
-        storage.metadata.content_version += 1
-        storage.content = note.content
-        storage.metadata.content_hash = hash_obj(new_content)
+
+        increment = calculate_version_increment(
+            old_doc=stored_note.content.document, new_doc=note.content.document
+        )
+        stored_note.metadata.content_version += increment
+
+        stored_note.content = note.content
+        stored_note.metadata.content_hash = hash_obj(new_content)
 
     # ---------- INK DIFF ----------
-    old_ink = [s.dict() for s in storage.ink]
-    new_ink = [s.dict() for s in note.ink or []]
+    # TODO: revisit when ink has been incorporated
+    """
+    old_ink = [s.model_dump() for s in stored_note.ink]
+    new_ink = [s.model_dump() for s in note.ink or []]
     if old_ink != new_ink:
         # Simple full replace diff for now
         ops = [{"op": "replace", "strokes": new_ink}]
-        storage.history.ink.append(
-            InkDiff(version=storage.metadata.ink_version, ts=datetime.now(), ops=ops)
+        stored_note.history.ink.append(
+            InkDiff(
+                version=stored_note.metadata.ink_version, ts=datetime.now(), ops=ops
+            )
         )
-        storage.metadata.ink_version += 1
-        storage.ink = note.ink or []
-        storage.metadata.ink_hash = hash_obj(new_ink)
+        # TODO: add major/minor version handlers
+        stored_note.metadata.ink_version += 1
+        stored_note.ink = note.ink or []
+        stored_note.metadata.ink_hash = hash_obj(new_ink)
+    """
+
+    # ----------------- COMPRESS DIFFS -------------------
+    stored_note = diff_collapser_inator(stored_note)
+
+    if stored_note.metadata.content_version.is_integer():
+        # ---------- ADD TO HISTORIC NOTES CACHE -------------
+        NoteArchiveInator(
+            note=stored_note, vectorstore_dir=str(vectorestore)
+        ).archive_init_inator()
 
     # Save updated note
-    file_path.write_text(storage.model_dump_json(indent=2), encoding="utf-8")
+    file_path.write_text(stored_note.model_dump_json(indent=2), encoding="utf-8")
 
     return NoteOut(
-        title=storage.title,
-        content=storage.content,
-        ink=storage.ink,
+        title=stored_note.title,
+        content=stored_note.content,
+        ink=stored_note.ink,
         filename=filename,
-    )  # Delete a note
+    )
 
 
+@bubble_router.put("/{bubble_id}/notes/rename/{filename}", response_model=NoteOut)
+def rename_note(bubble_id: str, filename: str, payload: NoteBase):
+    notes_dir = get_notes_dir(bubble_id)
+    old_path = notes_dir / filename
+
+    if not old_path.exists():
+        raise HTTPException(status_code=404, detail="Origincal note not found")
+
+    # Load old note into memory
+    old_data = json.loads(old_path.read_text(encoding="utf-8"))
+    old_note = NoteStorage(**old_data)
+
+    # Capture payload data
+    old_note.title = payload.title
+    new_filename = f"{payload.title}.json"
+    new_path = notes_dir / new_filename
+
+    if new_path.exists():
+        raise HTTPException(status_code=409, detail="Target filename already exists")
+
+    # Write new note data to disk
+    new_path.write_text(old_note.model_dump_json(indent=2), encoding="utf-8")
+    old_path.unlink()
+
+    return NoteOut(**old_note.model_dump(), filename=new_filename)
+
+
+# Delete a note
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
 def delete_note(bubble_id: str, filename: str):
     notes_dir = get_notes_dir(bubble_id)
@@ -353,6 +450,12 @@ def delete_note(bubble_id: str, filename: str):
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
+
+    # TODO: delete note from the archive
+    data = json.loads(file_path.read_text())
+    NoteArchiveInator(
+        note=NoteStorage(**data), vectorstore_dir=str(file_path)
+    ).archive_cleaner_inator()
 
     file_path.unlink()
     return {"detail": "Note deleted successfully"}

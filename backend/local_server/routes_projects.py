@@ -1,16 +1,21 @@
 import json
-import shutil
 import logging
-from typing import List
-from pathlib import Path
+import shutil
 from datetime import datetime
+from pathlib import Path
+from typing import List
 
-from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
+from cerebrum_core.model_inator import (
+    CreateResearchProject,
+    NoteBase,
+    NoteOut,
+    ResearchProject,
+)
 from cerebrum_core.retriever_inator import RetrieverInator
-from cerebrum_core.file_manager_inator import CerebrumPaths
-from cerebrum_core.model_inator import CreateResearchProject, NoteOut, NoteBase, ResearchProject
+from cerebrum_core.utils.file_manager_inator import CerebrumPaths
 
 # ------------------------- logging & config --------------------------- #
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +39,7 @@ VECTORSTORES_ROOT.mkdir(parents=True, exist_ok=True)
 
 # ------------------------------ UTILITIES ------------------------------ #
 
+
 def get_project_path(project_id: str) -> Path:
     return PROJECTS_ROOT / project_id
 
@@ -44,7 +50,7 @@ def get_notes_dir(project_id: str) -> Path:
       - projects/<id>/notes
       - study_bubbles/<id>/notes
     Raises HTTPException on invalid project_id.
-    """    
+    """
     projects_path = get_project_path(project_id)
     notes_path = projects_path / "notes"
     notes_path.mkdir(parents=True, exist_ok=True)
@@ -59,7 +65,9 @@ def list_notes_in(notes_path: Path) -> List[NoteOut]:
         notes.append(NoteOut(title=title, content=content, filename=file.name))
     return notes
 
+
 # --------------------------- PROJECT CRUD ----------------------------- #
+
 
 @project_router.get("/", response_model=List[ResearchProject])
 def list_projects():
@@ -101,8 +109,8 @@ def create_project(data: CreateResearchProject) -> ResearchProject:
     (project_path / "reviews").mkdir(parents=True, exist_ok=True)
 
     project_data = ResearchProject(
-        id = project_id,
-        name = data.name,
+        id=project_id,
+        name=data.name,
         description=data.description,
         domains=data.domains,
         user_goals=data.user_goals,
@@ -127,13 +135,14 @@ def get_project(project_id: str) -> ResearchProject:
 
     return ResearchProject(**data)
 
+
 @project_router.delete("/{project_id}")
 def delete_project(project_id: str):
     project_path = get_project_path(project_id)
     if not project_path.exists():
         raise HTTPException(status_code=404, detail="Project not found")
 
-    #Recursively delete folder
+    # Recursively delete folder
     shutil.rmtree(project_path)
 
     return {"detail": "Project deleted successfully"}
@@ -142,13 +151,17 @@ def delete_project(project_id: str):
 # ------------------------------ NOTES CRUD --------------------------- #
 @project_router.get("/{project_id}/notes")
 def list_notes(project_id: str):
-    notes_dir = get_notes_dir(project_id, )
+    notes_dir = get_notes_dir(
+        project_id,
+    )
     return list_notes_in(notes_dir)
 
 
 @project_router.post("/{project_id}/notes/create", response_model=NoteOut)
-def create_note(project_id: str,  note: NoteBase):
-    notes_dir = get_notes_dir(project_id, )
+def create_note(project_id: str, note: NoteBase):
+    notes_dir = get_notes_dir(
+        project_id,
+    )
 
     safe_title = note.title.replace(" ", "_")
     filename = f"{safe_title}.md"
@@ -165,8 +178,10 @@ def create_note(project_id: str,  note: NoteBase):
 
 
 @project_router.get("/{project_id}/notes/get/{filename}", response_model=NoteOut)
-def get_note(project_id: str,  filename: str):
-    notes_dir = get_notes_dir(project_id, )
+def get_note(project_id: str, filename: str):
+    notes_dir = get_notes_dir(
+        project_id,
+    )
     file_path = notes_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
@@ -176,8 +191,10 @@ def get_note(project_id: str,  filename: str):
 
 
 @project_router.put("/{project_id}/notes/update/{filename}", response_model=NoteOut)
-def update_note(project_id: str,  filename: str, note: NoteBase):
-    notes_dir = get_notes_dir(project_id, )
+def update_note(project_id: str, filename: str, note: NoteBase):
+    notes_dir = get_notes_dir(
+        project_id,
+    )
     file_path = notes_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
@@ -186,8 +203,10 @@ def update_note(project_id: str,  filename: str, note: NoteBase):
 
 
 @project_router.delete("/{project_id}/notes/delete/{filename}")
-def delete_note(project_id: str,  filename: str):
-    notes_dir = get_notes_dir(project_id, )
+def delete_note(project_id: str, filename: str):
+    notes_dir = get_notes_dir(
+        project_id,
+    )
     file_path = notes_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
@@ -222,4 +241,3 @@ async def chat_in_project(project_id: str, query: Query):
     response = processor.generate_inator(user_query=query.text)
 
     return {"reply": response}
-

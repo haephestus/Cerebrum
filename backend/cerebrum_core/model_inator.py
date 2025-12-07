@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -85,7 +84,7 @@ class UserConfig(BaseModel):
 
 #############################################################################
 #                                                                           #
-#                      MODELS FOR LLM QUERYING                              #
+#                        MODELS NEEDED FOR RAG                              #
 #                                                                           #
 #############################################################################
 
@@ -117,7 +116,7 @@ class Chunk(BaseModel):
 
 #############################################################################
 #                                                                           #
-#                    MODELS FOR NOTES AND LEARNING                          #
+#                     MODELS FOR NOTES AND LEARNING                         #
 #                                                                           #
 #############################################################################
 
@@ -143,14 +142,14 @@ class NoteBase(BaseModel):
 
 class NoteMetadata(BaseModel):
     content_hash: str = ""
-    content_version: int = 1
+    content_version: float = 0
     ink_hash: str = ""
-    ink_version: int = 1
+    ink_version: float = 0
     last_modified: datetime = Field(default_factory=lambda: datetime.now())
 
 
 class ContentDiff(BaseModel):
-    version: int
+    version: float
     ts: datetime
     ops: List[Dict[str, Any]]
 
@@ -158,11 +157,11 @@ class ContentDiff(BaseModel):
 class InkDiffOp(str, Enum):
     ADD = "add"
     REMOVE = "remove"
-    MODIFTY = "modify"
+    MODIFY = "modify"
 
 
 class InkDiff(BaseModel):
-    version: int
+    version: float
     ts: datetime
     ops: List[Dict[str, Any]]
 
@@ -172,11 +171,9 @@ class NoteHistory(BaseModel):
     ink: List[InkDiff] = Field(default_factory=list)
 
 
-class NoteStorage(BaseModel):
-    title: str
-    content: NoteContent
-    ink: List[InkStroke]
-    bubble_id: str
+class NoteStorage(NoteBase):
+    note_id: str = ""
+    bubble_id: str = ""
 
     metadata: NoteMetadata = Field(default_factory=NoteMetadata)
     history: NoteHistory = Field(default_factory=NoteHistory)

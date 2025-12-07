@@ -6,22 +6,20 @@ from cerebrum_core.user_inator import (
     ConfigManager,
 )
 
-# TODO: generate quizzes
-#       run adapative spaced repetition
-
-# TODO: generate mockexams
-#       run adapative spaced repetition
-
 # TODO: progress tracking (based of learning goals)
 
 
 class AssesorInator(RetrieverInator):
+    """
+    Extends RetrieverInator, to allow for assement specific generation
+    """
+
     def generate_inator(
         self,
         user_query: str,
         top_k_chunks: int = 5,
-        comparison_context: str | None = None,
         prompt_name: str = "rose_note_analyser",
+        comparison_context: str | None = None,
     ) -> str:
         """
         Extends base generate_inator to allow dynamic prompts for
@@ -95,6 +93,12 @@ def assesment_maker(raw: str, mode: str):
 '''
 
 
+# TODO: generate engram(readings, quizzes, mock exams, flash cards)
+#       run adapative spaced repetition
+#       place quizzes in bubble specific folders
+#       store historic engrams in bubble specific folders
+
+
 # note analysis:
 # TODO: implement note caching(intemediary md) to allow chunking
 # TODO: add supporting caching dir in platform dirs
@@ -125,3 +129,10 @@ def note_analyser_inator(note: str):
     # analysed_info = analyser.anslyser_inator(note)
     analysed_info = analyser.generate_inator(note)
     return analysed_info
+
+
+def historical_note_analyser_inator():
+    # load note into memory from ./embeds/vectorstore
+    # fetch the note, analyse the note
+    # add note to registry(sqlbd) of analysed notes
+    pass

@@ -25,23 +25,26 @@ class CerebrumPaths:
         ]:
             (self.DATA_DIR / sub).mkdir(exist_ok=True)
 
-    def get_kb_dir(self):
+    def init_bubble_dirs(self):
+        self.DATA_DIR
+
+    def get_kb_dir(self) -> Path:
         KB_DIR = self.DATA_DIR / "knowledgebase"
         return KB_DIR
 
-    def get_projects_dir(self):
+    def get_projects_dir(self) -> Path:
         PROJECTS_DIR = self.DATA_DIR / "projects"
         return PROJECTS_DIR
 
-    def get_bubbles_dir(self):
+    def get_bubbles_dir(self) -> Path:
         BUBBLE_DIR = self.DATA_DIR / "study_bubbles"
         return BUBBLE_DIR
 
-    def get_logs_dir(self):
+    def get_logs_dir(self) -> Path:
         LOGS_DIR = self.DATA_DIR / "logs"
         return LOGS_DIR
 
-    def get_config_dir(self):
+    def get_config_dir(self) -> Path:
         return self.CONFIG_FILE
 
 

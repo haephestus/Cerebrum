@@ -80,3 +80,13 @@
 2025-11-12 23:11:39,274 [INFO] root: Raw translated query: '{\n  "rewritten": "Describe how plants convert sunlight into chemical energy using carbon dioxide and water to produce glucose and oxygen.",\n  "subqueries": [\n    {\n      "text": "Describe how plants convert sunlight into chemical energy",\n      "domain": [],\n      "subject": []\n    },\n    {\n      "text": "Using carbon dioxide and water to produce glucose and oxygen",\n      "domain": [],\n      "subject": []\n    }\n  ],\n  "domain": [""],\n  "subject": [""]\n}'
 2025-11-12 23:12:44,091 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
 2025-11-12 23:12:49,098 [INFO] root: Raw translated query: '{\n  "rewritten": "Describe DNA.",\n  "subqueries": [\n    {\n      "text": "describe DNA",\n      "domain": [],\n      "subject": []\n    }\n  ],\n  "domain": [""],\n  "subject": [""]\n}'
+2025-12-05 16:27:03,764 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-05 17:38:43,736 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-05 17:39:45,361 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-05 17:39:57,780 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-05 17:43:01,840 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-05 17:43:19,833 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-05 17:48:56,379 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-05 17:49:04,050 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-05 17:54:54,547 [INFO] backoff: Backing off send_request(...) for 0.7s (requests.exceptions.ConnectionError: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response')))
+2025-12-05 18:08:27,122 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.

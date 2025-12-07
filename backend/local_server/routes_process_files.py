@@ -12,7 +12,6 @@ from fastapi import (
     UploadFile,
 )
 
-from cerebrum_core.file_manager_inator import CerebrumPaths, file_walker_inator
 from cerebrum_core.ingest_inator import IngestInator
 from cerebrum_core.model_inator import UserConfig
 from cerebrum_core.user_inator import (
@@ -20,6 +19,7 @@ from cerebrum_core.user_inator import (
     DEFAULT_EMBED_MODEL,
     ConfigManager,
 )
+from cerebrum_core.utils.file_manager_inator import CerebrumPaths, file_walker_inator
 from cerebrum_core.utils.progress_bar import progress_bar
 
 router = APIRouter(prefix="/process")

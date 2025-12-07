@@ -4,14 +4,10 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from cerebrum_core.file_manager_inator import CerebrumPaths, FileRegisterInator
 from cerebrum_core.user_inator import ConfigManager
-from local_server import (
-    routes_process_files,
-    routes_projects,
-    routes_study_bubble,
-    routes_user,
-)
+from cerebrum_core.utils.file_manager_inator import CerebrumPaths, FileRegisterInator
+from local_server import routes_process_files  # routes_projects,
+from local_server import routes_bubble, routes_user
 
 config_manager = ConfigManager()
 
@@ -26,8 +22,8 @@ async def lifespan(app: FastAPI):
     app.state.registry = registry
 
     app.include_router(routes_process_files.router)
-    app.include_router(routes_projects.project_router)
-    app.include_router(routes_study_bubble.bubble_router)
+    # app.include_router(routes_projects.project_router)
+    app.include_router(routes_bubble.bubble_router)
     app.include_router(routes_user.configs_router)
     yield
 

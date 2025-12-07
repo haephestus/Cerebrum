@@ -7,8 +7,11 @@ from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings, OllamaLLM
 
 from agents.rose import RosePrompts
-from cerebrum_core.file_manager_inator import CerebrumPaths, knowledgebase_index_inator
 from cerebrum_core.model_inator import TranslatedQuery
+from cerebrum_core.utils.file_manager_inator import (
+    CerebrumPaths,
+    knowledgebase_index_inator,
+)
 
 os.makedirs("./logs", exist_ok=True)
 logging.basicConfig(
