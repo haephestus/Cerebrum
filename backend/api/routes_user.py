@@ -97,3 +97,15 @@ def ollama_status():
         return config.get_ollama_status()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────
+# GET model details (description and tags)
+# ─────────────────────────────────────────────────────────────
+@configs_router.get("/models/{model_name}/details")
+def get_model_details(model_name: str):
+    try:
+        details = config.get_model_details(model_name)
+        return details
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

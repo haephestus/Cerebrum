@@ -126,7 +126,6 @@ class ConfigManager:
 
         return chat_models, emb_models
 
-    # TODO: EXPAND ON THIS, AND RETURN A MORE DETAILED LIST OF MODELS AND TAGS
     def get_available_online_models(self):
         """Fetch full model list available on Ollama.com"""
         response = requests.get(LIBRARY_URL)
@@ -134,25 +133,140 @@ class ConfigManager:
         soup = BeautifulSoup(response.text, "html.parser")
 
         models = set()
-        for _ in soup.find_all("_", href=True):
-            href = _["href"]
-            if href.startswith("/library"):
+        # Fix: Use 'a' tag and get href as string
+        for link in soup.find_all("a", href=True):
+            href = str(link["href"])  # Convert to string explicitly
+            if href.startswith("/library/"):
                 model = href.split("/library/")[-1]
-                models.add(model)
+                if model:  # Skip empty strings
+                    models.add(model)
 
         online_chat = []
         online_embed = []
 
-        for m in models:
+        for m in sorted(models):  # Sort for consistency
             (online_embed if EMBED_PATTERN.search(m) else online_chat).append(m)
 
         return {
-            "online_chat_models": online_chat,
-            "online_embedding_models": online_embed,
+            "online_chat_models": sorted(online_chat),
+            "online_embedding_models": sorted(online_embed),
         }
 
     def download_model(self, model_name: str):
         return subprocess.run(["ollama", "pull", model_name], check=False)
+
+    def get_model_details(self, model_name: str):
+        """
+        Fetch model details from Ollama library page.
+        Returns description and available tags/versions with sizes.
+        """
+        try:
+            url = f"https://ollama.com/library/{model_name}/tags"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            # Extract description from the main page
+            desc_url = f"https://ollama.com/library/{model_name}"
+            desc_response = requests.get(desc_url, timeout=10)
+            desc_soup = BeautifulSoup(desc_response.text, "html.parser")
+
+            description = None
+            desc_elem = desc_soup.find("p", class_="mb-4")
+            if desc_elem:
+                description = desc_elem.get_text(strip=True)
+
+            # Extract tags with details from the tags table
+            tags = []
+
+            # Find all row groups (each tag is in a div with class "group px-4 py-3")
+            tag_rows = soup.find_all("div", class_="group px-4 py-3")
+
+            for row in tag_rows:
+                tag_info = {}
+
+                # Extract tag name from the link
+                tag_link = row.find("a", class_="group-hover:underline")
+                if tag_link:
+                    tag_text = tag_link.get_text(strip=True)
+                    # Extract just the tag part (after the colon)
+                    if ":" in tag_text:
+                        tag_info["name"] = tag_text.split(":")[-1]
+                    else:
+                        tag_info["name"] = tag_text
+
+                # Check if this is the latest tag - look for the badge with specific classes
+                latest_badges = row.find_all("span")
+                for badge in latest_badges:
+                    if badge.get_text(strip=True) == "latest":
+                        tag_info["is_latest"] = True
+                        break
+
+                # Find the grid with size, context, input (desktop view)
+                grid = row.find("div", class_="grid grid-cols-12")
+                if grid:
+                    # Get all <p> tags which contain size, context, input
+                    info_cells = grid.find_all("p", class_="text-neutral-500")
+
+                    if len(info_cells) >= 3:
+                        size_text = info_cells[0].get_text(strip=True)
+                        context_text = info_cells[1].get_text(strip=True)
+                        input_text = info_cells[2].get_text(strip=True)
+
+                        if size_text and size_text != "-":
+                            tag_info["size"] = size_text
+                        if context_text and context_text != "-":
+                            tag_info["context"] = context_text
+                        if input_text and input_text != "-":
+                            tag_info["input"] = input_text
+
+                # Extract digest and date from the bottom line
+                digest_line = row.find("span", class_="font-mono")
+                if digest_line:
+                    tag_info["digest"] = digest_line.get_text(strip=True)
+
+                # Build details string
+                details_parts = []
+                if tag_info.get("size"):
+                    details_parts.append(tag_info["size"])
+                if tag_info.get("context"):
+                    details_parts.append(f"{tag_info['context']} context")
+                if tag_info.get("input"):
+                    details_parts.append(f"{tag_info['input']} input")
+
+                if details_parts:
+                    tag_info["details"] = " • ".join(details_parts)
+                else:
+                    tag_info["details"] = ""
+
+                if tag_info.get("name"):
+                    tags.append(tag_info)
+
+            # Fallback: if no tags found, provide default
+            if not tags:
+                tags = [
+                    {"name": "latest", "size": "", "details": "", "is_latest": True}
+                ]
+
+            return {
+                "model_name": model_name,
+                "description": description or f"Ollama model: {model_name}",
+                "tags": tags,
+                "url": url,
+            }
+
+        except Exception as e:
+            # Return minimal info if scraping fails
+            return {
+                "model_name": model_name,
+                "description": f"Ollama model: {model_name}",
+                "tags": [
+                    {"name": "latest", "size": "", "details": "", "is_latest": True}
+                ],
+                "url": f"https://ollama.com/library/{model_name}",
+                "error": str(e),
+            }
 
     # ─────────────────────────────────────────────────────────
     #  UPDATE USER SETTINGS

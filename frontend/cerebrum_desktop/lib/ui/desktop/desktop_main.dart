@@ -1,6 +1,6 @@
-import 'package:cerebrum_app/ui/desktop/screens/settings.dart';
+import 'package:cerebrum_app/ui/desktop/screens/home/d_homescreen_page.dart';
+import 'package:cerebrum_app/ui/desktop/screens/settings/settings.dart';
 import 'package:flutter/material.dart';
-import '/features/home/home_page.dart';
 import 'package:cerebrum_app/ui/desktop/widgets/sidebar_button.dart';
 import 'package:cerebrum_app/ui/desktop/screens/study_bubble/d_study_bubble_page.dart';
 import 'package:cerebrum_app/ui/desktop/screens/study_bubble/d_study_bubble_home.dart';
@@ -24,7 +24,7 @@ class _DesktopUIState extends State<DesktopUI> {
 
   Widget _buildPage() {
     if (selectedPage == 0) {
-      return HomePage();
+      return DHomescreen();
     } else if (selectedPage == 1) {
       return DStudyBubbleHome(
         onOpenBubble: (bubble) {
