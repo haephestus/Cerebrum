@@ -39,7 +39,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
       // Ensure each note has bubbleId and proper content structure
       for (var note in data) {
         // Ensure bubbleId is set
-        note['bubbleId'] = bubbleId;
+        note['bubble_id'] = bubbleId;
 
         // Ensure content has document key
         if (note['content'] is Map &&

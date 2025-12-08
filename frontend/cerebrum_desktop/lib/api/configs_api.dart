@@ -42,6 +42,34 @@ class ConfigsApi {
     }
   }
 
+  static Future<List<dynamic>> updateChatModel(String model) async {
+    final response = await http.post(
+      Uri.parse("$configsEndpoint/config/models/chat"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(model),
+    );
+
+    if (response.statusCode != 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception("Failed to update chat model: ${response.body}");
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateEmbeddingModel(String model) async {
+    final response = await http.post(
+      Uri.parse("$configsEndpoint/config/models/embedding"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(model),
+    );
+
+    if (response.statusCode != 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception("Failed to update embedding model: ${response.body}");
+    }
+  }
+
   static Future<Map<String, dynamic>> fetchOllamaStatus() async {
     final response = await http.get(
       Uri.parse("$configsEndpoint/models/embedding/installed"),

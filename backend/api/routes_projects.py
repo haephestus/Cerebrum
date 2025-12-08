@@ -58,11 +58,13 @@ def get_notes_dir(project_id: str) -> Path:
 
 
 def list_notes_in(notes_path: Path) -> List[NoteOut]:
-    notes = []
+    notes: List[NoteOut] = []
     for file in notes_path.glob("*.md"):
         content = file.read_text(encoding="utf-8")
-        title = content.splitlines()[0] if content else file.stem
-        notes.append(NoteOut(title=title, content=content, filename=file.name))
+        note = NoteBase.model_validate_json(content)
+        notes.append(
+            NoteOut(title=note.title, content=note.content, filename=file.name)
+        )
     return notes
 
 
@@ -173,7 +175,7 @@ def create_note(project_id: str, note: NoteBase):
         file_path = notes_dir / filename
         counter += 1
 
-    file_path.write_text(note.content, encoding="utf-8")
+    file_path.write_text(note.model_dump_json(indent=2), encoding="utf-8")
     return NoteOut(title=note.title, content=note.content, filename=filename)
 
 
@@ -186,8 +188,9 @@ def get_note(project_id: str, filename: str):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
     content = file_path.read_text(encoding="utf-8")
+    note = NoteBase.model_validate_json(content)
     title = content.splitlines()[0] if content else file_path.stem
-    return NoteOut(title=title, content=content, filename=filename)
+    return NoteOut(title=title, content=note.content, filename=filename)
 
 
 @project_router.put("/{project_id}/notes/update/{filename}", response_model=NoteOut)
@@ -198,7 +201,7 @@ def update_note(project_id: str, filename: str, note: NoteBase):
     file_path = notes_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
-    file_path.write_text(note.content, encoding="utf-8")
+    file_path.write_text(note.model_dump_json(indent=2), encoding="utf-8")
     return NoteOut(title=note.title, content=note.content, filename=filename)
 
 

@@ -4,10 +4,10 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api import routes_process_files  # routes_projects,
+from api import routes_bubble, routes_user
 from cerebrum_core.user_inator import ConfigManager
 from cerebrum_core.utils.file_manager_inator import CerebrumPaths, FileRegisterInator
-from local_server import routes_process_files  # routes_projects,
-from local_server import routes_bubble, routes_user
 
 config_manager = ConfigManager()
 

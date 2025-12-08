@@ -37,7 +37,7 @@ class _DesktopUIState extends State<DesktopUI> {
     } else if (selectedPage == 2) {
       return Text("data");
     } else if (selectedPage == 3) {
-      return Setting();
+      return SettingPage();
     } else if (selectedPage == 4) {
       return DStudyBubblePage(addMode: false, bubble: payload);
     }
@@ -57,8 +57,24 @@ class _DesktopUIState extends State<DesktopUI> {
             children: [
               // Left side: buttons
               Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
+                  IconButton(
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: true,
+                        barrierColor: Colors.black54,
+                        builder: (_) => const SettingPage(),
+                      );
+                    },
+                    icon: Icon(
+                      Icons.settings,
+                      color: selectedPage == 3 ? Colors.blue : Colors.white,
+                      size: 45,
+                    ),
+                  ),
+                  SizedBox(height: 350),
                   SidebarButton(
                     icon: Icons.home,
                     label: 'Home',
@@ -73,15 +89,9 @@ class _DesktopUIState extends State<DesktopUI> {
                   ),
                   SidebarButton(
                     icon: Icons.folder,
-                    label: 'Projects',
+                    label: 'Learning Center',
                     selected: selectedPage == 2,
                     onPressed: () => changePage(2),
-                  ),
-                  SidebarButton(
-                    icon: Icons.settings,
-                    label: 'Settings',
-                    selected: selectedPage == 3,
-                    onPressed: () => changePage(3),
                   ),
                 ],
               ),

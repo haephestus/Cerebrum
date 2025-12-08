@@ -135,6 +135,8 @@ class InkStroke(BaseModel):
 
 class NoteBase(BaseModel):
     title: str
+    note_id: str = ""
+    bubble_id: str = ""
     # AppFlowy expects a "document" key here
     content: NoteContent
     ink: List[InkStroke] = Field(default_factory=list)
@@ -172,9 +174,6 @@ class NoteHistory(BaseModel):
 
 
 class NoteStorage(NoteBase):
-    note_id: str = ""
-    bubble_id: str = ""
-
     metadata: NoteMetadata = Field(default_factory=NoteMetadata)
     history: NoteHistory = Field(default_factory=NoteHistory)
 

@@ -68,13 +68,8 @@ class BubbleNotesApi {
     if (response.statusCode == 200) {
       final List<dynamic> body = jsonDecode(response.body);
       return body.map((e) => e as Map<String, dynamic>).map((note) {
-        // Convert bubble_id to bubbleId for consistency
-        if (note.containsKey('bubble_id')) {
-          note['bubbleId'] = note['bubble_id'];
-          note.remove('bubble_id');
-        } else {
-          note['bubbleId'] = bubbleId;
-        }
+        // Ensure bubble_id exists
+        note['bubble_id'] ??= bubbleId;
         return note;
       }).toList();
     }
@@ -93,31 +88,22 @@ class BubbleNotesApi {
 
     if (response.statusCode == 200) {
       final note = jsonDecode(response.body) as Map<String, dynamic>;
-      // Convert bubble_id to bubbleId for consistency
-      if (note.containsKey('bubble_id')) {
-        note['bubbleId'] = note['bubble_id'];
-        note.remove('bubble_id');
-      } else {
-        note['bubbleId'] = bubbleId;
-      }
+      // Ensure bubble_id exists
+      note['bubble_id'] ??= bubbleId;
       return note;
     }
 
     throw Exception("Note not found: ${response.statusCode}");
   }
 
-  // Create note - FIXED VERSION
+  // Create note
   static Future<Map<String, dynamic>> createNote({
     required String bubbleId,
     required String title,
-    required Map<String, dynamic> content, // should already have "document" key
+    required Map<String, dynamic> content,
     List<Map<String, dynamic>>? ink,
   }) async {
-    final note = {
-      "title": title,
-      "content": content, // This should already contain {"document": {...}}
-      "ink": ink ?? [],
-    };
+    final note = {"title": title, "content": content, "ink": ink ?? []};
 
     final response = await http.post(
       Uri.parse("${notesEndpoint(bubbleId)}/create/notes"),
@@ -127,12 +113,8 @@ class BubbleNotesApi {
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       final result = jsonDecode(response.body) as Map<String, dynamic>;
-      if (result.containsKey('bubble_id')) {
-        result['bubbleId'] = result['bubble_id'];
-        result.remove('bubble_id');
-      } else {
-        result['bubbleId'] = bubbleId;
-      }
+      // Ensure bubble_id exists
+      result['bubble_id'] ??= bubbleId;
       return result;
     }
 
@@ -146,7 +128,7 @@ class BubbleNotesApi {
     required String bubbleId,
     required String filename,
     required String title,
-    required Map<String, dynamic> content, // must include "document"
+    required Map<String, dynamic> content,
     List<Map<String, dynamic>>? ink,
   }) async {
     // Ensure content has document key
@@ -164,13 +146,8 @@ class BubbleNotesApi {
 
     if (response.statusCode == 200) {
       final result = jsonDecode(response.body) as Map<String, dynamic>;
-      // Convert bubble_id to bubbleId for consistency
-      if (result.containsKey('bubble_id')) {
-        result['bubbleId'] = result['bubble_id'];
-        result.remove('bubble_id');
-      } else {
-        result['bubbleId'] = bubbleId;
-      }
+      // Ensure bubble_id exists
+      result['bubble_id'] ??= bubbleId;
       return result;
     }
 

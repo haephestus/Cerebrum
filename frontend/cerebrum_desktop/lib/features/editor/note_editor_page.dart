@@ -204,9 +204,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               ? documentJson
               : {'document': documentJson};
 
-      String? bubbleId =
-          widget.note['bubbleId'] as String? ??
-          widget.note['bubble_id'] as String?;
+      String? bubbleId = widget.note['bubble_id'] as String?;
 
       if (bubbleId == null || bubbleId.isEmpty) {
         throw Exception('Missing bubbleId for note.');
@@ -237,8 +235,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       setState(() {
         widget.note['content'] = updatedNote['content'];
         widget.note['ink'] = updatedNote['ink'];
-        widget.note['bubbleId'] =
-            updatedNote['bubbleId'] ?? updatedNote['bubble_id'] ?? bubbleId;
+        widget.note['bubbleId'] = updatedNote['bubble_id'] ?? bubbleId;
       });
 
       _updateLastSavedState();
