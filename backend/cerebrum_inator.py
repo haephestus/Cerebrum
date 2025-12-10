@@ -14,7 +14,6 @@ config_manager = ConfigManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    config_manager.generate_default_config()
     cerebrum_paths = CerebrumPaths()
     cerebrum_paths.init_cerebrum_dirs()
 

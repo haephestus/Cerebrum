@@ -11,8 +11,10 @@ import ulid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from cerebrum_core.model_inator import ContentDiff  # InkDiff,
 from cerebrum_core.model_inator import (
+    ArchivedNote,
+    ArchivedNoteContent,
+    ContentDiff,
     CreateStudyBubble,
     NoteBase,
     NoteContent,
@@ -46,11 +48,12 @@ ROOT_KB_DIR = CEREBRUM_PATHS.get_kb_dir()
 STUDY_BUBBLES_DIR = CEREBRUM_PATHS.get_bubbles_dir()
 STUDY_BUBBLES_DIR.mkdir(parents=True, exist_ok=True)
 
-VECTORSTORES_DIR = ROOT_KB_DIR / "vectorstores"
-VECTORSTORES_DIR.mkdir(parents=True, exist_ok=True)
+KB_VECTORSTORES_DIR = ROOT_KB_DIR / "vectorstores"
+KB_VECTORSTORES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ------------------------------ UTILITIES ------------------------------ #
+# TODO: move to note_util_inator?
 def hash_obj(obj: Any) -> str:
     """Return MD5 hash of object JSON strin."""
     return hashlib.md5(json.dumps(obj, sort_keys=True).encode()).hexdigest()
@@ -60,16 +63,13 @@ def get_user_config():
     return ConfigManager().load_config()
 
 
+# TODO: move to file_manager_inator
 def get_bubble_path(bubble_id: str) -> Path:
     path = STUDY_BUBBLES_DIR / bubble_id
     return path
 
 
-def get_notes_tracker_path(bubble_id: str) -> Path:
-    path = STUDY_BUBBLES_DIR / bubble_id / "tracker"
-    return path
-
-
+# TODO: move to file_manager_inator
 def get_notes_dir(bubble_id: str) -> Path:
     """
     Always returns:
@@ -81,6 +81,7 @@ def get_notes_dir(bubble_id: str) -> Path:
     return notes_path
 
 
+# TODO: move to note_util_inator?
 def ensure_valid_document(document: Dict[str, Any]) -> Dict[str, Any]:
     """
     Ensure the document has valid AppFlowy structure with delta fields.
@@ -110,6 +111,7 @@ def ensure_valid_document(document: Dict[str, Any]) -> Dict[str, Any]:
     return document
 
 
+# TODO: move to note_util_inator?
 def extract_total_text(doc):
     text_chunks = []
     for child in doc.get("children", []):
@@ -118,6 +120,7 @@ def extract_total_text(doc):
     return "".join(text_chunks)
 
 
+# TODO: move to note_util_inator?
 def calculate_version_increment(old_doc: dict, new_doc: dict) -> float:
     """
     Rules:
@@ -137,9 +140,9 @@ def calculate_version_increment(old_doc: dict, new_doc: dict) -> float:
 
     # ----- Decision -----
 
-    if added_chars > 100 or added_children > 10:
+    if added_chars > 250 or added_children > 10:
         return 1.0  # major bump
-    elif added_chars > 50 or added_children > 5:
+    elif added_chars > 125 or added_children > 5:
         return 0.1  # medium bump
     elif added_chars > 0:
         return 0.01  # minor bump
@@ -183,6 +186,7 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
         raise HTTPException(status_code=400, detail="Bubble already exists")
 
     # Initialize study bubble associated dirs
+    # TODO: move to file_manager_inator
     bubble_path.mkdir(parents=True, exist_ok=True)
 
     (bubble_path / "chat").mkdir(parents=True, exist_ok=True)
@@ -342,7 +346,7 @@ async def debug_create_note(bubble_id: str, request: Request):
 @bubble_router.put("/{bubble_id}/notes/update/{filename}", response_model=NoteOut)
 def update_note(bubble_id: str, filename: str, note: NoteBase):
     notes_dir = get_notes_dir(bubble_id)
-    vectorestore = notes_dir / "notes" / ".embeds"
+    vectorestore = notes_dir / ".embeds"
     file_path = notes_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
@@ -358,6 +362,11 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
     # ---------- CONTENT DIFF ----------
     old_content = stored_note.content.model_dump()
     new_content = note.content.model_dump()
+    version = stored_note.metadata.content_version
+    increment = calculate_version_increment(
+        old_doc=stored_note.content.document, new_doc=note.content.document
+    )
+
     if old_content != new_content:
         patch_ops = jsonpatch.make_patch(old_content, new_content).patch
         stored_note.history.content.append(
@@ -368,10 +377,7 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
             )
         )
 
-        increment = calculate_version_increment(
-            old_doc=stored_note.content.document, new_doc=note.content.document
-        )
-        stored_note.metadata.content_version += increment
+        version = int(version) + 1 if increment == 1 else version + increment
 
         stored_note.content = note.content
         stored_note.metadata.content_hash = hash_obj(new_content)
@@ -398,20 +404,22 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
     # ----------------- COMPRESS DIFFS -------------------
     stored_note = diff_collapser_inator(stored_note)
 
-    if stored_note.metadata.content_version.is_integer():
-        # ---------- ADD TO HISTORIC NOTES CACHE -------------
-        NoteArchiveInator(
-            note=stored_note, vectorstore_dir=str(vectorestore)
-        ).archive_init_inator()
+    # ---------- ADD TO HISTORIC NOTES ARCHIVE -------------
+    should_archive = (increment == 1) or (version == 1)
+    if should_archive:
+        archive = NoteArchiveInator(note=stored_note, note_embeds=str(vectorestore))
+        archive.archive_init_inator()
+        archive.archive_populator_inator()
 
     # Save updated note
     file_path.write_text(stored_note.model_dump_json(indent=2), encoding="utf-8")
 
     return NoteOut(
+        filename=filename,
+        ink=stored_note.ink,
         title=stored_note.title,
         content=stored_note.content,
-        ink=stored_note.ink,
-        filename=filename,
+        bubble_id=stored_note.bubble_id,
     )
 
 
@@ -446,19 +454,63 @@ def rename_note(bubble_id: str, filename: str, payload: NoteBase):
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
 def delete_note(bubble_id: str, filename: str):
     notes_dir = get_notes_dir(bubble_id)
-    file_path = notes_dir / filename
+    filepath = notes_dir / filename
 
-    if not file_path.exists():
+    if not filepath.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
     # TODO: delete note from the archive
-    data = json.loads(file_path.read_text())
+    data = json.loads(filepath.read_text())
     NoteArchiveInator(
-        note=NoteStorage(**data), vectorstore_dir=str(file_path)
+        note=NoteStorage(**data), note_embeds=str(filepath)
     ).archive_cleaner_inator()
 
-    file_path.unlink()
+    filepath.unlink()
     return {"detail": "Note deleted successfully"}
+
+
+@bubble_router.get("/{bubble_id}/notes/archive")
+def browse_bubble_archive(bubble_id: str):
+    notes_dir = get_notes_dir(bubble_id)
+    embeds_dir = notes_dir / ".embeds"
+
+    if not embeds_dir.exists():
+        raise HTTPException(404, "No archive found for this bubble")
+
+    all_archives = []
+
+    for note_file in notes_dir.glob("*.json"):
+        note_data = json.loads(note_file.read_text(encoding="utf-8"))
+        note_storage = NoteStorage(**note_data)
+
+        archive = NoteArchiveInator(note=note_storage, note_embeds=str(embeds_dir))
+        raw_data = archive.archive_browser_inator()
+
+        versions = []
+        for doc_content, metadata in zip(raw_data["documents"], raw_data["metadatas"]):
+            version = metadata.get("version", 0.0)
+            # Wrap using existing NoteContent
+            versions.append(
+                ArchivedNoteContent(
+                    version=float(version),
+                    content=doc_content,
+                )
+            )
+
+        # Sort versions by version number
+        versions.sort(key=lambda x: x.version)
+
+        historical_note = ArchivedNote(
+            note_id=note_storage.note_id,
+            note_name=note_storage.title,
+            versions=versions,
+        )
+
+        all_archives.append(
+            {"note_filename": note_file.name, "archive": historical_note}
+        )
+
+    return all_archives
 
 
 # ---------------------------- CHAT ENDPOINT ------------------------------ #
@@ -476,7 +528,7 @@ async def chat_in_bubble(
     """
     Chat inside a specific study bubble.
     """
-    vectorstore_root = VECTORSTORES_DIR
+    vectorstore_root = KB_VECTORSTORES_DIR
     chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
     embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
 
@@ -493,7 +545,8 @@ async def chat_in_bubble(
     # CONSTRUCT CONTEXT
     processor.constructor_inator(translated_query=translated_query)
 
-    # RETRIEVE
+    # TODO: cache responses for bubbles
+    # RETRIEVE from knowledgebase and from note/.embeds
     processor.retrieve_inator()
 
     # GENERATE RESPONSE

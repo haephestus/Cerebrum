@@ -136,7 +136,12 @@ class BubbleNotesApi {
       content = {'document': content};
     }
 
-    final note = {"title": title, "content": content, "ink": ink ?? []};
+    final note = {
+      "ink": ink ?? [],
+      "title": title,
+      "content": content,
+      "bubble_id": bubbleId,
+    };
 
     final response = await http.put(
       Uri.parse("${notesEndpoint(bubbleId)}/notes/update/$filename"),

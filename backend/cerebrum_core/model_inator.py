@@ -182,6 +182,17 @@ class NoteOut(NoteBase):
     filename: str
 
 
+class ArchivedNoteContent(BaseModel):
+    version: float
+    content: str
+
+
+class ArchivedNote(BaseModel):
+    note_id: str
+    note_name: str
+    versions: List[ArchivedNoteContent]
+
+
 #############################################################################
 #                                                                           #
 #                    MODELS FOR INTERACTIVE USER LEARNING                   #

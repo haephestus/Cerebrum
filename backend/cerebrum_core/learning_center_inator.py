@@ -93,6 +93,13 @@ def assesment_maker(raw: str, mode: str):
 '''
 
 
+def data_retriever_inator(bubble_id: str, filename: str):
+    """
+    Retrieve note data from archives
+    """
+    pass
+
+
 # TODO: generate engram(readings, quizzes, mock exams, flash cards)
 #       run adapative spaced repetition
 #       place quizzes in bubble specific folders

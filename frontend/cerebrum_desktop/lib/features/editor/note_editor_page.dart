@@ -4,7 +4,7 @@ import 'package:cerebrum_app/api/bubbles_api.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_drawing_board/flutter_drawing_board.dart';
 import 'package:flutter_drawing_board/paint_contents.dart';
-import 'note_editor_commands.dart'; // Import your shortcuts
+import 'helpers/note_editor_commands.dart'; // Import your shortcuts
 
 class NoteEditorPage extends StatefulWidget {
   final Map<String, dynamic> note;
@@ -35,6 +35,13 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     super.initState();
 
     debugPrint('Initializing NoteEditorPage with note: ${widget.note}');
+
+    if (!widget.note.containsKey('bubble_id') ||
+        widget.note['bubble_id'] == null) {
+      throw Exception(
+        "NoteEditorPage: missing bubble_id in incoming note: ${widget.note}",
+      );
+    }
 
     // Initialize editor with saved content or blank
     Map<String, dynamic>? contentData =
@@ -199,10 +206,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
       final inkJson = _drawingController.getJsonList();
 
       // Ensure correct wrapping
-      final contentForApi =
-          documentJson.containsKey('document')
-              ? documentJson
-              : {'document': documentJson};
+      final contentForApi = {
+        'document': documentJson['document'] ?? documentJson,
+      };
 
       String? bubbleId = widget.note['bubble_id'] as String?;
 
@@ -228,14 +234,17 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           content: contentForApi,
           ink: inkJson,
         );
-        widget.note['filename'] = updatedNote['filename'];
+        setState(() {
+          widget.note['filename'] = updatedNote['filename'];
+        });
       }
 
       // Update local state
       setState(() {
         widget.note['content'] = updatedNote['content'];
         widget.note['ink'] = updatedNote['ink'];
-        widget.note['bubbleId'] = updatedNote['bubble_id'] ?? bubbleId;
+        widget.note['bubble_id'] =
+            updatedNote['bubble_id'] ?? widget.note['bubble_id'];
       });
 
       _updateLastSavedState();

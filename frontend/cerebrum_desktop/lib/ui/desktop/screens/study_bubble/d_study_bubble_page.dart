@@ -107,7 +107,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
                 .map((e) => e as Map<String, dynamic>)
                 .toList(),
         "filename": createdNote['filename'] as String,
-        "bubbleId": bubbleId,
+        "bubble_id": bubbleId,
       };
 
       // 5️⃣ Insert into local notes list
@@ -274,7 +274,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
                     onTap: () {
                       // Ensure note has bubbleId before opening
                       final noteToEdit = Map<String, dynamic>.from(note);
-                      noteToEdit['bubbleId'] = bubbleId;
+                      noteToEdit['bubble_id'] = bubbleId;
 
                       Navigator.push(
                         context,

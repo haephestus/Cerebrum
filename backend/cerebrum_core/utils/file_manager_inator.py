@@ -25,9 +25,31 @@ class CerebrumPaths:
         ]:
             (self.DATA_DIR / sub).mkdir(exist_ok=True)
 
+    # ------------- HANDLE BUBBLES PATHS ---------------------------
+    # TODO: handle all bubble ops: inits bubble
     def init_bubble_dirs(self):
         self.DATA_DIR
 
+    # TODO: init study bubble sub-dirs
+    def init_bubble_subdir(self):
+        pass
+
+    # TODO: return notes path
+    def get_notes_dir(self, bubble_id):
+        pass
+
+    # TODO: return bubble path
+    def get_bubble_path(self, bubble_id):
+        pass
+
+    # TODO: return note path
+    # TODO: return note embeds path
+    # TODO: return chat path
+    # TODO: return chat embeds path
+    # TODO: return assesments paths
+    # TODO: return assesments embeds paths
+
+    # ------------- HANDLE KNOWLEDGEBASE PATHS ---------------------------
     def get_kb_dir(self) -> Path:
         KB_DIR = self.DATA_DIR / "knowledgebase"
         return KB_DIR

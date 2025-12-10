@@ -1,14 +1,9 @@
-import json
-from pathlib import Path
-
-import chromadb
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 
 from cerebrum_core.model_inator import NoteStorage
 from cerebrum_core.user_inator import ConfigManager
-from cerebrum_core.utils.file_manager_inator import CEREBRUM_PATHS
 
 
 def diff_collapser_inator(note: NoteStorage) -> NoteStorage:
@@ -37,10 +32,10 @@ class NoteArchiveInator:
     def __init__(
         self,
         note: NoteStorage,
-        vectorstore_dir: str,
+        note_embeds: str,
     ) -> None:
         self.note = note
-        self.vectorstore_dir = vectorstore_dir
+        self.note_embeds = note_embeds
 
     def _get_vectorstore(self) -> Chroma:
         """Helper: Get Chroma vectore instance from disk"""
@@ -53,7 +48,7 @@ class NoteArchiveInator:
             collection_name=self.note.note_id,
             embedding_function=OllamaEmbeddings(model=embedding_model),
             create_collection_if_not_exists=True,
-            persist_directory=str(self.vectorstore_dir),
+            persist_directory=str(self.note_embeds),
             collection_metadata={
                 "note_id": self.note.note_id,
             },
@@ -95,6 +90,9 @@ class NoteArchiveInator:
         except Exception as e:
             print(f"Collection not found or error: {self.note.note_id} - {e}")
 
+    def archive_browser_inator(self):
+        return self._get_vectorstore().get()
+
 
 class NoteToMarkdownInator:
     """
@@ -109,7 +107,7 @@ class NoteToMarkdownInator:
         """
         Main entry point - returns a flattened Markdown string.
         """
-        children = note.content["document"]["children"]
+        children = note.document["children"]
         lines = []
 
         for block in children:
@@ -130,22 +128,28 @@ class NoteToMarkdownInator:
 
     def _handle_paragraph(self, block):
         text = self._extract_text(block)
-        return text if text.strip() else None
+        return text.strip() if text else None
 
     def _handle_divider(self, block):
         return "---"
 
     def _handle_table(self, block):
         if not self.convert_tables:
-            return "[TABLE OMITTED"
+            return "[TABLE OMITTED]"
 
         return self._flatten_table(block)
 
     # ---------------- Helpers -----------------#
     def _extract_text(self, block):
         """Extracts linear text from delta[].insert"""
-        delta = block.get("data", {}.get("delta", []))
-        return "".join(item.get("insert", "") for item in delta)
+        delta = block.get("data", {}).get("delta", [])
+        text = ""
+        for item in delta:
+            if isinstance(item, dict):
+                text += item.get("insert", "")
+            elif isinstance(item, str):
+                text += item
+            return text
 
     def _flatten_table(self, table_block):
         """Converts Appflowy table -> markdown table."""

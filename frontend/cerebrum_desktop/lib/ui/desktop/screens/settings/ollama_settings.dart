@@ -51,6 +51,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         checkingStatus = false;
       });
     } catch (e) {
+      debugPrint("Error checking Ollama status: $e");
       setState(() {
         ollamaInstalled = false;
         ollamaRunning = false;
@@ -91,6 +92,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
       setState(() => loading = false);
     } catch (e) {
+      debugPrint("Error loading models: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -105,6 +107,8 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
   Future<void> onChatModelChanged(String newModel) async {
     final needsDownload = !installedChatModels.contains(newModel);
+
+    String modelToSet = newModel;
 
     if (needsDownload) {
       // Show model details dialog
@@ -127,8 +131,9 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         setState(() {
           installedChatModels.add(selectedVersion);
           onlineChatModels.remove(newModel);
-          selectedChatModel = selectedVersion;
         });
+
+        modelToSet = selectedVersion;
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -138,6 +143,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
           );
         }
       } catch (e) {
+        debugPrint("Download error: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -148,18 +154,20 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         }
         return;
       }
-    } else {
-      setState(() => selectedChatModel = newModel);
     }
 
+    // Always update the config after download or selection
+    setState(() => selectedChatModel = modelToSet);
+
     try {
-      await ConfigsApi.updateChatModel(selectedChatModel!);
+      await ConfigsApi.updateChatModel(modelToSet);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Chat model updated to $selectedChatModel")),
+          SnackBar(content: Text("Chat model updated to $modelToSet")),
         );
       }
     } catch (e) {
+      debugPrint("Update error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -173,6 +181,8 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
   Future<void> onEmbeddingModelChanged(String newModel) async {
     final needsDownload = !installedEmbeddingModels.contains(newModel);
+
+    String modelToSet = newModel;
 
     if (needsDownload) {
       // Show model details dialog
@@ -195,8 +205,9 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         setState(() {
           installedEmbeddingModels.add(selectedVersion);
           onlineEmbeddingModels.remove(newModel);
-          selectedEmbeddingModel = selectedVersion;
         });
+
+        modelToSet = selectedVersion;
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -206,6 +217,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
           );
         }
       } catch (e) {
+        debugPrint("Download error: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -216,20 +228,20 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         }
         return;
       }
-    } else {
-      setState(() => selectedEmbeddingModel = newModel);
     }
 
+    // Always update the config after download or selection
+    setState(() => selectedEmbeddingModel = modelToSet);
+
     try {
-      await ConfigsApi.updateEmbeddingModel(selectedEmbeddingModel!);
+      await ConfigsApi.updateEmbeddingModel(modelToSet);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Embedding model updated to $selectedEmbeddingModel"),
-          ),
+          SnackBar(content: Text("Embedding model updated to $modelToSet")),
         );
       }
     } catch (e) {
+      debugPrint("Update error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -247,6 +259,8 @@ class _OllamaSettingsState extends State<OllamaSettings> {
   ) async {
     return showDialog<String>(
       context: context,
+      barrierColor: Colors.black54,
+      barrierDismissible: true, // Allow clicking outside to dismiss
       builder: (context) => _ModelDetailsDialog(modelName: modelName),
     );
   }
@@ -707,6 +721,7 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
         }
       });
     } catch (e) {
+      print("Error loading model details: $e");
       setState(() => loading = false);
     }
   }
@@ -777,7 +792,6 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                     itemBuilder: (context, index) {
                       final tagObj = modelInfo!['tags'][index];
                       final tag = tagObj is String ? tagObj : tagObj['name'];
-                      //final size = tagObj is Map ? (tagObj['size'] ?? '') : '';
                       final details =
                           tagObj is Map ? (tagObj['details'] ?? '') : '';
                       final isLatest =
