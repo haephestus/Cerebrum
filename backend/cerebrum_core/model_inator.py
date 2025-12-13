@@ -182,6 +182,7 @@ class NoteOut(NoteBase):
     filename: str
 
 
+# ---------------------------ARCHIVED NOTE MODELS---------------------------
 class ArchivedNoteContent(BaseModel):
     version: float
     content: str
@@ -233,3 +234,20 @@ class ResearchProject(CreateResearchProject):
 #                            LEARNING MODELS                                #
 #                                                                           #
 #############################################################################
+
+
+#############################################################################
+#                                                                           #
+#                       MODELS NEEDED FOR CACHING                           #
+#                                                                           #
+#############################################################################
+
+
+class CachedQuery(BaseModel):
+    pass
+
+
+class CachedNotes(BaseModel):
+    id: str
+    content: str
+    version: float

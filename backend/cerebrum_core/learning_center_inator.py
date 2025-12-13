@@ -39,6 +39,8 @@ def assesment_maker(raw: str, mode: str):
 # note analysis:
 # TODO: implement note caching(intemediary md) to allow chunking
 # TODO: add supporting caching dir in platform dirs
+
+
 def note_analyser_inator(
     note: NoteStorage, semantic_version: float, analyser: RetrieverInator
 ):

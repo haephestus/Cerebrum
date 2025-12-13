@@ -21,7 +21,7 @@ from cerebrum_core.utils.file_manager_inator import CerebrumPaths
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-llm_model = "granite4:micro"
+chat_model = "granite4:micro"
 embedding_model = "qwen3-embedding:4b-q4_K_M"
 
 # --------------------------- router & paths --------------------------- #
@@ -33,8 +33,8 @@ ROOT_KB_DIR = CEREBRUM_PATHS.get_kb_dir()
 PROJECTS_ROOT = CEREBRUM_PATHS.get_projects_dir()
 PROJECTS_ROOT.mkdir(parents=True, exist_ok=True)
 
-VECTORSTORES_ROOT = ROOT_KB_DIR / "vectorstores"
-VECTORSTORES_ROOT.mkdir(parents=True, exist_ok=True)
+ARCHIVES_ROOT = ROOT_KB_DIR / "archives"
+ARCHIVES_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 # ------------------------------ UTILITIES ------------------------------ #
@@ -226,14 +226,14 @@ class Query(BaseModel):
 async def chat_in_project(project_id: str, query: Query):
     """
     Chat inside a specific project.
-    Uses the global vectorstore root but you can adapt to per-project vectorstores easily.
+    Uses the global archives root but you can adapt to per-project archives easily.
     """
-    vectorstores_root = VECTORSTORES_ROOT
+    archives_root = ARCHIVES_ROOT
 
     processor = RetrieverInator(
-        vectorstores_root=str(vectorstores_root),
+        archives_root=str(archives_root),
         embedding_model=embedding_model,
-        llm_model=llm_model,
+        chat_model=chat_model,
     )
 
     translated_query = processor.translator_inator(user_query=query.text)

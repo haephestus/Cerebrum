@@ -15,7 +15,7 @@ pdf_path = pathlib.Path("../data/knowledgebase/biology/physiology/Johnny Hall - 
 from pathlib import Path
 from cerebrum_core.file_manager_inator import knowledgebase_index_inator
 
-test, testfile = knowledgebase_index_inator(Path("../data/storage/vectorstores"))
+test, testfile = knowledgebase_index_inator(Path("../data/storage/archives"))
 for test in test:
     print(test["domain"])
     print(test["subject"])
@@ -30,7 +30,7 @@ to_md = IngestInator(
 clean_md = to_md.sanitize_inator(
     filename=pdf_path.name,
     metadata=file.metadata,
-    llm_model="granite4:micro"
+    chat_model="granite4:micro"
 )
 print(file.metadata)
 print(clean_md)
@@ -43,9 +43,9 @@ for chunk in chunks:
 # %%
 query = "Describe DNA"
 retrieve = RetrieverInator(
-    vectorstores_root = "../data/storage/vectorstores",
+    archives_root = "../data/storage/archives",
     embedding_model="qwen3-embedding:4b-q4_K_M",
-    llm_model = "granite4:micro"
+    chat_model = "granite4:micro"
 )
 
 translated_query = retrieve.translator_inator(user_query=query)
@@ -73,7 +73,7 @@ query = "Describe DNA."
 test_db = Chroma (
     embedding_function=OllamaEmbeddings(model="qwen3-embedding:4b-q4_K_M"),
     collection_name="david-s-latchman-gene-control",
-    persist_directory="../data/storage/vectorstores/biology/genetics"
+    persist_directory="../data/storage/archives/biology/genetics"
 )
 retrieve = test_db.as_retriever(search_kwargs={"k": 3})
 result = retrieve.invoke(query)

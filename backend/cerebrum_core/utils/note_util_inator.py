@@ -1,9 +1,13 @@
+from pathlib import Path
+
+from fastapi import HTTPException
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 
-from cerebrum_core.model_inator import NoteStorage
+from cerebrum_core.model_inator import ArchivedNote, ArchivedNoteContent, NoteStorage
 from cerebrum_core.user_inator import ConfigManager
+from cerebrum_core.utils.file_manager_inator import CerebrumPaths
 
 
 def diff_collapser_inator(note: NoteStorage) -> NoteStorage:
@@ -28,17 +32,18 @@ def diff_collapser_inator(note: NoteStorage) -> NoteStorage:
     return note
 
 
-class NoteArchiveInator:
+class ArchiveInator:
     def __init__(
         self,
         note: NoteStorage,
-        note_embeds: str,
+        # WARN: chroma needs str
+        note_archives: str,
     ) -> None:
         self.note = note
-        self.note_embeds = note_embeds
+        self.note_archives = note_archives
 
-    def _get_vectorstore(self) -> Chroma:
-        """Helper: Get Chroma vectore instance from disk"""
+    def _get_archives(self) -> Chroma:
+        """Helper: Get Chroma archive instance from disk"""
         embedding_model = ConfigManager().load_config().models.embedding_model
         assert embedding_model is not None
         assert self.note is not None
@@ -48,7 +53,7 @@ class NoteArchiveInator:
             collection_name=self.note.note_id,
             embedding_function=OllamaEmbeddings(model=embedding_model),
             create_collection_if_not_exists=True,
-            persist_directory=str(self.note_embeds),
+            persist_directory=str(self.note_archives),
             collection_metadata={
                 "note_id": self.note.note_id,
             },
@@ -58,7 +63,7 @@ class NoteArchiveInator:
         """
         Stores snapshots of notes in a historic database
         """
-        self._get_vectorstore()
+        self._get_archives()
 
     def archive_populator_inator(self) -> None:
         """
@@ -77,21 +82,51 @@ class NoteArchiveInator:
             },
         )
 
-        self._get_vectorstore().add_documents([note])
+        self._get_archives().add_documents([note])
 
     def archive_cleaner_inator(self) -> None:
         """
         DANGER: Deletes entire collection(note)
         """
         try:
-            self._get_vectorstore().delete_collection()
+            self._get_archives().delete_collection()
             print(f"Deleted collection: {self.note.note_id}")
 
         except Exception as e:
             print(f"Collection not found or error: {self.note.note_id} - {e}")
 
-    def archive_browser_inator(self):
-        return self._get_vectorstore().get()
+    def archive_browser_inator(self, bubble_id):
+        note_file = CerebrumPaths().get_notes_dir(bubble_id) / self.note.title
+
+        if not Path(self.note_archives).exists():
+            raise HTTPException(404, f"No archive found for bubble:{bubble_id}")
+
+        if not note_file.exists():
+            raise HTTPException(
+                404, f"No note:{self.note.title} found for bubble:{bubble_id}"
+            )
+
+        raw_data = self._get_archives().get()
+
+        versions = []
+        for doc_content, metadata in zip(raw_data["documents"], raw_data["metadatas"]):
+            version = metadata.get("version", 0.0)
+            versions.append(
+                ArchivedNoteContent(
+                    version=float(version),
+                    content=doc_content,
+                )
+            )
+
+        versions.sort(key=lambda x: x.version)
+
+        historical_note = ArchivedNote(
+            note_id=self.note.note_id,
+            note_name=self.note.title,
+            versions=versions,
+        )
+
+        return {"filename": note_file.name, "archive": historical_note}
 
 
 class NoteToMarkdownInator:
