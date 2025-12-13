@@ -3,7 +3,6 @@ import json
 import logging
 import shutil
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List
 
 import jsonpatch
@@ -11,9 +10,8 @@ import ulid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from agents.rose import RosePrompts
 from cerebrum_core.model_inator import (
-    ArchivedNote,
-    ArchivedNoteContent,
     ContentDiff,
     CreateStudyBubble,
     NoteBase,
@@ -30,26 +28,12 @@ from cerebrum_core.user_inator import (
     ConfigManager,
 )
 from cerebrum_core.utils.file_manager_inator import CerebrumPaths
-from cerebrum_core.utils.note_util_inator import (
-    NoteArchiveInator,
-    diff_collapser_inator,
-)
+from cerebrum_core.utils.note_util_inator import ArchiveInator, diff_collapser_inator
 
 bubble_router = APIRouter(prefix="/bubbles", tags=["Study Bubble API"])
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-CEREBRUM_PATHS = CerebrumPaths()
-ROOT_KB_DIR = CEREBRUM_PATHS.get_kb_dir()
-
-# Base directories
-STUDY_BUBBLES_DIR = CEREBRUM_PATHS.get_bubbles_dir()
-STUDY_BUBBLES_DIR.mkdir(parents=True, exist_ok=True)
-
-KB_VECTORSTORES_DIR = ROOT_KB_DIR / "vectorstores"
-KB_VECTORSTORES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ------------------------------ UTILITIES ------------------------------ #
@@ -61,24 +45,6 @@ def hash_obj(obj: Any) -> str:
 
 def get_user_config():
     return ConfigManager().load_config()
-
-
-# TODO: move to file_manager_inator
-def get_bubble_path(bubble_id: str) -> Path:
-    path = STUDY_BUBBLES_DIR / bubble_id
-    return path
-
-
-# TODO: move to file_manager_inator
-def get_notes_dir(bubble_id: str) -> Path:
-    """
-    Always returns:
-    DATA_DIR/study_bubbles/<bubble_id>/notes
-    """
-    bubble_path = get_bubble_path(bubble_id)
-    notes_path = bubble_path / "notes"
-    notes_path.mkdir(parents=True, exist_ok=True)
-    return notes_path
 
 
 # TODO: move to note_util_inator?
@@ -155,6 +121,7 @@ def calculate_version_increment(old_doc: dict, new_doc: dict) -> float:
 
 @bubble_router.get("/", response_model=List[StudyBubble])
 def list_study_bubbles():
+    STUDY_BUBBLES_DIR = CerebrumPaths().get_bubbles_root()
     """
     List all study bubbles.
     """
@@ -180,25 +147,16 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
     Create a study bubble folder and info file.
     """
     bubble_id = data.name.replace(" ", "_").lower()
-    bubble_path = get_bubble_path(bubble_id)
+    bubble = CerebrumPaths().get_bubbles_root() / bubble_id
 
-    if bubble_path.exists():
+    if bubble.exists():
         raise HTTPException(status_code=400, detail="Bubble already exists")
 
     # Initialize study bubble associated dirs
     # TODO: move to file_manager_inator
-    bubble_path.mkdir(parents=True, exist_ok=True)
+    CerebrumPaths().init_bubble_dirs(bubble_id=bubble_id)
 
-    (bubble_path / "chat").mkdir(parents=True, exist_ok=True)
-    (bubble_path / "chat" / ".embeds").mkdir(parents=True, exist_ok=True)
-
-    (bubble_path / "notes").mkdir(parents=True, exist_ok=True)
-    (bubble_path / "notes" / ".embeds").mkdir(parents=True, exist_ok=True)
-
-    (bubble_path / "assesments").mkdir(parents=True, exist_ok=True)
-    (bubble_path / "assesments" / ".embeds").mkdir(parents=True, exist_ok=True)
-
-    # TODO: initiate study bubble vectorstore
+    # TODO: initiate study bubble archives
     bubble_data = StudyBubble(
         id=bubble_id,
         name=data.name,
@@ -208,7 +166,7 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
         created_at=datetime.now(),
     )
 
-    info_file = bubble_path / "info.json"
+    info_file = bubble / "info.json"
     info_file.write_text(bubble_data.model_dump_json(indent=4), encoding="utf-8")
 
     return bubble_data
@@ -219,7 +177,8 @@ def get_study_bubble(bubble_id: str) -> StudyBubble:
     """
     Fetch a single study bubble's info.
     """
-    bubble_path = get_bubble_path(bubble_id)
+
+    bubble_path = CerebrumPaths().get_bubble_path(bubble_id)
     info_file = bubble_path / "info.json"
 
     if not info_file.exists():
@@ -234,7 +193,7 @@ def delete_study_bubble(bubble_id: str):
     """
     Delete a bubble and its notes.
     """
-    bubble_path = get_bubble_path(bubble_id)
+    bubble_path = CerebrumPaths().get_bubble_path(bubble_id)
 
     if not bubble_path.exists():
         raise HTTPException(status_code=404, detail="Study bubble not found")
@@ -251,7 +210,7 @@ def delete_study_bubble(bubble_id: str):
 # List notes
 @bubble_router.get("/{bubble_id}/notes", response_model=List[NoteOut])
 def list_notes_in_bubble(bubble_id: str):
-    notes_dir = get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
     notes = []
     for file in notes_dir.glob("*.json"):
         storage_data = json.loads(file.read_text(encoding="utf-8"))
@@ -270,7 +229,7 @@ def list_notes_in_bubble(bubble_id: str):
 # Create a new note
 @bubble_router.post("/{bubble_id}/create/notes", response_model=NoteOut)
 def create_note(bubble_id: str, note: NoteBase):
-    notes_dir = get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
     note.content.document = ensure_valid_document(note.content.document)
 
     safe_title = note.title.replace(" ", "_")
@@ -308,7 +267,7 @@ def create_note(bubble_id: str, note: NoteBase):
 # Get a single note
 @bubble_router.get("/{bubble_id}/notes/get/{filename}", response_model=NoteOut)
 def get_note(bubble_id: str, filename: str):
-    notes_dir = get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
     file_path = notes_dir / filename
 
     if not file_path.exists():
@@ -345,8 +304,8 @@ async def debug_create_note(bubble_id: str, request: Request):
 # Update a note
 @bubble_router.put("/{bubble_id}/notes/update/{filename}", response_model=NoteOut)
 def update_note(bubble_id: str, filename: str, note: NoteBase):
-    notes_dir = get_notes_dir(bubble_id)
-    vectorestore = notes_dir / ".embeds"
+    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
+    archive_path = notes_dir / ".archives"
     file_path = notes_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
@@ -407,7 +366,7 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
     # ---------- ADD TO HISTORIC NOTES ARCHIVE -------------
     should_archive = (increment == 1) or (version == 1)
     if should_archive:
-        archive = NoteArchiveInator(note=stored_note, note_embeds=str(vectorestore))
+        archive = ArchiveInator(note=stored_note, note_archives=str(archive_path))
         archive.archive_init_inator()
         archive.archive_populator_inator()
 
@@ -425,7 +384,7 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
 
 @bubble_router.put("/{bubble_id}/notes/rename/{filename}", response_model=NoteOut)
 def rename_note(bubble_id: str, filename: str, payload: NoteBase):
-    notes_dir = get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
     old_path = notes_dir / filename
 
     if not old_path.exists():
@@ -453,7 +412,7 @@ def rename_note(bubble_id: str, filename: str, payload: NoteBase):
 # Delete a note
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
 def delete_note(bubble_id: str, filename: str):
-    notes_dir = get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
     filepath = notes_dir / filename
 
     if not filepath.exists():
@@ -461,56 +420,12 @@ def delete_note(bubble_id: str, filename: str):
 
     # TODO: delete note from the archive
     data = json.loads(filepath.read_text())
-    NoteArchiveInator(
-        note=NoteStorage(**data), note_embeds=str(filepath)
+    ArchiveInator(
+        note=NoteStorage(**data), note_archives=str(filepath)
     ).archive_cleaner_inator()
 
     filepath.unlink()
     return {"detail": "Note deleted successfully"}
-
-
-@bubble_router.get("/{bubble_id}/notes/archive")
-def browse_bubble_archive(bubble_id: str):
-    notes_dir = get_notes_dir(bubble_id)
-    embeds_dir = notes_dir / ".embeds"
-
-    if not embeds_dir.exists():
-        raise HTTPException(404, "No archive found for this bubble")
-
-    all_archives = []
-
-    for note_file in notes_dir.glob("*.json"):
-        note_data = json.loads(note_file.read_text(encoding="utf-8"))
-        note_storage = NoteStorage(**note_data)
-
-        archive = NoteArchiveInator(note=note_storage, note_embeds=str(embeds_dir))
-        raw_data = archive.archive_browser_inator()
-
-        versions = []
-        for doc_content, metadata in zip(raw_data["documents"], raw_data["metadatas"]):
-            version = metadata.get("version", 0.0)
-            # Wrap using existing NoteContent
-            versions.append(
-                ArchivedNoteContent(
-                    version=float(version),
-                    content=doc_content,
-                )
-            )
-
-        # Sort versions by version number
-        versions.sort(key=lambda x: x.version)
-
-        historical_note = ArchivedNote(
-            note_id=note_storage.note_id,
-            note_name=note_storage.title,
-            versions=versions,
-        )
-
-        all_archives.append(
-            {"note_filename": note_file.name, "archive": historical_note}
-        )
-
-    return all_archives
 
 
 # ---------------------------- CHAT ENDPOINT ------------------------------ #
@@ -528,25 +443,29 @@ async def chat_in_bubble(
     """
     Chat inside a specific study bubble.
     """
-    vectorstore_root = KB_VECTORSTORES_DIR
+    archives_root = CerebrumPaths().get_kb_archives()
     chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
     embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
-
+    translation_prompt = RosePrompts.get_prompt("rose_query_translator")
     processor = RetrieverInator(
-        vectorstores_root=str(vectorstore_root),
+        archives_root=str(archives_root),
         embedding_model=embedding_model,
-        llm_model=chat_model,
+        chat_model=chat_model,
     )
 
+    assert translation_prompt is not None
     # TRANSLATE USER QUERY
-    translated_query = processor.translator_inator(user_query=query.text)
+    translated_query = processor.translator_inator(
+        user_query=query.text,
+        translation_prompt=translation_prompt,
+    )
     logger.info("Translated Query: %s", translated_query)
 
     # CONSTRUCT CONTEXT
     processor.constructor_inator(translated_query=translated_query)
 
     # TODO: cache responses for bubbles
-    # RETRIEVE from knowledgebase and from note/.embeds
+    # RETRIEVE from knowledgebase and from note/.archives
     processor.retrieve_inator()
 
     # GENERATE RESPONSE

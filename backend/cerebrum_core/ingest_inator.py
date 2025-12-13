@@ -22,9 +22,9 @@ class IngestInator:
     """
 
     def __init__(
-        self, filepath: Path, embedding_model=None, vectorstores_path=None
+        self, filepath: Path, embedding_model=None, archives_path=None
     ) -> None:
-        self.vectorstores_path = vectorstores_path
+        self.archives_path = archives_path
         self.filepath = filepath
         self.embedding_model = embedding_model
         self.chunks: list[Document] = []
@@ -34,14 +34,14 @@ class IngestInator:
         yaml_dump = yaml.dump(metadata.model_dump(), sort_keys=False)
         return f"---\n{yaml_dump}---\n\n"
 
-    def sanitize_inator(self, filename: str, metadata: dict | None, llm_model: str):
+    def sanitize_inator(self, filename: str, metadata: dict | None, chat_model: str):
         """
         renames files to chromadb ready strings
         while also preserving or updating metadata
         offloading renaming and sanitization to llm
         """
         metadata_json = json.dumps(metadata, indent=2) if metadata else "{}"
-        model = OllamaLLM(model=llm_model)
+        model = OllamaLLM(model=chat_model)
         santize_prompt = RosePrompts.get_prompt("rose_rename")
         if not santize_prompt:
             raise ValueError("Prompt 'rose_rename' not fount in RosePrompts")
@@ -106,10 +106,10 @@ class IngestInator:
 
     def embedd_inator(self, chunk, collection_name) -> None:
         """
-        store chunks in vectorstores
+        store chunks in archives
         """
         assert self.embedding_model is not None, "embedding_model is required"
-        assert self.vectorstores_path is not None, "vectorstores_path is required"
+        assert self.archives_path is not None, "archives_path is required"
 
         # embedding
         # WARN: look into making this framework agnostic
@@ -117,7 +117,7 @@ class IngestInator:
         embedding_llm = OllamaEmbeddings(model=self.embedding_model)
         chromadb = Chroma(
             collection_name=collection_name,
-            persist_directory=str(self.vectorstores_path),
+            persist_directory=str(self.archives_path),
             embedding_function=embedding_llm,
             collection_metadata=self.metatdata,
         )

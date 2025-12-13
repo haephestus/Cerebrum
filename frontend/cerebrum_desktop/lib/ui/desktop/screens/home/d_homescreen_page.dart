@@ -15,7 +15,8 @@ class _DHomescreenState extends State<DHomescreen> {
         children: [
           Text("upcomming quizes"),
           Text("results from last quiz"),
-          Text("whats available in library"),
+          Text("add file to knowledgebase"),
+          Text("files in the knowledgebase"),
         ],
       ),
     );

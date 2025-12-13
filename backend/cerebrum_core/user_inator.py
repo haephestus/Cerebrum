@@ -11,12 +11,11 @@ from cerebrum_core.utils.file_manager_inator import CerebrumPaths
 # ─────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────
-CEREBRUM_PATHS = CerebrumPaths()
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 LIBRARY_URL = "https://ollama.com/library"
 
-CONFIG_DIR = CEREBRUM_PATHS.get_config_dir()
+CONFIG_DIR = CerebrumPaths().get_config_dir()
 CONFIG_FILE = CONFIG_DIR / "user_config.json"
 
 EMBED_PATTERN = re.compile(r"(embed|embedding)", re.IGNORECASE)

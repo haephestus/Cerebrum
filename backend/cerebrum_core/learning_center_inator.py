@@ -1,76 +1,15 @@
 from agents.rose import RosePrompts
+from cerebrum_core.model_inator import NoteStorage
 from cerebrum_core.retriever_inator import RetrieverInator
 from cerebrum_core.user_inator import (
     DEFAULT_CHAT_MODEL,
     DEFAULT_EMBED_MODEL,
     ConfigManager,
 )
+from cerebrum_core.utils.cache_inator import CacheInator, SQLiteBackupCache
+from cerebrum_core.utils.note_util_inator import NoteToMarkdownInator
 
 # TODO: progress tracking (based of learning goals)
-
-
-class AssesorInator(RetrieverInator):
-    """
-    Extends RetrieverInator, to allow for assement specific generation
-    """
-
-    def generate_inator(
-        self,
-        user_query: str,
-        top_k_chunks: int = 5,
-        prompt_name: str = "rose_note_analyser",
-        comparison_context: str | None = None,
-    ) -> str:
-        """
-        Extends base generate_inator to allow dynamic prompts for
-        note analysis, quiz and mock exam generation
-        """
-
-        # Flatten and deduplicate retrieved docs
-        flat_docs = [doc for docs in self.all_results for doc in docs]
-        seen = set()
-        dedup_docs = []
-        for doc in flat_docs:
-            if doc.page_content not in seen:
-                seen.add(doc.page_content)
-                dedup_docs.append(doc)
-
-        selected_docs = dedup_docs[:top_k_chunks]
-
-        # Summarize chunks
-        chunk_summaries = []
-        for doc in selected_docs:
-            summary_prompt = f"""
-            Summarize the following text in 1–2 sentences, keeping only the key factual information:
-            {doc.page_content}
-            """
-            summary = self.llm_model.invoke(summary_prompt)
-            chunk_summaries.append(summary.strip())
-
-        context_text = "\n\n".join(chunk_summaries)
-
-        # Include user notes for comparison if provided
-        if comparison_context:
-            context_text = (
-                f"User Notes:\n{comparison_context}\n\nRetrieved Info:\n{context_text}"
-            )
-
-        # Get prompt dynamically
-        base_prompt = RosePrompts.get_prompt(prompt_name)
-        if not base_prompt:
-            raise ValueError(f"Prompt '{prompt_name}' not found in RosePrompts")
-
-        # Add tiered instructions
-        final_prompt = (
-            base_prompt
-            + "\n\nAdditional Instructions:\n- Use only the provided context.\n- Compare retrieved info with user notes if provided."
-        )
-        final_prompt = final_prompt.format(question=user_query, context=context_text)
-
-        # Invoke LLM
-        response = self.llm_model.invoke(final_prompt)
-        return response
-
 
 # TODO: implement models
 '''
@@ -92,14 +31,6 @@ def assesment_maker(raw: str, mode: str):
             return raw
 '''
 
-
-def data_retriever_inator(bubble_id: str, filename: str):
-    """
-    Retrieve note data from archives
-    """
-    pass
-
-
 # TODO: generate engram(readings, quizzes, mock exams, flash cards)
 #       run adapative spaced repetition
 #       place quizzes in bubble specific folders
@@ -109,37 +40,159 @@ def data_retriever_inator(bubble_id: str, filename: str):
 # note analysis:
 # TODO: implement note caching(intemediary md) to allow chunking
 # TODO: add supporting caching dir in platform dirs
-def note_analyser_inator(note: str):
+
+
+def note_analyser_inator(
+    note: NoteStorage, semantic_version: float, analyser: RetrieverInator
+):
+    """
+    note: the note object to analyze
+    semantic_version: current semantic version of the note
+    analyser: your RetrieverInator instance, should have .vectorstore attribute
+    """
+
+    # Load models
     models = ConfigManager().load_config().models
-    analyser = AssesorInator(
-        vectorstores_root="placeholder",
-        embedding_model=models.embedding_model or DEFAULT_EMBED_MODEL,
-        llm_model=models.chat_model or DEFAULT_CHAT_MODEL,
+
+    # ----------------------------
+    # Initialize caches
+    # ----------------------------
+    vector_cache = CacheInator(analyser.vectorstore)
+    backup_cache = SQLiteBackupCache(in_memory=True)  # preloaded into memory
+
+    # Load prompts
+    analysis_query = RosePrompts.get_prompt("rose_note_to_query")
+    analysis_prompt = RosePrompts.get_prompt("rose_note_analyser")
+    if not analysis_query or not analysis_prompt:
+        raise ValueError("Analysis query and prompt are required")
+
+    # ----------------------------
+    # 1️⃣ Translation Step
+    # ----------------------------
+    translated = vector_cache.get_deterministic(
+        note_id=note.note_id,
+        semantic_version=semantic_version,
+        operation="translation",
+        prompt=analysis_query,
     )
 
-    analysis_query = RosePrompts.get_prompt("rose_note_analyser")
-    if not analysis_query:
-        raise ValueError("Analysis query is needed")
+    if not translated:
+        # Try backup cache
+        translated = backup_cache.get(
+            note_id=note.note_id,
+            semantic_version=semantic_version,
+            operation="translation",
+            prompt=analysis_query,
+        )
 
-    # translate analysis query to llm compatible format
-    translated_analysis = analyser.translator_inator(
-        user_query=analysis_query.format(information="", context=note)
+    if not translated:
+        # Compute translation
+        translated = analyser.translator_inator(
+            user_query=analysis_query.format(information="", context=note),
+            translation_prompt="hie",
+        )
+
+        # Store in caches
+        vector_cache.set(
+            note_id=note.note_id,
+            semantic_version=semantic_version,
+            operation="translation",
+            prompt=analysis_query,
+            embedding=analyser.embedding_model.encode(translated),
+            response=translated,
+        )
+        backup_cache.set(
+            note_id=note.note_id,
+            semantic_version=semantic_version,
+            operation="translation",
+            prompt=analysis_query,
+            response=translated,
+        )
+
+    # ----------------------------
+    # 2️⃣ Retrieval Step
+    # ----------------------------
+    retrieved = vector_cache.get_deterministic(
+        note_id=note.note_id,
+        semantic_version=semantic_version,
+        operation="retrieval",
+        prompt=translated,
     )
 
-    # construct vector store query
-    analyser.constructor_inator(translated_analysis)
-    analyser.retrieve_inator()
+    if not retrieved:
+        # Semantic fallback via vectorstore
+        embedding = analyser.embedding_model.encode(translated)
+        similar_docs = vector_cache.get_semantic(embedding)
+        if similar_docs:
+            # LLM adapts previous analyses
+            retrieved = analyser.adapt_from_similar(similar_docs, note)
+        else:
+            # Fresh retrieval
+            analyser.constructor_inator(translated)
+            retrieved = analyser.retrieve_inator()
 
-    # produce targeted reading suggestions
-    # generate response: highlight weak areas
-    # TODO: pass analysis_query to generate_inator?
-    # analysed_info = analyser.anslyser_inator(note)
-    analysed_info = analyser.generate_inator(note)
+        # Store result
+        vector_cache.set(
+            note_id=note.note_id,
+            semantic_version=semantic_version,
+            operation="retrieval",
+            prompt=translated,
+            embedding=embedding,
+            response=retrieved,
+        )
+        backup_cache.set(
+            note_id=note.note_id,
+            semantic_version=semantic_version,
+            operation="retrieval",
+            prompt=translated,
+            response=retrieved,
+        )
+    else:
+        analyser.cached_retrieval_result = retrieved
+
+    # ----------------------------
+    # 3️⃣ Deep Analysis Step
+    # ----------------------------
+    analysed_info = vector_cache.get_deterministic(
+        note_id=note.note_id,
+        semantic_version=semantic_version,
+        operation="analysis",
+        prompt=analysis_prompt,
+    )
+
+    if not analysed_info:
+        # Try backup cache
+        analysed_info = backup_cache.get(
+            note_id=note.note_id,
+            semantic_version=semantic_version,
+            operation="analysis",
+            prompt=analysis_prompt,
+        )
+
+    if not analysed_info:
+        # Semantic fallback
+        embedding = analyser.embedding_model.encode(str(note.content))
+        similar_analyses = vector_cache.get_semantic(embedding)
+        if similar_analyses:
+            analysed_info = analyser.adapt_from_similar(similar_analyses, note)
+        else:
+            analysed_info = analyser.analyser_inator(note, analysis_prompt)
+
+        # Store result
+        vector_cache.set(
+            note_id=note.note_id,
+            semantic_version=semantic_version,
+            operation="analysis",
+            prompt=analysis_prompt,
+            embedding=embedding,
+            response=analysed_info,
+        )
+        backup_cache.set(
+            note_id=note.note_id,
+            semantic_version=semantic_version,
+            operation="analysis",
+            prompt=analysis_prompt,
+            response=analysed_info,
+        )
+
     return analysed_info
-
-
-def historical_note_analyser_inator():
-    # load note into memory from ./embeds/vectorstore
-    # fetch the note, analyse the note
-    # add note to registry(sqlbd) of analysed notes
-    pass

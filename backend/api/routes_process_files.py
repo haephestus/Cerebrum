@@ -38,7 +38,7 @@ def get_user_config():
 # ==========================================================
 # CONVERTER
 # ==========================================================
-def markdown_converter_inator(knowledgebase_dir: Path, llm_model: str, registry):
+def markdown_converter_inator(knowledgebase_dir: Path, chat_model: str, registry):
     """Convert PDF files to Markdown"""
     walked_knowledgebase = file_walker_inator(knowledgebase_dir, max_depth=4)
 
@@ -52,7 +52,7 @@ def markdown_converter_inator(knowledgebase_dir: Path, llm_model: str, registry)
 
             markdown_files = IngestInator(filepath=file_info["filepath"])
             sanitizedmetadatadata = markdown_files.sanitize_inator(
-                filename=file_info["filestem"], metadata=metadata, llm_model=llm_model
+                filename=file_info["filestem"], metadata=metadata, chat_model=chat_model
             )
 
             hash_id = registry.hash_inator(filename=sanitizedmetadatadata.title)
@@ -73,7 +73,7 @@ def markdown_converter_inator(knowledgebase_dir: Path, llm_model: str, registry)
 # ==========================================================
 # SINGLE FILE PROCESSOR (for uploads)
 # ==========================================================
-def process_single_pdf(file_path: Path, llm_model: str, embedding_model: str, registry):
+def process_single_pdf(file_path: Path, chat_model: str, embedding_model: str, registry):
     """Process a single PDF: convert to markdown then embed"""
     print(f"Processing uploaded file: {file_path.name}")
 
@@ -84,7 +84,7 @@ def process_single_pdf(file_path: Path, llm_model: str, embedding_model: str, re
 
         markdown_files = IngestInator(filepath=file_path)
         sanitizedmetadatadata = markdown_files.sanitize_inator(
-            filename=file_path.stem, metadata=metadata, llm_model=llm_model
+            filename=file_path.stem, metadata=metadata, chat_model=chat_model
         )
 
         hash_id = registry.hash_inator(filename=sanitizedmetadatadata.title)
@@ -106,15 +106,15 @@ def process_single_pdf(file_path: Path, llm_model: str, embedding_model: str, re
         )
 
         if markdown_file_path.exists():
-            vectorstores_path = Path(
-                f"../data/storage/vectorstores/{sanitizedmetadatadata.domain}/{sanitizedmetadatadata.subject}"
+            archives_path = Path(
+                f"../data/storage/archives/{sanitizedmetadatadata.domain}/{sanitizedmetadatadata.subject}"
             )
-            vectorstores_path.mkdir(parents=True, exist_ok=True)
+            archives_path.mkdir(parents=True, exist_ok=True)
 
             markdown_chunks = IngestInator(
                 filepath=markdown_file_path,
                 embedding_model=embedding_model,
-                vectorstores_path=vectorstores_path,
+                archives_path=archives_path,
             )
 
             chunks = markdown_chunks.chunk_inator(markdown_filepath=markdown_file_path)
@@ -139,21 +139,21 @@ def process_single_pdf(file_path: Path, llm_model: str, embedding_model: str, re
 # EMBEDDER
 # ==========================================================
 def markdown_embedder_inator(markdown_files_dir: Path, embedding_model: str, registry):
-    """Chunk and embed Markdown files into vectorstores"""
+    """Chunk and embed Markdown files into archives"""
     walked_markdown_dir = file_walker_inator(markdown_files_dir, max_depth=4)
 
     for md_file in walked_markdown_dir:
         print(md_file["filename"])
         try:
-            vectorstores_path = Path(
-                f"../data/storage/vectorstores/{md_file['domain']}/{md_file['subject']}"
+            archives_path = Path(
+                f"../data/storage/archives/{md_file['domain']}/{md_file['subject']}"
             )
-            vectorstores_path.mkdir(parents=True, exist_ok=True)
+            archives_path.mkdir(parents=True, exist_ok=True)
 
             markdown_chunks = IngestInator(
                 filepath=md_file["filepath"],
                 embedding_model=embedding_model,
-                vectorstores_path=vectorstores_path,
+                archives_path=archives_path,
             )
 
             hash_id = registry.hash_inator(md_file["filestem"])

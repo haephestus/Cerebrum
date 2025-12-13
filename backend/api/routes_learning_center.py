@@ -15,7 +15,7 @@ def _(param):
 
 
 # TODO: analyse current version of note
-# store analysis in bubble vectorstore
+# store analysis in bubble archives
 
 
 # TODO: generate quiz

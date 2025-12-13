@@ -11,63 +11,94 @@ class CerebrumPaths:
     def __init__(self, app_name: str = "cerebrum"):
         dirs = PlatformDirs(app_name)
         self.DATA_DIR = Path(dirs.user_data_dir)
-        self.CONFIG_FILE = Path(dirs.user_config_dir)
+        self.CONFIG_DIR = Path(dirs.user_config_dir)
+        self.CACHE_DIR = Path(dirs.user_cache_dir)
+
+        # Cerebrum paths
+        self.KB_DIR = self.DATA_DIR / "knowledgebase"
+        self.PROJECTS_DIR = self.DATA_DIR / "projects"
+        self.BUBBLES_DIR = self.DATA_DIR / "study_bubbles"
+        self.LOGS_DIR = self.DATA_DIR / "logs"
 
     def init_cerebrum_dirs(self):
-        self.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        self.CONFIG_FILE.mkdir(parents=True, exist_ok=True)
-
-        for sub in [
-            "knowledgebase",
-            "projects",
-            "study_bubbles",
-            "logs",
+        """Ensure all top-level directories exist"""
+        for d in [
+            self.DATA_DIR,
+            self.KB_DIR,
+            self.PROJECTS_DIR,
+            self.BUBBLES_DIR,
+            self.LOGS_DIR,
         ]:
-            (self.DATA_DIR / sub).mkdir(exist_ok=True)
+            d.mkdir(exist_ok=True)
 
     # ------------- HANDLE BUBBLES PATHS ---------------------------
     # TODO: handle all bubble ops: inits bubble
-    def init_bubble_dirs(self):
-        self.DATA_DIR
+    def init_bubble_dirs(self, bubble_id):
+        bubble_dir = self.get_bubble_path(bubble_id) / bubble_id
 
-    # TODO: init study bubble sub-dirs
-    def init_bubble_subdir(self):
-        pass
+        # Create sub-dirs
+        chat_dir = bubble_dir / "chat"
+        notes_dir = bubble_dir / "notes"
+        assesments_dir = bubble_dir / "assesments"
+
+        for d in [chat_dir, notes_dir, assesments_dir]:
+            d.mkdir(exist_ok=True)
+            (d / ".archives").mkdir(exist_ok=True)
+
+    # TODO: return bubble path
+
+    def get_bubbles_root(self) -> Path:
+        BUBBLE_DIR = self.DATA_DIR / "study_bubbles"
+        return BUBBLE_DIR
+
+    def get_bubble_path(self, bubble_id):
+        return self.BUBBLES_DIR / bubble_id
 
     # TODO: return notes path
     def get_notes_dir(self, bubble_id):
-        pass
+        return self.get_bubbles_root() / bubble_id / "notes"
 
-    # TODO: return bubble path
-    def get_bubble_path(self, bubble_id):
-        pass
+    # TODO: return note archives path
+    def get_note_archives(self, bubble_id):
+        return self.get_bubbles_root() / bubble_id / "notes" / ".archives"
 
-    # TODO: return note path
-    # TODO: return note embeds path
     # TODO: return chat path
-    # TODO: return chat embeds path
+    def get_chats_dir(self, bubble_id):
+        return self.get_bubbles_root() / bubble_id / "chat"
+
+    # TODO: return chat archives path
+    def get_chats_archives(self, bubble_id):
+        return self.get_bubbles_root() / bubble_id / "chat" / ".archives"
+
     # TODO: return assesments paths
-    # TODO: return assesments embeds paths
+    def get_assesment_dir(self, bubble_id):
+        return self.get_bubbles_root() / bubble_id / "assesments"
+
+    # TODO: return assesments archives paths
+    def get_assesment_archives(self, bubble_id):
+        return self.get_bubbles_root() / bubble_id / "assesments" / ".archives"
 
     # ------------- HANDLE KNOWLEDGEBASE PATHS ---------------------------
     def get_kb_dir(self) -> Path:
         KB_DIR = self.DATA_DIR / "knowledgebase"
         return KB_DIR
 
+    def get_kb_archives(self):
+        return self.get_kb_dir() / "archives"
+
     def get_projects_dir(self) -> Path:
         PROJECTS_DIR = self.DATA_DIR / "projects"
         return PROJECTS_DIR
-
-    def get_bubbles_dir(self) -> Path:
-        BUBBLE_DIR = self.DATA_DIR / "study_bubbles"
-        return BUBBLE_DIR
 
     def get_logs_dir(self) -> Path:
         LOGS_DIR = self.DATA_DIR / "logs"
         return LOGS_DIR
 
     def get_config_dir(self) -> Path:
-        return self.CONFIG_FILE
+        return self.CONFIG_DIR
+
+    def get_cache_dir(self) -> Path:
+        return self.CACHE_DIR
 
 
 # init so functions in this file can use it
