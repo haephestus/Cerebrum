@@ -2,30 +2,18 @@
 from pathlib import Path
 
 import pymupdf
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    File,
-    HTTPException,
-    Request,
-    UploadFile,
-)
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
 
-from cerebrum_core.ingest_inator import IngestInator
-from cerebrum_core.model_inator import UserConfig
-from cerebrum_core.user_inator import (
-    DEFAULT_CHAT_MODEL,
-    DEFAULT_EMBED_MODEL,
-    ConfigManager,
-)
-from cerebrum_core.utils.file_manager_inator import CerebrumPaths, file_walker_inator
+from cerebrum_core.file_processor_inator import IngestInator
+from cerebrum_core.user_inator import ConfigManager
+from cerebrum_core.utils.file_util_inator import CerebrumPaths, file_walker_inator
 from cerebrum_core.utils.progress_bar import progress_bar
 
 router = APIRouter(prefix="/process")
 paths = CerebrumPaths()
+archives_dir = paths.get_kb_archives()
 
-markdown_files_dir = paths.get_kb_dir() / "markdown"
+markdown_files_dir = paths.get_kb_artifacts()
 markdown_files_dir.mkdir(parents=True, exist_ok=True)
 
 knowledgebase_dir = paths.get_kb_dir()
@@ -38,11 +26,12 @@ def get_user_config():
 # ==========================================================
 # CONVERTER
 # ==========================================================
-def markdown_converter_inator(knowledgebase_dir: Path, chat_model: str, registry):
+def markdown_converter_inator(knowledgebase_dir: Path, registry):
     """Convert PDF files to Markdown"""
     walked_knowledgebase = file_walker_inator(knowledgebase_dir, max_depth=4)
 
     for file_info in walked_knowledgebase:
+        # TODO: find a better alternative than assert
         assert file_info is not None, "file info cannot be empty"
 
         print(f"Converting {file_info['filename']}")
@@ -52,7 +41,7 @@ def markdown_converter_inator(knowledgebase_dir: Path, chat_model: str, registry
 
             markdown_files = IngestInator(filepath=file_info["filepath"])
             sanitizedmetadatadata = markdown_files.sanitize_inator(
-                filename=file_info["filestem"], metadata=metadata, chat_model=chat_model
+                filename=file_info["filestem"], metadata=metadata
             )
 
             hash_id = registry.hash_inator(filename=sanitizedmetadatadata.title)
@@ -73,7 +62,7 @@ def markdown_converter_inator(knowledgebase_dir: Path, chat_model: str, registry
 # ==========================================================
 # SINGLE FILE PROCESSOR (for uploads)
 # ==========================================================
-def process_single_pdf(file_path: Path, chat_model: str, embedding_model: str, registry):
+def process_single_pdf(file_path: Path, registry):
     """Process a single PDF: convert to markdown then embed"""
     print(f"Processing uploaded file: {file_path.name}")
 
@@ -84,7 +73,7 @@ def process_single_pdf(file_path: Path, chat_model: str, embedding_model: str, r
 
         markdown_files = IngestInator(filepath=file_path)
         sanitizedmetadatadata = markdown_files.sanitize_inator(
-            filename=file_path.stem, metadata=metadata, chat_model=chat_model
+            filename=file_path.stem, metadata=metadata
         )
 
         hash_id = registry.hash_inator(filename=sanitizedmetadatadata.title)
@@ -106,14 +95,16 @@ def process_single_pdf(file_path: Path, chat_model: str, embedding_model: str, r
         )
 
         if markdown_file_path.exists():
-            archives_path = Path(
-                f"../data/storage/archives/{sanitizedmetadatadata.domain}/{sanitizedmetadatadata.subject}"
+            archives_path = (
+                archives_dir
+                / f"{sanitizedmetadatadata.domain}"
+                / f"{sanitizedmetadatadata.subject}"
             )
+
             archives_path.mkdir(parents=True, exist_ok=True)
 
             markdown_chunks = IngestInator(
                 filepath=markdown_file_path,
-                embedding_model=embedding_model,
                 archives_path=archives_path,
             )
 
@@ -138,21 +129,21 @@ def process_single_pdf(file_path: Path, chat_model: str, embedding_model: str, r
 # ==========================================================
 # EMBEDDER
 # ==========================================================
-def markdown_embedder_inator(markdown_files_dir: Path, embedding_model: str, registry):
+def markdown_embedder_inator(markdown_files_dir: Path, registry):
     """Chunk and embed Markdown files into archives"""
     walked_markdown_dir = file_walker_inator(markdown_files_dir, max_depth=4)
 
     for md_file in walked_markdown_dir:
         print(md_file["filename"])
         try:
-            archives_path = Path(
-                f"../data/storage/archives/{md_file['domain']}/{md_file['subject']}"
+            archives_path = (
+                archives_dir / f'{md_file["domain"]}' / f'{md_file["subject"]}'
             )
+
             archives_path.mkdir(parents=True, exist_ok=True)
 
             markdown_chunks = IngestInator(
                 filepath=md_file["filepath"],
-                embedding_model=embedding_model,
                 archives_path=archives_path,
             )
 
@@ -202,14 +193,10 @@ async def reset(status: str, request: Request, hash_id: str | None = None):
 async def convert_files(
     background_tasks: BackgroundTasks,
     request: Request,
-    config: UserConfig = Depends(get_user_config),
 ):
     """Queue Markdown conversion in background"""
-    chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
     reg = request.app.state.registry
-    background_tasks.add_task(
-        markdown_converter_inator, knowledgebase_dir, chat_model, reg
-    )
+    background_tasks.add_task(markdown_converter_inator, knowledgebase_dir, reg)
     return {"message": "Conversion started in background"}
 
 
@@ -217,14 +204,10 @@ async def convert_files(
 async def embedd_files(
     background_tasks: BackgroundTasks,
     request: Request,
-    config: UserConfig = Depends(get_user_config),
 ):
-    embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
     """Queue Markdown embedding in background"""
     reg = request.app.state.registry
-    background_tasks.add_task(
-        markdown_embedder_inator, markdown_files_dir, embedding_model, reg
-    )
+    background_tasks.add_task(markdown_embedder_inator, markdown_files_dir, reg)
     return {"message": "Embedding started in background"}
 
 
@@ -233,10 +216,7 @@ async def upload_pdf(
     background_tasks: BackgroundTasks,
     request: Request,
     file: UploadFile = File(...),
-    config: UserConfig = Depends(get_user_config),
 ):
-    chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
-    embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
     """Upload a PDF file and auto-process it"""
     # Validate file type
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -261,9 +241,7 @@ async def upload_pdf(
         if background_tasks and request:
             reg = request.app.state.registry
             # Convert to markdown
-            background_tasks.add_task(
-                process_single_pdf, file_path, chat_model, embedding_model, reg
-            )
+            background_tasks.add_task(process_single_pdf, file_path, reg)
 
         return {
             "message": "PDF uploaded and queued for processing",

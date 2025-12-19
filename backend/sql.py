@@ -1,57 +1,47 @@
-from typing import List
+import hashlib
 
-import requests
-from bs4 import BeautifulSoup
-
-OLLAMA_LIBRARY_URL = "https://ollama.com/library"
+from langchain.schema import Document
 
 
-def fetch_ollama_models() -> List[str]:
-    """
-    Fetch the list of model names from Ollama library page.
-    """
-    resp = requests.get(OLLAMA_LIBRARY_URL)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    # All links like /library/<model-name>
-    models = set()
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if href.startswith("/library/"):
-            model = href.split("/library/")[-1]
-            models.add(model)
-
-    return sorted(models)
+def build_doc_fingerprint(domain: str, doc: Document) -> tuple[str, str]:
+    canonical = f"{domain}\n{doc.page_content.strip()}"
+    fingerprint = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return canonical, fingerprint
 
 
-def fetch_model_tags(model_name: str) -> List[str]:
-    """
-    Fetch tags for a given model from Ollama library page.
-    Filters out unwanted tags like 'text', 'base', 'fp', or q4_0/q5_0.
-    """
-    url = f"{OLLAMA_LIBRARY_URL}/{model_name}/tags"
-    resp = requests.get(url)
-    if resp.status_code != 200:
-        return []
+def fingerprint_documents(domain: str, docs: list[Document]) -> list[Document]:
+    for i, doc in enumerate(docs):
+        canonical, fp = build_doc_fingerprint(domain, doc)
 
-    # Simple regex-like parsing, since the page returns plain text or HTML
-    text = resp.text
-    tags = set()
-    for part in text.split():
-        if part.startswith(f"{model_name}:") and not any(
-            x in part for x in ["text", "base", "fp", "q4_0", "q5_0"]
-        ):
-            tags.add(part)
+        doc.metadata = doc.metadata or {}
+        doc.metadata["semantic_fingerprint"] = fp
 
-    return sorted(tags)
+        print(f"\n--- Document {i} ---")
+        print("Canonical form:")
+        print("---------------")
+        print(canonical)
+        print("---------------")
+        print(f"Fingerprint: {fp}")
+
+    return docs
 
 
-# Example usage
 if __name__ == "__main__":
-    models = fetch_ollama_models()
-    print("Available models:", models)
+    domain = "neuroscience"
 
-    if models:
-        tags = fetch_model_tags(models[0])
-        print(f"Tags for {models[0]}:", tags)
+    docs = [
+        Document(
+            page_content="The hippocampus is involved in memory consolidation.",
+            metadata={"source": "textbook_A"},
+        ),
+        Document(
+            page_content="The hippocampus is involved in memory consolidation.",
+            metadata={"source": "paper_B"},
+        ),
+        Document(
+            page_content="The amygdala plays a key role in emotional processing.",
+            metadata={"source": "textbook_A"},
+        ),
+    ]
+
+    fingerprint_documents(domain, docs)

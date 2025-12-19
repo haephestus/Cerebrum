@@ -2,7 +2,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from cerebrum_core.file_manager_inator import CEREBRUM_PATHS
+from cerebrum_core.file_util_inator import CEREBRUM_PATHS
 
 DB_PATH = CEREBRUM_PATHS.get_card_bd() / "learning_center_cards.sqlite"
 

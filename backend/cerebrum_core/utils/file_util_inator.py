@@ -32,7 +32,6 @@ class CerebrumPaths:
             d.mkdir(exist_ok=True)
 
     # ------------- HANDLE BUBBLES PATHS ---------------------------
-    # TODO: handle all bubble ops: inits bubble
     def init_bubble_dirs(self, bubble_id):
         bubble_dir = self.get_bubble_path(bubble_id) / bubble_id
 
@@ -45,43 +44,53 @@ class CerebrumPaths:
             d.mkdir(exist_ok=True)
             (d / ".archives").mkdir(exist_ok=True)
 
-    # TODO: return bubble path
-
     def get_bubbles_root(self) -> Path:
+        """Return bubbles root directory"""
         BUBBLE_DIR = self.DATA_DIR / "study_bubbles"
         return BUBBLE_DIR
 
     def get_bubble_path(self, bubble_id):
+        """Return the path of a single bubble"""
         return self.BUBBLES_DIR / bubble_id
 
-    # TODO: return notes path
-    def get_notes_dir(self, bubble_id):
+    def get_notes_root(self, bubble_id):
+        """Return notes root directory"""
         return self.get_bubbles_root() / bubble_id / "notes"
 
-    # TODO: return note archives path
+    def get_note_path(self, bubble_id: str, filename: str):
+        """Return path to a sinlge note"""
+        return self.get_bubbles_root() / bubble_id / "notes" / filename
+
     def get_note_archives(self, bubble_id):
+        """Return note archives root directory"""
         return self.get_bubbles_root() / bubble_id / "notes" / ".archives"
 
-    # TODO: return chat path
     def get_chats_dir(self, bubble_id):
+        """Return chats root directory"""
         return self.get_bubbles_root() / bubble_id / "chat"
 
-    # TODO: return chat archives path
     def get_chats_archives(self, bubble_id):
+        """Return chat archives root directory"""
         return self.get_bubbles_root() / bubble_id / "chat" / ".archives"
 
-    # TODO: return assesments paths
     def get_assesment_dir(self, bubble_id):
+        """Returns assesment root directory"""
         return self.get_bubbles_root() / bubble_id / "assesments"
 
-    # TODO: return assesments archives paths
     def get_assesment_archives(self, bubble_id):
+        """Returns assesment archives root directory"""
         return self.get_bubbles_root() / bubble_id / "assesments" / ".archives"
 
     # ------------- HANDLE KNOWLEDGEBASE PATHS ---------------------------
     def get_kb_dir(self) -> Path:
         KB_DIR = self.DATA_DIR / "knowledgebase"
         return KB_DIR
+
+    def get_kb_source_files(self) -> Path:
+        return self.get_kb_dir() / "source_files"
+
+    def get_kb_artifacts(self) -> Path:
+        return self.get_kb_dir() / "markdown_artifacts"
 
     def get_kb_archives(self):
         return self.get_kb_dir() / "archives"

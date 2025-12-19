@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from agents.rose import RosePrompts
+from cerebrum_core.file_processor_inator import RetrieverInator
 from cerebrum_core.model_inator import (
     ContentDiff,
     CreateStudyBubble,
@@ -21,13 +22,12 @@ from cerebrum_core.model_inator import (
     StudyBubble,
     UserConfig,
 )
-from cerebrum_core.retriever_inator import RetrieverInator
 from cerebrum_core.user_inator import (
     DEFAULT_CHAT_MODEL,
     DEFAULT_EMBED_MODEL,
     ConfigManager,
 )
-from cerebrum_core.utils.file_manager_inator import CerebrumPaths
+from cerebrum_core.utils.file_util_inator import CerebrumPaths
 from cerebrum_core.utils.note_util_inator import ArchiveInator, diff_collapser_inator
 
 bubble_router = APIRouter(prefix="/bubbles", tags=["Study Bubble API"])
@@ -147,13 +147,13 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
     Create a study bubble folder and info file.
     """
     bubble_id = data.name.replace(" ", "_").lower()
-    bubble = CerebrumPaths().get_bubbles_root() / bubble_id
+    bubble = CerebrumPaths().get_bubble_path(bubble_id)
 
     if bubble.exists():
         raise HTTPException(status_code=400, detail="Bubble already exists")
 
     # Initialize study bubble associated dirs
-    # TODO: move to file_manager_inator
+    # TODO: move to file_util_inator
     CerebrumPaths().init_bubble_dirs(bubble_id=bubble_id)
 
     # TODO: initiate study bubble archives
@@ -210,7 +210,7 @@ def delete_study_bubble(bubble_id: str):
 # List notes
 @bubble_router.get("/{bubble_id}/notes", response_model=List[NoteOut])
 def list_notes_in_bubble(bubble_id: str):
-    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
     notes = []
     for file in notes_dir.glob("*.json"):
         storage_data = json.loads(file.read_text(encoding="utf-8"))
@@ -229,7 +229,7 @@ def list_notes_in_bubble(bubble_id: str):
 # Create a new note
 @bubble_router.post("/{bubble_id}/create/notes", response_model=NoteOut)
 def create_note(bubble_id: str, note: NoteBase):
-    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
     note.content.document = ensure_valid_document(note.content.document)
 
     safe_title = note.title.replace(" ", "_")
@@ -267,7 +267,7 @@ def create_note(bubble_id: str, note: NoteBase):
 # Get a single note
 @bubble_router.get("/{bubble_id}/notes/get/{filename}", response_model=NoteOut)
 def get_note(bubble_id: str, filename: str):
-    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
     file_path = notes_dir / filename
 
     if not file_path.exists():
@@ -304,8 +304,7 @@ async def debug_create_note(bubble_id: str, request: Request):
 # Update a note
 @bubble_router.put("/{bubble_id}/notes/update/{filename}", response_model=NoteOut)
 def update_note(bubble_id: str, filename: str, note: NoteBase):
-    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
-    archive_path = notes_dir / ".archives"
+    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
     file_path = notes_dir / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
@@ -363,13 +362,6 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
     # ----------------- COMPRESS DIFFS -------------------
     stored_note = diff_collapser_inator(stored_note)
 
-    # ---------- ADD TO HISTORIC NOTES ARCHIVE -------------
-    should_archive = (increment == 1) or (version == 1)
-    if should_archive:
-        archive = ArchiveInator(note=stored_note, note_archives=str(archive_path))
-        archive.archive_init_inator()
-        archive.archive_populator_inator()
-
     # Save updated note
     file_path.write_text(stored_note.model_dump_json(indent=2), encoding="utf-8")
 
@@ -384,7 +376,7 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
 
 @bubble_router.put("/{bubble_id}/notes/rename/{filename}", response_model=NoteOut)
 def rename_note(bubble_id: str, filename: str, payload: NoteBase):
-    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
     old_path = notes_dir / filename
 
     if not old_path.exists():
@@ -412,7 +404,7 @@ def rename_note(bubble_id: str, filename: str, payload: NoteBase):
 # Delete a note
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
 def delete_note(bubble_id: str, filename: str):
-    notes_dir = CerebrumPaths().get_notes_dir(bubble_id)
+    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
     filepath = notes_dir / filename
 
     if not filepath.exists():
@@ -421,7 +413,7 @@ def delete_note(bubble_id: str, filename: str):
     # TODO: delete note from the archive
     data = json.loads(filepath.read_text())
     ArchiveInator(
-        note=NoteStorage(**data), note_archives=str(filepath)
+        note=NoteStorage(**data), archives_path=str(filepath)
     ).archive_cleaner_inator()
 
     filepath.unlink()
@@ -453,6 +445,7 @@ async def chat_in_bubble(
         chat_model=chat_model,
     )
 
+    # TODO: find a better alternative than assert
     assert translation_prompt is not None
     # TRANSLATE USER QUERY
     translated_query = processor.translator_inator(

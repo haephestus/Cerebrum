@@ -6,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from cerebrum_core.model_inator import ModelConfig, UserConfig
-from cerebrum_core.utils.file_manager_inator import CerebrumPaths
+from cerebrum_core.utils.file_util_inator import CerebrumPaths
 
 # ─────────────────────────────────────────────────────────────
 # Constants

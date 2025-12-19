@@ -1,7 +1,10 @@
+import hashlib
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from langchain_core.documents import Document
 from pydantic import BaseModel, Field
 
 
@@ -116,7 +119,7 @@ class Chunk(BaseModel):
 
 #############################################################################
 #                                                                           #
-#                     MODELS FOR NOTES AND LEARNING                         #
+#                          MODELS FOR NOTES                                 #
 #                                                                           #
 #############################################################################
 
@@ -182,18 +185,6 @@ class NoteOut(NoteBase):
     filename: str
 
 
-# ---------------------------ARCHIVED NOTE MODELS---------------------------
-class ArchivedNoteContent(BaseModel):
-    version: float
-    content: str
-
-
-class ArchivedNote(BaseModel):
-    note_id: str
-    note_name: str
-    versions: List[ArchivedNoteContent]
-
-
 #############################################################################
 #                                                                           #
 #                    MODELS FOR INTERACTIVE USER LEARNING                   #
@@ -238,16 +229,71 @@ class ResearchProject(CreateResearchProject):
 
 #############################################################################
 #                                                                           #
-#                       MODELS NEEDED FOR CACHING                           #
+#                    ARCHIVEING AND CUNKING MODELS                          #
 #                                                                           #
 #############################################################################
 
 
-class CachedQuery(BaseModel):
-    pass
-
-
-class CachedNotes(BaseModel):
-    id: str
+# ---------------------------ARCHIVE MODELS---------------------------
+# not in use
+class NoteChunks(BaseModel):
+    chunk_id: str
+    note_id: str
+    bubble_id: str
     content: str
+    fingerprint: str
+
+
+class ArchivedNoteContent(BaseModel):
     version: float
+    content: str
+
+
+class ArchivedNote(BaseModel):
+    note_id: str
+    note_name: str
+    versions: List[ArchivedNoteContent]
+
+
+# ---------------------------CACHE MODELS---------------------------
+class NoteQueryToCache(BaseModel):
+    note_id: str
+    bubble_id: str
+    semantic_version: float
+    content: TranslatedQuery
+
+
+class RetrievedDocsCache(BaseModel):
+    domain: str
+    content: list[Document]
+    semantic_fingerprint: str
+
+    # metadata
+    note_id: str
+    bubble_id: str
+
+
+class AnalysisToCache(BaseModel):
+    analysis: str
+
+    # metadata
+    note_id: str
+    bubble_id: str
+
+
+# not in use
+class SemanticFingerprint(BaseModel):
+    note_id: str
+    bubble_id: str
+    semantic_version: float
+
+    def canonical(self) -> str:
+        payload = {
+            "note_id": self.note_id,
+            "bubble_id": self.bubble_id,
+            "semantic_version": self.semantic_version,
+        }
+        return json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+    def hash(self) -> str:
+        return hashlib.sha256(self.canonical().encode("utf-8")).hexdigest()

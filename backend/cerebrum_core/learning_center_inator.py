@@ -1,183 +1,108 @@
-from agents.rose import RosePrompts
+import logging
+
 from cerebrum_core.model_inator import NoteStorage
-from cerebrum_core.retriever_inator import RetrieverInator
-from cerebrum_core.user_inator import (
-    DEFAULT_CHAT_MODEL,
-    DEFAULT_EMBED_MODEL,
-    ConfigManager,
-)
-from cerebrum_core.utils.note_util_inator import NoteToMarkdownInator
+from cerebrum_core.utils.cache_inator import AnalysisCacheInator
+from cerebrum_core.utils.file_util_inator import CerebrumPaths
+from cerebrum_core.utils.note_util_inator import NoteAnalyserInator
 
-# TODO: progress tracking (based of learning goals)
+logger = logging.getLogger(__name__)
 
-# TODO: implement models
-'''
-# Use model matching to generate quizzes, or analysis or mockexams
-def assesment_maker(raw: str, mode: str):
-    """
-    mode: quiz. analysis, mockexams
-    """
-    match mode:
-        case "quiz":
-            # parse string into a QuizModel
-            return QuizModel.parse_from_string(raw)
-        case "analysis":
-            return AnalysisModel.parse_from_string(raw)
-        case  "mock_exam":
-            return MockExamModel.parse_from_string(raw)
-        case _:
-        # just return raw string
-            return raw
-'''
+
+def generate_engram():
+    # WARN: PURPOSE: progress tracking (based of learning goals)
+    #                note analysis based of current and historic notes
+    #                engram(quizzes, mockexams) generation
+
+    # TODO: implement models
+    '''
+    # Use model matching to generate quizzes, or analysis or mockexams
+    def assesment_maker(raw: str, mode: str):
+        """
+        mode: quiz. analysis, mockexams
+        """
+        match mode:
+            case "quiz":
+                # parse string into a QuizModel
+                return QuizModel.parse_from_string(raw)
+            case "analysis":
+                return AnalysisModel.parse_from_string(raw)
+            case  "mock_exam":
+                return MockExamModel.parse_from_string(raw)
+            case _:
+            # just return raw string
+                return raw
+    '''
+    pass
+
 
 # TODO: generate engram(readings, quizzes, mock exams, flash cards)
 #       run adapative spaced repetition
 #       place quizzes in bubble specific folders
 #       store historic engrams in bubble specific folders
 
-
-# note analysis:
-# TODO: implement note caching(intemediary md) to allow chunking
-# TODO: add supporting caching dir in platform dirs
+# cerebrum_core/learning_center_inator.py
 
 
-def note_analyser_inator(
-    note: NoteStorage, semantic_version: float, analyser: RetrieverInator
-):
+def passive_analysis(
+    note: NoteStorage, prompt: str, cache_manager: AnalysisCacheInator
+) -> str:
     """
-    PURPOSE
-    -------
-    Analyse a note while minimizing recomputation by using:
-    - Vectorstore cache (primary: deterministic + semantic)
-    - SQL backup cache (secondary: persistence + safety)
+    Perform passive analysis on a note and cache the result.
 
-    semantic_version:
-        Incremented only when semantic meaning changes
-        (not cosmetic edits)
+    This function:
+    1. Chunks the note
+    2. Archives it (via NoteAnalyserInator)
+    3. Runs analysis against knowledge base
+    4. Caches the result
+
+    Args:
+        note: The note to analyze
+        prompt: Analysis prompt template
+        cache_manager: Cache manager for storing results
+
+    Returns:
+        Analysis result string
     """
+    try:
+        logger.info(
+            f"Starting passive analysis for note {note.note_id} v{note.metadata.content_version}"
+        )
 
-    # ============================================================
-    # PRE-CONDITIONS / REQUIRED SYSTEMS
-    # ============================================================
+        notes_path = CerebrumPaths().get_notes_root(note.bubble_id)
 
-    # - ConfigManager must expose:
-    #   - embedding_model
-    #   - chat_model
-    #
-    # - analyser must already be initialized with:
-    #   - embedding_model
-    #   - vectorstore (bubble or domain scoped)
-    #
-    # - The following caches must exist:
-    #   - vector_cache  -> Chroma-based (semantic + deterministic)
-    #   - backup_cache  -> SQLite-based (persistent backup)
-    #
-    # - Cache resolution order MUST be:
-    #   1. Vector deterministic
-    #   2. SQL backup
-    #   3. Vector semantic
-    #   4. Fresh computation
+        # Initialize analyzer (this chunks and archives the note)
+        analyzer = NoteAnalyserInator(
+            note=note, notes_path=notes_path, generate_artifact=True
+        )
 
-    # ============================================================
-    # LOAD PROMPTS
-    # ============================================================
+        logger.info(
+            f"Initialized analyzer: {len(analyzer.chunks)} chunks, "
+            f"{len(analyzer.translation_results)} queries"
+        )
 
-    # - Load analysis_query:
-    #     Used to translate the note into retrieval queries
-    #
-    # - Load analysis_prompt:
-    #     Used to perform deep note analysis
-    #
-    # - If either prompt is missing:
-    #     Abort early (this is a configuration error)
+        # Run analysis (retrieves from KB and generates response)
+        analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
 
-    # ============================================================
-    # STEP 1: NOTE → QUERY TRANSLATION (EXPENSIVE, CACHEABLE)
-    # ============================================================
+        logger.info(
+            f"✓ Completed analysis for note {note.note_id} v{note.metadata.content_version}"
+        )
 
-    # GOAL:
-    # - Convert the raw note into a structured query representation
-    #
-    # CACHE STRATEGY:
-    # - Deterministic cache key:
-    #     (note_id, semantic_version, "translation", prompt_hash)
-    #
-    # - First try vector deterministic cache
-    # - Then try SQL backup cache
-    #
-    # IF CACHE MISS:
-    # - Run analyser.translator_inator(...)
-    # - Store result in:
-    #     - Vector cache (with embedding)
-    #     - SQL backup cache (raw JSON/text)
+        # Cache the result with metadata
+        cache_manager.cache_analysis(
+            content_version=note.metadata.content_version,
+            analysis=analysis_result,
+            metadata={
+                "chunks_count": len(analyzer.chunks),
+                "queries_count": len(analyzer.translation_results),
+                "retrieved_docs": len(analyzer.retrieved_docs),
+                "note_title": note.title,
+            },
+        )
 
-    # ============================================================
-    # STEP 2: KNOWLEDGE RETRIEVAL (CONTEXTUAL, BUBBLE-SCOPED)
-    # ============================================================
+        logger.info(f"Cached analysis for note {note.note_id}")
 
-    # GOAL:
-    # - Retrieve relevant documents from the knowledge base
-    #
-    # CACHE STRATEGY:
-    # - Deterministic cache using translated query
-    #
-    # IF DETERMINISTIC MISS:
-    # - Perform semantic search in vector cache
-    #
-    # IF SEMANTIC HIT:
-    # - Adapt previous retrieval results to current note
-    #
-    # ELSE:
-    # - Run full retrieval pipeline:
-    #     - constructor_inator(...)
-    #     - retrieve_inator(...)
-    #
-    # STORE RESULT:
-    # - Vector cache (semantic + deterministic)
-    # - SQL backup cache
-    #
-    # SIDE EFFECT:
-    # - If cached retrieval exists, inject it back into analyser
-    #   so downstream steps remain unchanged
+        return analysis_result
 
-    # ============================================================
-    # STEP 3: DEEP NOTE ANALYSIS (MOST EXPENSIVE)
-    # ============================================================
-
-    # GOAL:
-    # - Produce structured analysis:
-    #     - Weak areas
-    #     - Key concepts
-    #     - Learning recommendations
-    #
-    # CACHE STRATEGY:
-    # - Deterministic cache keyed by:
-    #     (note_id, semantic_version, "analysis", prompt_hash)
-    #
-    # IF DETERMINISTIC MISS:
-    # - Check SQL backup cache
-    #
-    # IF STILL MISS:
-    # - Perform semantic fallback:
-    #     - Embed note content
-    #     - Search for similar analyses
-    #
-    # IF SEMANTIC HIT:
-    # - Adapt previous analysis to current note
-    #
-    # ELSE:
-    # - Run analyser.analyser_inator(...)
-    #
-    # STORE RESULT:
-    # - Vector cache (embedding + metadata)
-    # - SQL backup cache (raw output)
-
-    # ============================================================
-    # RETURN VALUE
-    # ============================================================
-
-    # - Return analysed_info
-    # - Caller may:
-    #     - Persist it
-    #     - Display it
-    #     - Feed it into quiz / engram generation
+    except Exception as e:
+        logger.error(f"Failed to analyze note {note.note_id}: {e}", exc_info=True)
+        raise
