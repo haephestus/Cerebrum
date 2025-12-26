@@ -4,10 +4,13 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api import routes_learning_center  # routes_projects,
-from api import routes_bubble, routes_file_manager, routes_user
+from api import routes_bubble, routes_knowledgebase, routes_learning_center, routes_user
 from cerebrum_core.user_inator import ConfigManager
-from cerebrum_core.utils.file_util_inator import CerebrumPaths, FileRegisterInator
+from cerebrum_core.utils.file_util_inator import (
+    CerebrumPaths,
+    ChunkRegisterInator,
+    FileRegisterInator,
+)
 
 config_manager = ConfigManager()
 
@@ -17,11 +20,13 @@ async def lifespan(app: FastAPI):
     cerebrum_paths = CerebrumPaths()
     cerebrum_paths.init_cerebrum_dirs()
 
-    registry = FileRegisterInator()
-    app.state.registry = registry
+    # SQL DBs necessary for file processing
+    app.state.file_registry = FileRegisterInator()
+    app.state.chunk_registry = ChunkRegisterInator()
 
+    # ROUTES for api level control
     app.include_router(routes_user.configs_router)
-    app.include_router(routes_file_manager.router)
+    app.include_router(routes_knowledgebase.router)
     app.include_router(routes_bubble.bubble_router)
     # app.include_router(routes_projects.project_router)
     app.include_router(routes_learning_center.router_learn)

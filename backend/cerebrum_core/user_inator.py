@@ -15,8 +15,8 @@ from cerebrum_core.utils.file_util_inator import CerebrumPaths
 OLLAMA_URL = "http://127.0.0.1:11434"
 LIBRARY_URL = "https://ollama.com/library"
 
-CONFIG_DIR = CerebrumPaths().get_config_dir()
-CONFIG_FILE = CONFIG_DIR / "user_config.json"
+CONFIG_ROOT = CerebrumPaths().get_config_dir()
+CONFIG_FILE = CONFIG_ROOT / "user_config.json"
 
 EMBED_PATTERN = re.compile(r"(embed|embedding)", re.IGNORECASE)
 
@@ -49,7 +49,7 @@ class ConfigManager:
             return UserConfig(**json.load(f))
 
     def save_config(self, config: UserConfig):
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        CONFIG_ROOT.mkdir(parents=True, exist_ok=True)
         with open(CONFIG_FILE, "w") as f:
             json.dump(config.model_dump(), f, indent=4)
 

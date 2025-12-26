@@ -1,38 +1,55 @@
 import hashlib
 import re
 import sqlite3
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from platformdirs import PlatformDirs
+
+"""
+file_util_inator.py
+
+Purpose: 
+    Exposes file paths, and handles all file related manipulations
+    regarding what is available in the knowledgebase.
+"""
 
 
 # init dirs for server
 class CerebrumPaths:
+    """
+    Exposes necesary file paths and makes it easier to define
+    config level control concerning default file locations.
+    """
+
     def __init__(self, app_name: str = "cerebrum"):
         dirs = PlatformDirs(app_name)
-        self.DATA_DIR = Path(dirs.user_data_dir)
-        self.CONFIG_DIR = Path(dirs.user_config_dir)
-        self.CACHE_DIR = Path(dirs.user_cache_dir)
+        self.DATA_ROOT = Path(dirs.user_data_dir)
+        self.CONFIG_ROOT = Path(dirs.user_config_dir)
+        self.CACHE_ROOT = Path(dirs.user_cache_dir)
 
         # Cerebrum paths
-        self.KB_DIR = self.DATA_DIR / "knowledgebase"
-        self.PROJECTS_DIR = self.DATA_DIR / "projects"
-        self.BUBBLES_DIR = self.DATA_DIR / "study_bubbles"
-        self.LOGS_DIR = self.DATA_DIR / "logs"
+        self.KB_ROOT = self.DATA_ROOT / "knowledgebase"
+        self.BUBBLES_ROOT = self.DATA_ROOT / "study_bubbles"
+        self.LOGS_ROOT = self.DATA_ROOT / "logs"
 
     def init_cerebrum_dirs(self):
         """Ensure all top-level directories exist"""
         for d in [
-            self.DATA_DIR,
-            self.KB_DIR,
-            self.PROJECTS_DIR,
-            self.BUBBLES_DIR,
-            self.LOGS_DIR,
+            self.DATA_ROOT,
+            self.KB_ROOT,
+            self.BUBBLES_ROOT,
+            self.LOGS_ROOT,
         ]:
             d.mkdir(exist_ok=True)
 
     # ------------- HANDLE BUBBLES PATHS ---------------------------
     def init_bubble_dirs(self, bubble_id):
+        """
+        Handles creation of bubble specific folders when a new study bubble
+        is created
+        """
         bubble_dir = self.get_bubble_path(bubble_id) / bubble_id
 
         # Create sub-dirs
@@ -46,68 +63,64 @@ class CerebrumPaths:
 
     def get_bubbles_root(self) -> Path:
         """Return bubbles root directory"""
-        BUBBLE_DIR = self.DATA_DIR / "study_bubbles"
-        return BUBBLE_DIR
+        return self.BUBBLES_ROOT
 
     def get_bubble_path(self, bubble_id):
         """Return the path of a single bubble"""
-        return self.BUBBLES_DIR / bubble_id
+        BUBBLE_PATH = self.BUBBLES_ROOT / bubble_id
+        return BUBBLE_PATH
 
     def get_notes_root(self, bubble_id):
         """Return notes root directory"""
-        return self.get_bubbles_root() / bubble_id / "notes"
+        return self.get_bubble_path(bubble_id) / "notes"
 
     def get_note_path(self, bubble_id: str, filename: str):
         """Return path to a sinlge note"""
-        return self.get_bubbles_root() / bubble_id / "notes" / filename
+        return self.get_bubble_path(bubble_id) / "notes" / filename
 
     def get_note_archives(self, bubble_id):
-        """Return note archives root directory"""
-        return self.get_bubbles_root() / bubble_id / "notes" / ".archives"
+        """Return bubble specific note archives directory"""
+        return self.get_bubble_path(bubble_id) / "notes" / ".archives"
 
     def get_chats_dir(self, bubble_id):
-        """Return chats root directory"""
-        return self.get_bubbles_root() / bubble_id / "chat"
+        """Return  bubble specific chats directory"""
+        return self.get_bubble_path(bubble_id) / "chat"
 
     def get_chats_archives(self, bubble_id):
-        """Return chat archives root directory"""
-        return self.get_bubbles_root() / bubble_id / "chat" / ".archives"
+        """Return  bubble specific chat archives directory"""
+        return self.get_bubble_path(bubble_id) / "chat" / ".archives"
 
     def get_assesment_dir(self, bubble_id):
-        """Returns assesment root directory"""
-        return self.get_bubbles_root() / bubble_id / "assesments"
+        """Returns bubble specific assesment directory"""
+        return self.get_bubble_path(bubble_id) / "assesments"
 
     def get_assesment_archives(self, bubble_id):
-        """Returns assesment archives root directory"""
-        return self.get_bubbles_root() / bubble_id / "assesments" / ".archives"
+        """Returns bubble specific assesment archives directory"""
+        return self.get_bubble_path(bubble_id) / "assesments" / ".archives"
 
     # ------------- HANDLE KNOWLEDGEBASE PATHS ---------------------------
-    def get_kb_dir(self) -> Path:
-        KB_DIR = self.DATA_DIR / "knowledgebase"
+    def get_kb_root(self) -> Path:
+        KB_DIR = self.DATA_ROOT / "knowledgebase"
         return KB_DIR
 
     def get_kb_source_files(self) -> Path:
-        return self.get_kb_dir() / "source_files"
+        return self.get_kb_root() / "source_files"
 
     def get_kb_artifacts(self) -> Path:
-        return self.get_kb_dir() / "markdown_artifacts"
+        return self.get_kb_root() / "markdown_artifacts"
 
     def get_kb_archives(self):
-        return self.get_kb_dir() / "archives"
-
-    def get_projects_dir(self) -> Path:
-        PROJECTS_DIR = self.DATA_DIR / "projects"
-        return PROJECTS_DIR
+        return self.get_kb_root() / "archives"
 
     def get_logs_dir(self) -> Path:
-        LOGS_DIR = self.DATA_DIR / "logs"
+        LOGS_DIR = self.DATA_ROOT / "logs"
         return LOGS_DIR
 
     def get_config_dir(self) -> Path:
-        return self.CONFIG_DIR
+        return self.CONFIG_ROOT
 
     def get_cache_dir(self) -> Path:
-        return self.CACHE_DIR
+        return self.CACHE_ROOT
 
 
 # init so functions in this file can use it
@@ -116,8 +129,9 @@ CEREBRUM_PATHS = CerebrumPaths()
 
 def file_walker_inator(root: Path, max_depth: int = 4):
     """
-    walk the through knowledgebase_dir, identify files at
-
+    walks the  knowledgebase root directory, in order to give context
+    of the available domains to the llm, so it can determinstically
+    classify documents
     """
 
     def recurse_inator(path: Path, parts: list[str]):
@@ -177,9 +191,16 @@ def knowledgebase_index_inator(root: Path):
 
 
 class FileRegisterInator:
-    def __init__(self, db_path: str = "registry/registry.db"):
-        self.DB_PATH = CEREBRUM_PATHS.get_kb_dir() / db_path
+    """
+    Registers available files, and is the source of truth for which files
+    are to be processed and added to domain specific archives in the knowledgebase
+    """
+
+    def __init__(self, db_path: str = "registry/file_registry.db"):
+        self.DB_PATH = CEREBRUM_PATHS.get_kb_root() / db_path
         self.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+        # self init functions
         self._table_iniatior_inator()
 
     def _table_iniatior_inator(self):
@@ -193,9 +214,12 @@ class FileRegisterInator:
             id INTEGER PRIMARY KEY,
             original_name TEXT UNIQUE,
             sanitized_name TEXT,
-            hash_id TEXT UNIQUE,
+            domain TEXT,
+            subject TEXT,
+            fingerprint TEXT UNIQUE,
             converted INTEGER DEFAULT 0,
             embedded INTEGER DEFAULT 0,
+            filepath TEXT,
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -205,59 +229,125 @@ class FileRegisterInator:
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_original_name ON registry(original_name)"
         )
         cursor.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_hash ON registry(hash_id)"
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_registry_hash ON registry(fingerprint)"
         )
 
         conn.commit()
         conn.close()
 
-    def hash_inator(self, filename: str):
-        """Generate a determinstic hash_id from filename"""
-        return hashlib.sha256(filename.encode("utf-8")).hexdigest()
-
-    def register_inator(self, original_name: str, sanitized_name: str):
-        hash_id = self.hash_inator(sanitized_name)
+    def register_inator(self, original_name: str, filepath: str):
+        fingerprint = self._fingerprint_inator(original_name)
         conn = sqlite3.connect(self.DB_PATH)
         cursor = conn.cursor()
 
         cursor.execute(
             """
-        INSERT INTO registry (original_name, sanitized_name, hash_id)
-        VALUES (?,?, ?)
-        ON CONFLICT(hash_id) DO UPDATE SET
+        INSERT INTO registry (original_name, fingerprint, filepath)
+        VALUES (?,?,?)
+        ON CONFLICT(fingerprint) DO UPDATE SET
             last_updated = CURRENT_TIMESTAMP
         """,
-            (original_name, sanitized_name, hash_id),
+            (original_name, fingerprint, filepath),
         )
 
         conn.commit()
         conn.close()
 
-        return hash_id
+    def mark_converted_inator(
+        self,
+        fingerprint: str,
+        domain: str | None,
+        subject: str | None,
+        sanitized_name: str | None,
+    ):
 
-    def updater_inator(self, status: str, hash_id: str):
         conn = sqlite3.connect(self.DB_PATH)
         cursor = conn.cursor()
 
-        if status in ("converted", "embedded"):
-            cursor.execute(
-                f"""
+        cursor.execute(
+            """
             UPDATE registry
-            SET {status} = 1,
+            SET 
+                converted = 1,
+                domain = COALESCE(?, domain),
+                subject = COALESCE(?, subject),
+                sanitized_name = COALESCE(?, sanitized_name),
                 last_updated = CURRENT_TIMESTAMP
-            WHERE hash_id = ?
+            WHERE fingerprint
             """,
-                (hash_id,),
-            )
-
-            print(
-                f"[DEBUG] Updated {status} for hash_id={hash_id} → {cursor.rowcount} rows affected"
-            )
+            (domain, subject, sanitized_name, fingerprint),
+        )
 
         conn.commit()
         conn.close()
 
-    def check_inator(self, hash_id: str, field: str = "") -> bool:
+    def mark_embedded_inator(
+        self,
+        fingerprint: str,
+    ):
+
+        conn = sqlite3.connect(self.DB_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            UPDATE registry
+            SET 
+                embedded = 1,
+                last_updated = CURRENT_TIMESTAMP
+            WHERE fingerprint = ?
+            AND sanitized_name = ?
+            """,
+            (fingerprint),
+        )
+
+        conn.commit()
+        conn.close()
+
+    def fetch_unconverted_file_inator(self):
+        """Fetch all files not converted to markdown"""
+        conn = sqlite3.connect(self.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+        SELECT
+            original_name,
+            fingerprint,
+            filepath
+        FROM registry
+        WHERE converted = 0
+        """
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        columns = ["original_name", "fingerprint", "filepath"]
+        data = [dict(zip(columns, row)) for row in rows]
+        return data
+
+    def fetch_unembedded_file_inator(self):
+        """Fetch all files that are converted but not embedded"""
+        conn = sqlite3.connect(self.DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                original_name,
+                sanitized_name,
+                fingerprint,
+                filepath
+            FROM registry
+            WHERE converted = 1 AND embedded = 0
+            """
+        )
+        rows = cursor.fetchall()
+        conn.close()
+
+        columns = ["original_name", "sanitized_name", "fingerprint", "filepath"]
+        data = [dict(zip(columns, row)) for row in rows]
+        return data
+
+    def check_inator(self, fingerprint: str, field: str = "") -> bool:
         """
         Check if a file exists or if a flag is set.
         """
@@ -267,10 +357,12 @@ class FileRegisterInator:
 
         if field:
             cursor.execute(
-                f"SELECT {field} FROM registry WHERE hash_id = ?", (hash_id,)
+                f"SELECT {field} FROM registry WHERE fingerprint = ?", (fingerprint,)
             )
         else:
-            cursor.execute("SELECT 1 FROM registry WHERE hash_id = ?", (hash_id,))
+            cursor.execute(
+                "SELECT 1 FROM registry WHERE fingerprint = ?", (fingerprint,)
+            )
 
         result = cursor.fetchone()
         conn.close()
@@ -288,14 +380,17 @@ class FileRegisterInator:
             "ids",
             "original_name",
             "sanitized_name",
-            "hash_id",
+            "subject",
+            "domain",
+            "fingerprint",
             "converted",
             "embedded",
+            "filepath",
         ]
         data = [dict(zip(columns, row)) for row in rows]
         return data
 
-    def reset_inator(self, status, hash_id=None):
+    def reset_inator(self, status, fingerprint=None):
         VALID_COLUMNS = {"embedded", "converted"}
 
         if status not in VALID_COLUMNS:
@@ -304,14 +399,14 @@ class FileRegisterInator:
         conn = sqlite3.connect(self.DB_PATH)
         cursor = conn.cursor()
         try:
-            if hash_id:
+            if fingerprint:
                 cursor.execute(
                     f"""
                 UPDATE registry
                 SET {status} = 0
-                WHERE hash_id = ?
+                WHERE fingerprint = ?
                 """,
-                    (hash_id),
+                    (fingerprint),
                 )
             else:
                 cursor.execute(f"UPDATE registry SET {status} = 0")
@@ -321,3 +416,132 @@ class FileRegisterInator:
 
         finally:
             conn.close()
+
+    def _fingerprint_inator(self, original_name: str):
+        """Generate a determinstic fingerprint from filename"""
+        return hashlib.sha256(original_name.encode("utf-8")).hexdigest()
+
+
+@dataclass
+class ChunkRecordInator:
+    fingerprint: str
+    chunk_index: str
+    byte_start: int
+    byte_end: int
+    token_count: int
+    chunk_type: str
+    parent_chunk_index: Optional[str]
+    embedded: int = 0
+
+
+class ChunkRegisterInator:
+    def __init__(self, db_path: str = "registry/chunk_registry.db"):
+        self.db_path = CEREBRUM_PATHS.get_kb_root() / db_path
+        self._init_table()
+
+    def _init_table(self):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chunks (
+            id INTEGER PRIMARY KEY,
+            chunk_fingerprint TEXT NOT NULL, 
+            chunk_index TEXT NOT NULL,
+            byte_start INTEGER NOT NULL,
+            byte_end INTEGER NOT NULL,
+            token_count INTEGER,
+            chunk_type TEXT NOT NULL,
+            parent_chunk_index TEXT,
+            embedded INTEGER DEFAULT 0,
+            UNIQUE (chunk_fingerprint, chunk_index)
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+
+    def register_chunks(self, chunk_rows: list[tuple]):
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.executemany(
+            """
+            INSERT OR REPLACE INTO chunks (
+                chunk_fingerprint,
+                chunk_index,
+                byte_start,
+                byte_end,
+                token_count,
+                chunk_type,
+                parent_chunk_index
+            ) VALUES (?,?,?,?,?,?,?)
+            """,
+            chunk_rows,
+        )
+        conn.commit()
+        conn.close()
+
+    def get_embedding_progress(self, chunk_fingerprint: str) -> dict:
+        """
+        Check embedding progress for a document
+        """
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            SELECT 
+                COUNT(*) as total,
+                SUM(embedded) as completed,
+                COUNT(*) - SUM(embedded) as remaining
+            FROM chunks
+            WHERE chunk_fingerprint = ?
+            """,
+            (chunk_fingerprint,),
+        )
+        result = cur.fetchone()
+        conn.close()
+
+        if result and result[0] > 0:
+            total, completed, remaining = result
+            return {
+                "total": total,
+                "completed": completed,
+                "remaining": remaining,
+                "progress_pct": (completed / total) * 100,
+            }
+        return {"total": 0, "completed": 0, "remaining": 0, "progress_pct": 0}
+
+    def mark_embedded(self, chunk_fingerprint: str, chunk_index: str):
+        """Mark a chunk as embedded"""
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE chunks
+            SET embedded = 1
+            WHERE  chunk_fingerprint = ? AND chunk_index = ?
+            """,
+            (chunk_fingerprint, chunk_index),
+        )
+        conn.commit()
+        conn.close()
+
+    def get_unembedded_chunks(self, chunk_fingerprint: str) -> list[ChunkRecordInator]:
+        """Get all chunks that have not been embedded yet for a given doucment"""
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            """
+        SELECT chunk_fingerprint, chunk_index, byte_start, byte_end,
+        token_count, chunk_type, parent_chunk_index, embedded
+
+        FROM chunks
+        WHERE chunk_fingerprint = ? AND embedded = 0
+        ORDER BY chunk_index
+        """,
+            (chunk_fingerprint,),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return [ChunkRecordInator(*row) for row in rows]

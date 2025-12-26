@@ -121,12 +121,12 @@ def calculate_version_increment(old_doc: dict, new_doc: dict) -> float:
 
 @bubble_router.get("/", response_model=List[StudyBubble])
 def list_study_bubbles():
-    STUDY_BUBBLES_DIR = CerebrumPaths().get_bubbles_root()
+    STUDY_BUBBLES_ROOT = CerebrumPaths().get_bubbles_root()
     """
     List all study bubbles.
     """
     bubbles = []
-    for folder in STUDY_BUBBLES_DIR.iterdir():
+    for folder in STUDY_BUBBLES_ROOT.iterdir():
         if not folder.is_dir():
             continue
 

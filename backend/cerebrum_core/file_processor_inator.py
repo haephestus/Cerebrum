@@ -1,42 +1,112 @@
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 
 import pymupdf4llm
+import tiktoken
 import yaml
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings, OllamaLLM
-from langchain_text_splitters import MarkdownHeaderTextSplitter
+from langchain_text_splitters import (
+    MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter,
+)
 
 from agents.rose import RosePrompts
 from cerebrum_core.model_inator import FileMetadata, TranslatedQuery
 from cerebrum_core.user_inator import DEFAULT_CHAT_MODEL, ConfigManager
 from cerebrum_core.utils.file_util_inator import (
     CerebrumPaths,
+    ChunkRegisterInator,
     knowledgebase_index_inator,
 )
+
+os.makedirs("./logs", exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler("logs/cerebrum_debug.log"),
+        logging.StreamHandler(),  # optional: still prints to console
+    ],
+)
+logger = logging.getLogger("cerebrum")
 
 
 class IngestInator:
     """
-    ingestinator is  supposed to take files from the storage dir
-        1. chunk them up
-        2. index information
-        3. embed information
+    ingestinator converts pdf(for now) into markdown, and embeds them into
+    a knowledgebase archiver
     """
 
-    def __init__(self, filepath: Path, archives_path=None) -> None:
-        self.archives_path = archives_path
-        self.filepath = filepath
-        self.embedding_model = ConfigManager().load_config().models.embedding_model
-        self.chunks: list[Document] = []
+    def __init__(self, filepath: Path) -> None:
         self.metatdata = {}
+        self.filepath = filepath
+        self.chunks: list[Document] = []
+        self.registry = ChunkRegisterInator()
+        self.fingerprint = self._fingerprint_inator(filepath)
+        self.archives_path = CerebrumPaths().get_kb_archives()
+        self.embedding_model = ConfigManager().load_config().models.embedding_model
 
-    def _yaml_inator(self, metadata: FileMetadata) -> str:
-        yaml_dump = yaml.dump(metadata.model_dump(), sort_keys=False)
-        return f"---\n{yaml_dump}---\n\n"
+    def embedd_inator(self, collection_name: str, chunk_fingerprint: str) -> None:
+        """
+        store chunks in archives
+        """
+        # TODO: find a better alternative than assert
+        assert self.embedding_model is not None, "embedding_model is required"
+        assert self.archives_path is not None, "archives_path is required"
+
+        progress = self.registry.get_embedding_progress(
+            chunk_fingerprint=chunk_fingerprint
+        )
+
+        if progress["remaining"] == 0 and progress["total"] > 0:
+            print("All chunks already embedded!")
+            return
+
+        if progress["total"] > 0:
+            print(
+                f"Resuming: {progress['remaining']}/{progress['total']} chunks remaining"
+            )
+
+        unembedded = self.registry.get_unembedded_chunks(self.fingerprint)
+        unembedded_indices = {chunk.chunk_index for chunk in unembedded}
+
+        chunks_to_embed = [
+            (i, chunk)
+            for i, chunk in enumerate(self.chunks)
+            if f"chunk_{i:04d}" in unembedded_indices
+        ]
+
+        if not chunks_to_embed:
+            print("No chunks to embed")
+            return
+
+        # embedding
+        # WARN: look into making this framework agnostic
+        # (split it into a seperate embedding funcion)
+        embedding_llm = OllamaEmbeddings(model=self.embedding_model)
+        chromadb = Chroma(
+            collection_name=collection_name,
+            persist_directory=str(self.archives_path),
+            embedding_function=embedding_llm,
+            collection_metadata=self.metatdata,
+        )
+
+        for idx, (i, chunk) in enumerate(chunks_to_embed, 1):
+            chunk_index = f"chunk_{i:04d}"
+            try:
+                chromadb.add_documents([chunk])
+                self.registry.mark_embedded(self.fingerprint, chunk_index)
+                print(f"✓ Embedded {idx}/{len(chunks_to_embed)} ({chunk_index})")
+            except Exception as e:
+                print(f"✗ Failed at {chunk_index}: {e}")
+                print("Progress saved. Run again to resume.")
+                raise
+        print(f"✓ Complete! All {progress['total']} chunks embedded.")
 
     def sanitize_inator(self, filename: str, metadata: dict | None):
         """
@@ -71,7 +141,7 @@ class IngestInator:
         self.metatdata = {"filename": filename, "domain": domain, "subject": subject}
 
         path = CerebrumPaths()
-        markdown_dir = path.get_kb_dir() / "markdown" / domain / subject
+        markdown_dir = path.get_kb_root() / "markdown" / domain / subject
         markdown_dir.mkdir(parents=True, exist_ok=True)
 
         md_body = pymupdf4llm.to_markdown(self.filepath, show_progress=True)
@@ -89,10 +159,8 @@ class IngestInator:
         input markdown files
         split md according at header_levels
         """
-        # TODO: work on chunking,
-        # dynamic chunking -> auto adjust to embedding models context window
-        # or manual chunking ->  4k tokens (find a normalized and fair tokenizer)
-        md_text = markdown_filepath.read_text()
+        md_text = markdown_filepath.read_text(encoding="utf-8")
+        max_chunk_tokens = 4000
 
         header_levels = [
             ("#", "Header 1"),
@@ -103,55 +171,72 @@ class IngestInator:
             ("######", "Header 6"),
         ]
 
-        splitter = MarkdownHeaderTextSplitter(
+        header_splitter = MarkdownHeaderTextSplitter(
             headers_to_split_on=header_levels, strip_headers=False
         )
+        header_chunks = header_splitter.split_text(md_text)
 
-        self.chunks = splitter.split_text(md_text)
+        tokenizer = tiktoken.get_encoding("cl100k_base")
+
+        def len_and_overlap(text: str) -> tuple[int, int]:
+            return len(tokenizer.encode(text)), 200
+
+        recursive_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=max_chunk_tokens,
+            chunk_overlap=200,
+            length_function=len_and_overlap,
+            add_start_index=True,
+        )
+        for idx, chunk in enumerate(header_chunks):
+            if len_and_overlap(chunk.page_content)[0] <= max_chunk_tokens:
+                self.chunks.append(chunk)
+            else:
+                sub_chunks = recursive_splitter.split_documents([chunk])
+                for sub_chunk in sub_chunks:
+                    sub_chunk.metadata["parent_chunk_index"] = f"chunk_{idx:04d}"
+                    self.chunks.append(sub_chunk)
+
+        self._chunk_register_inator(self.fingerprint, self.chunks)
+
         return self.chunks
 
-    def embedd_inator(self, chunk, collection_name) -> None:
+    def _fingerprint_inator(self, filepath: Path) -> str:
         """
-        store chunks in archives
+        Generate a unique fingerprint for a document based on its content
         """
-        # TODO: find a better alternative than assert
-        assert self.embedding_model is not None, "embedding_model is required"
-        assert self.archives_path is not None, "archives_path is required"
+        hasher = hashlib.sha256()
+        with open(filepath, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest()[:16]
 
-        # embedding
-        # WARN: look into making this framework agnostic
-        # (split it into a seperate embedding funcion)
-        embedding_llm = OllamaEmbeddings(model=self.embedding_model)
-        chromadb = Chroma(
-            collection_name=collection_name,
-            persist_directory=str(self.archives_path),
-            embedding_function=embedding_llm,
-            collection_metadata=self.metatdata,
-        )
+    def _yaml_inator(self, metadata: FileMetadata) -> str:
+        yaml_dump = yaml.dump(metadata.model_dump(), sort_keys=False)
+        return f"---\n{yaml_dump}---\n\n"
 
-        # TODO: add legible chunk ids for each documents
-        # probably in a style that matches filemeta data
-        chromadb.add_documents([chunk])
+    def _chunk_register_inator(self, fingerprint: str, chunks: list[Document]):
+        """Register all chunks in the database for tracking"""
+        chunk_rows = []
 
-    # WARN: for later if chroma stores are too big
-    def index_inator(self):
-        pass
+        for i, chunk in enumerate(chunks):
+            content = chunk.page_content
+            chunk_index = f"chunk_{i:04d}"
 
-    def token_inator(self):
-        pass
+            chunk_type = "header" if chunk.metadata else "recursive"
+            parent_index = chunk.metadata.get("parent_chunk_index", None)
 
+            chunk_row = (
+                fingerprint,
+                chunk_index,
+                chunk.metadata.get("start_index", 0),
+                chunk.metadata.get("start_index", 0) + len(content),
+                len(content.split()),
+                chunk_type,
+                parent_index,
+            )
+            chunk_rows.append(chunk_row)
 
-os.makedirs("./logs", exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler("logs/cerebrum_debug.log"),
-        logging.StreamHandler(),  # optional: still prints to console
-    ],
-)
-logger = logging.getLogger("cerebrum")
-archives_path = CerebrumPaths()
+        self.registry.register_chunks(chunk_rows)
 
 
 class RetrieverInator:
