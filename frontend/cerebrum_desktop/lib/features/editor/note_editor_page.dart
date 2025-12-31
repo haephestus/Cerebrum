@@ -35,6 +35,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   String? _cachedAnalysis;
   bool _isLoadingAnalysis = false;
   bool _showAnalysisPanel = false;
+  bool _isGeneratingAnalysis = false;
 
   String? _noteIdFromFilename(String? filename) {
     if (filename == null || filename.isEmpty) return null;
@@ -178,6 +179,62 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     }
   }
 
+  Future<void> _generateAnalysis() async {
+    final bubbleId = widget.note['bubble_id'] as String?;
+    final filename = widget.note['filename'] as String?;
+
+    if (bubbleId == null || filename == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot generate analysis: Note not saved yet'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isGeneratingAnalysis = true);
+
+    try {
+      final analysis = await LearningCenterApi.runActiveAnalysis(
+        bubbleId: bubbleId,
+        filename: filename,
+      );
+
+      setState(() {
+        _cachedAnalysis =
+            analysis ?? 'Analysis generated but no content returned.';
+        _showAnalysisPanel = true;
+        _isGeneratingAnalysis = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Analysis generated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _cachedAnalysis = 'Error generating analysis:\n$e';
+        _showAnalysisPanel = true;
+        _isGeneratingAnalysis = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate analysis: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _loadInkFromJson(List<Map<String, dynamic>> jsonList) {
     for (final item in jsonList) {
       try {
@@ -214,6 +271,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               padding: EdgeInsets.all(12),
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
+          if (_isGeneratingAnalysis)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.orange,
+              ),
+            ),
           IconButton(
             icon: Icon(drawingEnabled ? Icons.brush : Icons.text_fields),
             tooltip:
@@ -229,6 +294,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
           ),
           IconButton(
             icon: const Icon(Icons.analytics),
+            tooltip: 'View Cached Analysis',
             onPressed:
                 _isLoadingAnalysis
                     ? null
@@ -241,6 +307,11 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                         _loadAnalysis();
                       }
                     },
+          ),
+          IconButton(
+            icon: const Icon(Icons.auto_awesome),
+            tooltip: 'Generate New Analysis',
+            onPressed: _isGeneratingAnalysis ? null : _generateAnalysis,
           ),
         ],
       ),

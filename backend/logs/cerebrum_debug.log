@@ -2279,3 +2279,4 @@ httpx.ConnectError: [Errno 111] Connection refused
 2025-12-31 22:07:38,691 [INFO] cerebrum: ✓ Deleted 5 documents matching filter: {'fingerprint': '6aee5e452a39e989d22329de8afeeacc74b583ec99968866ed1b069b1cbe6cbb'}
 2025-12-31 22:07:38,697 [INFO] cerebrum: ✓ Total deleted across all collections: 5
 2025-12-31 22:08:20,513 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 22:16:04,465 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
