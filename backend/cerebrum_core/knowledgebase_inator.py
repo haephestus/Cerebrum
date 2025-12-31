@@ -3,8 +3,9 @@ import json
 import logging
 import os
 import re
+from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Optional
 
 import pymupdf4llm
 import tiktoken
@@ -369,35 +370,366 @@ class MarkdownChunker:
         return len(self.tokenizer.encode(text))
 
 
+class VectorStoreManager:
+    """
+    Manages vector store operations independent of specific documents.
+    Use this for general queries, listing, and management tasks.
+    """
+
+    def __init__(self):
+        self.archives_path = CerebrumPaths().get_kb_archives()
+        embedding_model = ConfigManager().load_config().models.embedding_model
+        if not embedding_model:
+            raise ValueError("Embedding model not configured")
+        self.embedding_model = embedding_model
+
+    def get_store(
+        self,
+        collection_name: str,
+        domain: str = "default",
+        subject: str = "default",
+    ) -> Chroma:
+        """
+        Get a Chroma vector store instance.
+
+        Args:
+            collection_name: Name of the collection
+            domain: Domain directory
+            subject: Subject directory
+
+        Returns:
+            Chroma vector store instance
+        """
+        collection_path = Path(self.archives_path) / domain / subject
+        collection_path.mkdir(parents=True, exist_ok=True)
+
+        return Chroma(
+            collection_name=collection_name,
+            embedding_function=OllamaEmbeddings(model=self.embedding_model),
+            persist_directory=str(collection_path),
+        )
+
+    def list_all_collections(self) -> List[Dict[str, Any]]:
+        """
+        List all collections across all domains and subjects.
+
+        Returns:
+            List of dicts with collection info: {domain, subject, collection_name, path, count}
+        """
+        collections = []
+        archives_root = Path(self.archives_path)
+
+        # Traverse domain/subject structure
+        for domain_path in archives_root.iterdir():
+            if not domain_path.is_dir():
+                continue
+
+            for subject_path in domain_path.iterdir():
+                if not subject_path.is_dir():
+                    continue
+
+                domain = domain_path.name
+                subject = subject_path.name
+
+                # Check for chroma.sqlite3 to confirm it's a valid collection
+                if (subject_path / "chroma.sqlite3").exists():
+                    try:
+                        store = self.get_store(subject, domain, subject)
+                        count = store._collection.count()
+
+                        collections.append(
+                            {
+                                "domain": domain,
+                                "subject": subject,
+                                "collection_name": subject,
+                                "path": str(subject_path),
+                                "count": count,
+                            }
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to read collection at {subject_path}: {e}"
+                        )
+
+        return collections
+
+    def get_collection_info(
+        self,
+        collection_name: str,
+        domain: str = "default",
+        subject: str = "default",
+    ) -> Dict[str, Any]:
+        """
+        Get detailed information about a collection.
+
+        Returns:
+            Dict with count, collection metadata, and sample documents
+        """
+        store = self.get_store(collection_name, domain, subject)
+
+        try:
+            collection = getattr(store, "_collection", None)
+            if collection is None:
+                raise RuntimeError("Store has no underlying collection")
+
+            count = collection.count()
+            collection_metadata = getattr(collection, "metadata", {}) or {}
+
+            sample_docs: list[dict] = []
+
+            if count > 0:
+                results = collection.get(limit=3) or {}
+
+                ids = results.get("ids") or []
+                documents = results.get("documents") or []
+                metadatas = results.get("metadatas") or []
+
+                for i, doc_id in enumerate(ids):
+                    content = documents[i] if i < len(documents) else None
+                    metadata = metadatas[i] if i < len(metadatas) else {}
+
+                    sample_docs.append(
+                        {
+                            "id": doc_id,
+                            "content_preview": content[:200] if content else "",
+                            "metadata": metadata or {},
+                        }
+                    )
+
+            return {
+                "collection_name": collection_name,
+                "domain": domain,
+                "subject": subject,
+                "count": count,
+                "collection_metadata": collection_metadata,
+                "sample_documents": sample_docs,
+            }
+
+        except Exception as e:
+            logger.exception(
+                "Failed to get collection info",
+                extra={
+                    "collection": collection_name,
+                    "domain": domain,
+                    "subject": subject,
+                },
+            )
+            raise
+
+    def search_across_collections(
+        self,
+        query: str,
+        domains: Optional[List[str]] = None,
+        subjects: Optional[List[str]] = None,
+        k: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search across multiple collections.
+
+        Args:
+            query: Search query
+            domains: List of domains to search (None = all)
+            subjects: List of subjects to search (None = all)
+            k: Number of results per collection
+
+        Returns:
+            List of results with collection info
+        """
+        all_collections = self.list_all_collections()
+        results = []
+
+        for coll_info in all_collections:
+            # Filter by domain/subject if specified
+            if domains and coll_info["domain"] not in domains:
+                continue
+            if subjects and coll_info["subject"] not in subjects:
+                continue
+
+            try:
+                store = self.get_store(
+                    coll_info["collection_name"],
+                    coll_info["domain"],
+                    coll_info["subject"],
+                )
+
+                docs = store.similarity_search(query, k=k)
+
+                for doc in docs:
+                    results.append(
+                        {
+                            "domain": coll_info["domain"],
+                            "subject": coll_info["subject"],
+                            "collection": coll_info["collection_name"],
+                            "content": doc.page_content,
+                            "metadata": doc.metadata,
+                        }
+                    )
+
+            except Exception as e:
+                logger.warning(
+                    f"Failed to search in {coll_info['domain']}/{coll_info['subject']}: {e}"
+                )
+
+        return results
+
+    def delete_collection(
+        self,
+        collection_name: str,
+        domain: str = "default",
+        subject: str = "default",
+    ) -> None:
+        """Delete an entire collection."""
+        store = self.get_store(collection_name, domain, subject)
+        store.delete_collection()
+        logger.info(f"✓ Deleted collection {domain}/{subject}/{collection_name}")
+
+    def delete_by_metadata(
+        self,
+        collection_name: str,
+        metadata_filter: Dict[str, Any],
+        domain: str = "default",
+        subject: str = "default",
+    ) -> int:
+        """
+        Delete documents matching metadata criteria.
+
+        Args:
+            collection_name: Collection name
+            metadata_filter: Metadata key-value pairs to match
+            domain: Domain directory
+            subject: Subject directory
+
+        Returns:
+            Number of documents deleted
+        """
+        store = self.get_store(collection_name, domain, subject)
+
+        # Get all documents with matching metadata
+        results = store._collection.get(where=metadata_filter)
+
+        if not results["ids"]:
+            logger.info("No documents matched the filter")
+            return 0
+
+        # Delete by IDs
+        store._collection.delete(ids=results["ids"])
+        count = len(results["ids"])
+        logger.info(f"✓ Deleted {count} documents matching filter: {metadata_filter}")
+
+        return count
+
+    def get_documents_by_fingerprint(
+        self,
+        fingerprint: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Find all documents with a specific fingerprint across all collections.
+
+        Args:
+            fingerprint: Document fingerprint to search for
+
+        Returns:
+            List of documents with their collection info
+        """
+        all_collections = self.list_all_collections()
+        documents = []
+
+        for coll_info in all_collections:
+            try:
+                store = self.get_store(
+                    coll_info["collection_name"],
+                    coll_info["domain"],
+                    coll_info["subject"],
+                )
+
+                # Search by fingerprint metadata
+                results = store._collection.get(where={"fingerprint": fingerprint})
+
+                if results["ids"]:
+                    for i, doc_id in enumerate(results["ids"]):
+                        documents.append(
+                            {
+                                "id": doc_id,
+                                "domain": coll_info["domain"],
+                                "subject": coll_info["subject"],
+                                "collection": coll_info["collection_name"],
+                                "content": (
+                                    results["documents"][i]
+                                    if results["documents"]
+                                    else ""
+                                ),
+                                "metadata": (
+                                    results["metadatas"][i]
+                                    if results["metadatas"]
+                                    else {}
+                                ),
+                            }
+                        )
+
+            except Exception as e:
+                logger.warning(
+                    f"Failed to search in {coll_info['domain']}/{coll_info['subject']}: {e}"
+                )
+
+        return documents
+
+    def delete_by_fingerprint_all_collections(self, fingerprint: str) -> int:
+        """
+        Delete all documents with a specific fingerprint across all collections.
+
+        Args:
+            fingerprint: Document fingerprint
+
+        Returns:
+            Total number of documents deleted
+        """
+        total_deleted = 0
+        all_collections = self.list_all_collections()
+
+        for coll_info in all_collections:
+            try:
+                count = self.delete_by_metadata(
+                    coll_info["collection_name"],
+                    {"fingerprint": fingerprint},
+                    coll_info["domain"],
+                    coll_info["subject"],
+                )
+                total_deleted += count
+            except Exception as e:
+                logger.warning(
+                    f"Failed to delete from {coll_info['domain']}/{coll_info['subject']}: {e}"
+                )
+
+        logger.info(f"✓ Total deleted across all collections: {total_deleted}")
+        return total_deleted
+
+
 class EmbeddInator:
     """
-    Handles resumable embedding of document chunks using byte-coordinate access.
-    Reads chunks directly from .chunked.md files without loading entire file.
+    Handles embedding operations for specific documents.
+    Use this when you have a specific document to embed.
     """
 
     def __init__(self, fingerprint: str):
         self.fingerprint = fingerprint
         self.registry = ChunkRegisterInator()
-        self.archives_path = str(CerebrumPaths().get_kb_archives())
-
-        embedding_model = ConfigManager().load_config().models.embedding_model
-        if not embedding_model:
-            raise ValueError("Embedding model not configured in config")
-
-        self.embedding_model = embedding_model
+        self.vector_manager = VectorStoreManager()
 
     def embed_from_chunked_markdown(
         self,
         chunked_markdown: Path,
         collection_name: str,
+        domain: str = "default",
+        subject: str = "default",
     ) -> None:
         """
-        Embed chunks from .chunked.md file using byte coordinates.
-        Safe to restart - only embeds unembedded chunks.
+        Embed chunks from .chunked.md file.
 
         Args:
             chunked_markdown: Path to .chunked.md file
-            collection_name: Chroma collection name (typically subject)
+            collection_name: Collection name
+            domain: Domain directory
+            subject: Subject directory
         """
         # Check progress
         progress = self.registry.get_embedding_progress(self.fingerprint)
@@ -415,186 +747,52 @@ class EmbeddInator:
             f"({progress['progress_pct']:.1f}%)"
         )
 
-        # Get unembedded chunks from registry
+        # Get unembedded chunks
         unembedded = self.registry.get_unembedded_chunks(self.fingerprint)
 
-        # Read file once as bytes
+        # Read file once
         with open(chunked_markdown, "rb") as f:
             file_bytes = f.read()
 
-        # Parse YAML frontmatter for metadata
-        yaml_metadata = self._extract_yaml_metadata(chunked_markdown)
+        # Get vector store
+        store = self.vector_manager.get_store(collection_name, domain, subject)
 
-        # Extract domain and subject from YAML metadata
-        domain = yaml_metadata.get("domain", "default")
-        subject = yaml_metadata.get("subject", "default")
-
-        # Initialize Chroma with correct path
-        chromadb = self._get_archives(collection_name, yaml_metadata, domain, subject)
-
-        # Embed each unembedded chunk
+        # Embed each chunk
         for record in unembedded:
-            chunk_index = record.chunk_index
-            byte_start = record.byte_start
-            byte_end = record.byte_end
-
-            # Extract chunk content using byte coordinates
-            chunk_bytes = file_bytes[byte_start:byte_end]
+            chunk_bytes = file_bytes[record.byte_start : record.byte_end]
             chunk_content = chunk_bytes.decode("utf-8")
 
-            # Parse chunk metadata from the chunked file to get headers
-            chunk_headers = self._extract_chunk_headers(
-                chunked_markdown, int(chunk_index)
-            )
-
-            # Create document with metadata
             doc_metadata = {
                 "fingerprint": self.fingerprint,
-                "chunk_index": chunk_index,
+                "chunk_index": record.chunk_index,
                 "chunk_type": record.chunk_type,
-                "parent_chunk_index": (
-                    record.parent_chunk_index if record.parent_chunk_index else ""
-                ),
-                "filename": yaml_metadata.get("title", "unknown"),
-                "domain": yaml_metadata.get("domain", "unknown"),
-                "subject": yaml_metadata.get("subject", "unknown"),
+                "parent_chunk_index": record.parent_chunk_index or "",
+                "domain": domain,
+                "subject": subject,
             }
 
-            # Add header hierarchy to metadata
-            doc_metadata.update(chunk_headers)
-
-            # Convert list values to strings for Chroma compatibility
-            for key, value in doc_metadata.items():
-                if isinstance(value, list):
-                    doc_metadata[key] = ", ".join(str(v) for v in value)
-                elif value is None:
-                    doc_metadata[key] = ""
-
-            doc = Document(
-                page_content=chunk_content,
-                metadata=doc_metadata,
-            )
+            doc = Document(page_content=chunk_content, metadata=doc_metadata)
 
             try:
-                chromadb.add_documents([doc])
-                self.registry.mark_embedded(self.fingerprint, int(chunk_index))
-                logger.info(f"✓ Embedded chunk {chunk_index}")
+                store.add_documents([doc])
+                self.registry.mark_embedded(self.fingerprint, int(record.chunk_index))
+                logger.info(f"✓ Embedded chunk {record.chunk_index}")
             except Exception as e:
-                logger.error(f"✗ Failed at chunk {chunk_index}: {e}")
-                logger.info("Progress saved. Re-run to resume.")
+                logger.error(f"✗ Failed at chunk {record.chunk_index}: {e}")
                 raise
 
         logger.info("✓ Embedding complete")
 
-    def delete_by_fingerprint(
-        self,
-        collection_name: str,
-        fingerprint: str,
-        domain: str = "default",
-        subject: str = "default",
-    ) -> None:
-        """Delete all chunks for a document from vector database."""
-        chromadb = self._get_archives(collection_name, {}, domain, subject)
-        chunks = self.registry.get_unembedded_chunks(fingerprint)
-        ids = [str(c.chunk_index) for c in chunks]
+    def delete_embedded_document(self) -> int:
+        """
+        Delete all chunks for this document from all collections.
 
-        if not ids:
-            logger.warning(f"No chunks found for fingerprint: {fingerprint}")
-            return
-
-        chromadb.delete(ids=ids)
-        logger.info(f"✓ Deleted {len(ids)} chunks for fingerprint {fingerprint}")
-
-    def list_collections(self) -> List[str]:
-        """List all Chroma collections."""
-        chromadb = self._get_archives("default", {}, "default", "default")
-        return [c.name for c in chromadb._client.list_collections()]
-
-    def get_collection_count(
-        self, collection_name: str, domain: str = "default", subject: str = "default"
-    ) -> int:
-        """Get number of documents in collection."""
-        chromadb = self._get_archives(collection_name, {}, domain, subject)
-        return chromadb._collection.count()
-
-    def delete_collection(
-        self, collection_name: str, domain: str = "default", subject: str = "default"
-    ) -> None:
-        """Delete entire collection."""
-        chromadb = self._get_archives(collection_name, {}, domain, subject)
-        chromadb.delete_collection()
-        logger.info(f"✓ Collection '{collection_name}' deleted successfully")
-
-    def _get_archives(
-        self,
-        collection_name: str,
-        metadata: dict,
-        domain: str = "default",
-        subject: str = "default",
-    ):
-        """Initialize Chroma client with proper directory structure."""
-        # Build path: archives_root/domain/subject
-        collection_path = Path(self.archives_path) / domain / subject
-        collection_path.mkdir(parents=True, exist_ok=True)
-
-        return Chroma(
-            collection_name=collection_name,
-            embedding_function=OllamaEmbeddings(model=self.embedding_model),
-            persist_directory=str(collection_path),
-            collection_metadata=metadata,
+        Returns:
+            Number of documents deleted
+        """
+        return self.vector_manager.delete_by_fingerprint_all_collections(
+            self.fingerprint
         )
-
-    def _extract_yaml_metadata(self, markdown_path: Path) -> dict:
-        """Extract YAML frontmatter from markdown file."""
-        text = markdown_path.read_text(encoding="utf-8")
-
-        # Match YAML frontmatter
-        yaml_pattern = re.compile(r"^---\n(.*?)\n---\n", re.S)
-        match = yaml_pattern.match(text)
-
-        if not match:
-            logger.warning("No YAML frontmatter found")
-            return {}
-
-        yaml_content = match.group(1)
-        try:
-            metadata = yaml.safe_load(yaml_content)
-
-            # Convert lists to strings for Chroma compatibility
-            if metadata:
-                for key, value in metadata.items():
-                    if isinstance(value, list):
-                        metadata[key] = ", ".join(str(v) for v in value)
-                    elif value is None:
-                        metadata[key] = ""
-
-            return metadata
-        except yaml.YAMLError as e:
-            logger.error(f"Failed to parse YAML: {e}")
-            return {}
-
-    def _extract_chunk_headers(self, markdown_path: Path, chunk_index: int) -> dict:
-        """Extract header metadata from a specific chunk in the .chunked.md file."""
-        text = markdown_path.read_text(encoding="utf-8")
-
-        # Find the specific chunk's metadata block
-        pattern = rf"<!-- CHUNK_START\n.*?chunk_index: {chunk_index}\n(.*?)-->"
-        match = re.search(pattern, text, re.S)
-
-        if not match:
-            return {}
-
-        metadata_block = match.group(1)
-        headers = {}
-
-        # Extract header_N fields
-        for line in metadata_block.split("\n"):
-            line = line.strip()
-            if line.startswith("header_"):
-                key, value = line.split(":", 1)
-                headers[key.strip()] = value.strip()
-
-        return headers
 
 
 class RetrieverInator:

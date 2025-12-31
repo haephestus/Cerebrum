@@ -5,6 +5,52 @@ class LearningCenterApi {
   static const baseUrl = "http://localhost:8000";
   static const String learningCenterEndpoint = "$baseUrl/learn";
 
+  static Future<String?> runActiveAnalysis({
+    required String bubbleId,
+    required String filename,
+  }) async {
+    final uri = Uri.parse(
+      "$learningCenterEndpoint/active_analysis/$bubbleId/$filename",
+    );
+
+    print('DEBUG API: Running active analysis at $uri');
+
+    try {
+      final response = await http.post(uri);
+
+      print('DEBUG API: Response status: ${response.statusCode}');
+      print('DEBUG API: Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final body = response.body;
+
+        // Handle empty or null response
+        if (body.isEmpty || body == 'null') {
+          print('DEBUG API: Empty or null response');
+          return null;
+        }
+
+        // Try to decode as JSON first
+        try {
+          final decoded = jsonDecode(body);
+          print('DEBUG API: JSON decoded successfully: $decoded');
+          return decoded as String?;
+        } catch (e) {
+          // If JSON decode fails, return as plain string
+          print('DEBUG API: Not JSON, returning as plain string');
+          return body;
+        }
+      } else {
+        throw Exception(
+          "Failed to run active analysis. Status: ${response.statusCode}, Body: ${response.body}",
+        );
+      }
+    } catch (e) {
+      print('DEBUG API: Exception caught: $e');
+      rethrow;
+    }
+  }
+
   static Future<String?> getNoteAnalysis({
     required String bubbleId,
     required String noteId,

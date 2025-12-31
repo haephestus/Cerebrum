@@ -232,6 +232,7 @@ def list_notes_in_bubble(bubble_id: str):
 @bubble_router.post("/{bubble_id}/create/notes", response_model=NoteOut)
 def create_note(bubble_id: str, note: NoteBase):
     notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir.mkdir(parents=True, exist_ok=True)
     note.content.document = ensure_valid_document(note.content.document)
 
     safe_title = note.title.replace(" ", "_")

@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel
 
 from agents.rose import RosePrompts
-from cerebrum_core.learning_center_inator import passive_analysis
+from cerebrum_core.learning_center_inator import active_analysis, passive_analysis
 from cerebrum_core.model_inator import NoteStorage
 from cerebrum_core.utils.cache_inator import AnalysisCacheInator
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
@@ -240,7 +240,7 @@ def invalidate_analysis_cache(bubble_id: str, filename: str):
 
 
 @router_learn.post("/active_analysis/{bubble_id}/{filename}")
-def run_active_analysis(bubble_id: str, filename: str, user_query: str):
+def run_active_analysis(bubble_id: str, filename: str):
     """
     Run user-directed analysis with a specific question/prompt.
 
@@ -256,8 +256,8 @@ def run_active_analysis(bubble_id: str, filename: str, user_query: str):
     Returns:
         Analysis result tailored to user query
     """
-    # TODO: Implement
-    raise HTTPException(status_code=501, detail="Active analysis not yet implemented")
+    result = active_analysis(bubble_id, filename)
+    return {"status": "Success", "result": result}
 
 
 # ============================================================================

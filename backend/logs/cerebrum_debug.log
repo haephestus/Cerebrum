@@ -934,3 +934,1348 @@ ConnectionError: Failed to connect to Ollama. Please check that Ollama is downlo
 2025-12-31 15:18:01,538 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
 2025-12-31 15:35:47,343 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
 2025-12-31 17:15:45,773 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 18:30:16,806 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 18:56:00,469 [INFO] api.routes_bubble: Major version bump detected for note 01KDTN8K9G360YEQXRKVZA4ZQT (v1) — scheduling analysis
+2025-12-31 18:56:00,471 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1
+2025-12-31 18:56:00,483 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-31 18:56:00,483 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-31 18:56:00,483 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1
+2025-12-31 18:56:00,484 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1
+2025-12-31 18:56:00,484 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 18:58:23,992 [INFO] cerebrum_core.utils.cache_inator: Cache MISS for note 01KDTN8K9G360YEQXRKVZA4ZQT v0 (cached v1)
+2025-12-31 20:40:42,635 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:40:42,645 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-31 20:40:42,645 [WARNING] root: Failed to translate chunk 1: 'user_note'
+2025-12-31 20:40:42,645 [WARNING] root: Failed to translate chunk 2: 'user_note'
+2025-12-31 20:40:42,645 [WARNING] root: Failed to translate chunk 3: 'user_note'
+2025-12-31 20:40:42,645 [WARNING] root: Failed to translate chunk 4: 'user_note'
+2025-12-31 20:40:42,645 [WARNING] root: Failed to translate chunk 5: 'user_note'
+2025-12-31 20:40:42,645 [WARNING] root: Failed to translate chunk 6: 'user_note'
+2025-12-31 20:40:42,645 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 0 queries
+2025-12-31 20:40:42,646 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:40:42,646 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 20:40:42,646 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 20:42:05,548 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:42:05,557 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-31 20:42:05,557 [WARNING] root: Failed to translate chunk 1: 'user_note'
+2025-12-31 20:42:05,557 [WARNING] root: Failed to translate chunk 2: 'user_note'
+2025-12-31 20:42:05,557 [WARNING] root: Failed to translate chunk 3: 'user_note'
+2025-12-31 20:42:05,557 [WARNING] root: Failed to translate chunk 4: 'user_note'
+2025-12-31 20:42:05,557 [WARNING] root: Failed to translate chunk 5: 'user_note'
+2025-12-31 20:42:05,557 [WARNING] root: Failed to translate chunk 6: 'user_note'
+2025-12-31 20:42:05,558 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 0 queries
+2025-12-31 20:42:05,558 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:42:05,558 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 20:42:05,558 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 20:48:38,979 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:48:38,987 [WARNING] root: Failed to translate chunk 0: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:48:38,987 [WARNING] root: Failed to translate chunk 1: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:48:38,987 [WARNING] root: Failed to translate chunk 2: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:48:38,987 [WARNING] root: Failed to translate chunk 3: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:48:38,987 [WARNING] root: Failed to translate chunk 4: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:48:38,987 [WARNING] root: Failed to translate chunk 5: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:48:38,988 [WARNING] root: Failed to translate chunk 6: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:48:38,988 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 0 queries
+2025-12-31 20:48:38,988 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:48:38,988 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 20:48:38,988 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 20:50:01,652 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:50:01,664 [WARNING] root: Failed to translate chunk 0: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:50:01,665 [WARNING] root: Failed to translate chunk 1: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:50:01,665 [WARNING] root: Failed to translate chunk 2: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:50:01,665 [WARNING] root: Failed to translate chunk 3: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:50:01,665 [WARNING] root: Failed to translate chunk 4: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:50:01,665 [WARNING] root: Failed to translate chunk 5: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:50:01,665 [WARNING] root: Failed to translate chunk 6: Missing key 'user_note'. Parsed data: None
+2025-12-31 20:50:01,665 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 0 queries
+2025-12-31 20:50:01,666 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:50:01,666 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 20:50:01,666 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 20:54:55,714 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:54:55,914 [ERROR] root: Failed to translate chunk 0: [Errno 111] Connection refused. Raw output: None. Parsed data: None
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+    raise exc
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 78, in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 124, in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_backends/sync.py", line 207, in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 592, in _note_to_query
+    raw_output = OllamaLLM(model=self.chat_model).invoke(filled_prompt)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 390, in invoke
+    self.generate_prompt(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 789, in generate_prompt
+    return self.generate(prompt_strings, stop=stop, callbacks=callbacks, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 1000, in generate
+    return self._generate_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 815, in _generate_helper
+    self._generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 443, in _generate
+    final_chunk = self._stream_with_aggregation(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 402, in _stream_with_aggregation
+    for stream_resp in self._create_generate_stream(prompt, stop, **kwargs):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 346, in _create_generate_stream
+    yield from self._client.generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 165, in inner
+    with self._client.stream(*args, **kwargs) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 868, in stream
+    response = self.send(
+               ^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno 111] Connection refused
+2025-12-31 20:54:55,940 [ERROR] root: Failed to translate chunk 1: [Errno 111] Connection refused. Raw output: None. Parsed data: None
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+    raise exc
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 78, in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 124, in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_backends/sync.py", line 207, in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 592, in _note_to_query
+    raw_output = OllamaLLM(model=self.chat_model).invoke(filled_prompt)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 390, in invoke
+    self.generate_prompt(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 789, in generate_prompt
+    return self.generate(prompt_strings, stop=stop, callbacks=callbacks, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 1000, in generate
+    return self._generate_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 815, in _generate_helper
+    self._generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 443, in _generate
+    final_chunk = self._stream_with_aggregation(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 402, in _stream_with_aggregation
+    for stream_resp in self._create_generate_stream(prompt, stop, **kwargs):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 346, in _create_generate_stream
+    yield from self._client.generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 165, in inner
+    with self._client.stream(*args, **kwargs) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 868, in stream
+    response = self.send(
+               ^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno 111] Connection refused
+2025-12-31 20:54:55,963 [ERROR] root: Failed to translate chunk 2: [Errno 111] Connection refused. Raw output: None. Parsed data: None
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+    raise exc
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 78, in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 124, in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_backends/sync.py", line 207, in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 592, in _note_to_query
+    raw_output = OllamaLLM(model=self.chat_model).invoke(filled_prompt)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 390, in invoke
+    self.generate_prompt(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 789, in generate_prompt
+    return self.generate(prompt_strings, stop=stop, callbacks=callbacks, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 1000, in generate
+    return self._generate_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 815, in _generate_helper
+    self._generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 443, in _generate
+    final_chunk = self._stream_with_aggregation(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 402, in _stream_with_aggregation
+    for stream_resp in self._create_generate_stream(prompt, stop, **kwargs):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 346, in _create_generate_stream
+    yield from self._client.generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 165, in inner
+    with self._client.stream(*args, **kwargs) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 868, in stream
+    response = self.send(
+               ^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno 111] Connection refused
+2025-12-31 20:54:55,988 [ERROR] root: Failed to translate chunk 3: [Errno 111] Connection refused. Raw output: None. Parsed data: None
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+    raise exc
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 78, in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 124, in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_backends/sync.py", line 207, in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 592, in _note_to_query
+    raw_output = OllamaLLM(model=self.chat_model).invoke(filled_prompt)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 390, in invoke
+    self.generate_prompt(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 789, in generate_prompt
+    return self.generate(prompt_strings, stop=stop, callbacks=callbacks, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 1000, in generate
+    return self._generate_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 815, in _generate_helper
+    self._generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 443, in _generate
+    final_chunk = self._stream_with_aggregation(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 402, in _stream_with_aggregation
+    for stream_resp in self._create_generate_stream(prompt, stop, **kwargs):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 346, in _create_generate_stream
+    yield from self._client.generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 165, in inner
+    with self._client.stream(*args, **kwargs) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 868, in stream
+    response = self.send(
+               ^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno 111] Connection refused
+2025-12-31 20:54:56,006 [ERROR] root: Failed to translate chunk 4: [Errno 111] Connection refused. Raw output: None. Parsed data: None
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+    raise exc
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 78, in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 124, in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_backends/sync.py", line 207, in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 592, in _note_to_query
+    raw_output = OllamaLLM(model=self.chat_model).invoke(filled_prompt)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 390, in invoke
+    self.generate_prompt(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 789, in generate_prompt
+    return self.generate(prompt_strings, stop=stop, callbacks=callbacks, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 1000, in generate
+    return self._generate_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 815, in _generate_helper
+    self._generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 443, in _generate
+    final_chunk = self._stream_with_aggregation(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 402, in _stream_with_aggregation
+    for stream_resp in self._create_generate_stream(prompt, stop, **kwargs):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 346, in _create_generate_stream
+    yield from self._client.generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 165, in inner
+    with self._client.stream(*args, **kwargs) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 868, in stream
+    response = self.send(
+               ^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno 111] Connection refused
+2025-12-31 20:54:56,024 [ERROR] root: Failed to translate chunk 5: [Errno 111] Connection refused. Raw output: None. Parsed data: None
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+    raise exc
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 78, in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 124, in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_backends/sync.py", line 207, in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 592, in _note_to_query
+    raw_output = OllamaLLM(model=self.chat_model).invoke(filled_prompt)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 390, in invoke
+    self.generate_prompt(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 789, in generate_prompt
+    return self.generate(prompt_strings, stop=stop, callbacks=callbacks, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 1000, in generate
+    return self._generate_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 815, in _generate_helper
+    self._generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 443, in _generate
+    final_chunk = self._stream_with_aggregation(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 402, in _stream_with_aggregation
+    for stream_resp in self._create_generate_stream(prompt, stop, **kwargs):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 346, in _create_generate_stream
+    yield from self._client.generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 165, in inner
+    with self._client.stream(*args, **kwargs) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 868, in stream
+    response = self.send(
+               ^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno 111] Connection refused
+2025-12-31 20:54:56,040 [ERROR] root: Failed to translate chunk 6: [Errno 111] Connection refused. Raw output: None. Parsed data: None
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 250, in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 256, in handle_request
+    raise exc from None
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 236, in handle_request
+    response = connection.handle_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 101, in handle_request
+    raise exc
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 78, in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection.py", line 124, in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_backends/sync.py", line 207, in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ConnectError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 592, in _note_to_query
+    raw_output = OllamaLLM(model=self.chat_model).invoke(filled_prompt)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 390, in invoke
+    self.generate_prompt(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 789, in generate_prompt
+    return self.generate(prompt_strings, stop=stop, callbacks=callbacks, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 1000, in generate
+    return self._generate_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 815, in _generate_helper
+    self._generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 443, in _generate
+    final_chunk = self._stream_with_aggregation(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 402, in _stream_with_aggregation
+    for stream_resp in self._create_generate_stream(prompt, stop, **kwargs):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 346, in _create_generate_stream
+    yield from self._client.generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 165, in inner
+    with self._client.stream(*args, **kwargs) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 868, in stream
+    response = self.send(
+               ^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 914, in send
+    response = self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 942, in _send_handling_auth
+    response = self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 979, in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 1014, in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 249, in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ConnectError: [Errno 111] Connection refused
+2025-12-31 20:54:56,042 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 0 queries
+2025-12-31 20:54:56,042 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:54:56,042 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 20:54:56,043 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 20:55:22,196 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:55:41,875 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 20:55:52,751 [INFO] root: ================================================================================
+2025-12-31 20:55:52,752 [INFO] root: CHUNK 0 RAW LLM OUTPUT:
+2025-12-31 20:55:52,752 [INFO] root: {
+  "rewritten": "What are Super-Mendelian genetics and how do they differ from standard Mendelian inheritance patterns?",
+  "subqueries": [
+    {
+      "text": "Super-Mendelian genetics",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "inheritance beyond classical Mendelian rules",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 20:55:52,752 [INFO] root: ================================================================================
+2025-12-31 20:55:52,752 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 20:56:10,348 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 20:56:31,801 [INFO] root: ================================================================================
+2025-12-31 20:56:31,801 [INFO] root: CHUNK 1 RAW LLM OUTPUT:
+2025-12-31 20:56:31,801 [INFO] root: {
+  "rewritten": "What are Mendel's laws governing classical inheritance, specifically the Law of Segregation where each organism carries two alleles for each gene that segregate randomly into gametes, and the Law of Independent Assortment where alleles of different genes assort independently? In a heterozygote × heterozygote scenario, what is the expected chance distribution for each allele?",
+  "subqueries": [
+    {
+      "text": "What are Mendel's laws governing classical inheritance?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How do alleles segregate in gametes according to the Law of Segregation?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What is the process of Independent Assortment as per Mendel's laws?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 20:56:31,801 [INFO] root: ================================================================================
+2025-12-31 20:56:31,801 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 20:56:48,011 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 20:57:07,447 [INFO] root: ================================================================================
+2025-12-31 20:57:07,448 [INFO] root: CHUNK 2 RAW LLM OUTPUT:
+2025-12-31 20:57:07,448 [INFO] root: {
+  "rewritten": "What are the conditions under which an allele is inherited more frequently than predicted by Mendelian laws (greater than 50%)? This can occur due to selfish genetic elements or engineered systems that affect gamete formation or zygote viability.",
+  "subqueries": [
+    {
+      "text": "Conditions for an allele being inherited more frequently than predicted by Mendelian laws (greater than 50%).",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "Selfish genetic elements or engineered systems affecting gamete formation.",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "Effects on zygote viability in the context of super-Mendelian inheritance.",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 20:57:07,448 [INFO] root: ================================================================================
+2025-12-31 20:57:07,448 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 20:57:23,459 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 20:57:41,706 [INFO] root: ================================================================================
+2025-12-31 20:57:41,706 [INFO] root: CHUNK 3 RAW LLM OUTPUT:
+2025-12-31 20:57:41,706 [INFO] root: {
+  "rewritten": "CRISPR-based gene drives force their own inheritance by copying themselves onto homologous chromosomes, resulting in nearly 100% transmission. They are used for mosquito population control and spreading disease-resistant genes.",
+  "subqueries": [
+    {
+      "text": "What is a CRISPR-based gene drive?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How do CRISPR-based gene drives affect inheritance?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What is the mechanism of transmission for CRISPR-based gene drives?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 20:57:41,706 [INFO] root: ================================================================================
+2025-12-31 20:57:41,706 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 20:57:56,863 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 20:58:11,353 [INFO] root: ================================================================================
+2025-12-31 20:58:11,353 [INFO] root: CHUNK 4 RAW LLM OUTPUT:
+2025-12-31 20:58:11,353 [INFO] root: {
+  "rewritten": "In mice, what percentage of sperm carries the t-haplotype that involves selfish genetic elements like transposable elements and meiotic drive systems affecting gamete formation?",
+  "subqueries": [
+    {
+      "text": "What percentage of sperm carries the t-haplotype in mice?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How do selfish genetic elements such as transposable elements and meiotic drive systems manipulate gamete formation?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 20:58:11,353 [INFO] root: ================================================================================
+2025-12-31 20:58:11,353 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 20:58:25,910 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 20:58:40,449 [INFO] root: ================================================================================
+2025-12-31 20:58:40,449 [INFO] root: CHUNK 5 RAW LLM OUTPUT:
+2025-12-31 20:58:40,449 [INFO] root: {
+  "rewritten": "Scientists are capable of creating self-replicating alleles that facilitate quick dissemination throughout populations.",
+  "subqueries": [
+    {
+      "text": "Engineered Super-Mendelian Systems",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "design alleles that copy themselves during reproduction",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "rapid spread through a population",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 20:58:40,449 [INFO] root: ================================================================================
+2025-12-31 20:58:40,450 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 20:58:59,226 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 20:59:18,700 [INFO] root: ================================================================================
+2025-12-31 20:59:18,701 [INFO] root: CHUNK 6 RAW LLM OUTPUT:
+2025-12-31 20:59:18,701 [INFO] root: {
+  "rewritten": "What are the implications of using genetic techniques for controlling pests and disease vectors, including ethical considerations, ecological risks from rapid spread, and changes in inheritance patterns?",
+  "subqueries": [
+    {
+      "text": "What is the impact on population control of pests and disease vectors when using genetic techniques?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What are the ethical and ecological risks associated with rapid, potentially irreversible spread of genetically modified organisms used for pest control?",
+      "domain": "default",
+      "subject": "default"
+    },
+    {
+      "text": "How does genetic transmission shift from random inheritance to biased, controllable methods when using these techniques?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 20:59:18,701 [INFO] root: ================================================================================
+2025-12-31 20:59:18,701 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 20:59:18,701 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 7 queries
+2025-12-31 20:59:18,701 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 20:59:18,702 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 20:59:18,702 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 20:59:34,015 [INFO] cerebrum_core.utils.cache_inator: Cache MISS for note 01KDTN8K9G360YEQXRKVZA4ZQT v0 (cached v1)
+2025-12-31 21:01:33,870 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 21:01:49,506 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:02:01,791 [INFO] root: ================================================================================
+2025-12-31 21:02:01,792 [INFO] root: CHUNK 0 RAW LLM OUTPUT:
+2025-12-31 21:02:01,792 [INFO] root: {
+  "rewritten": "What are Super-Mendelian genetics and how do they differ from classical Mendelian inheritance patterns?",
+  "subqueries": [
+    {
+      "text": "What are Super-Mendelian genetics?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How do the inheritance rates in Super-Mendelian genetics compare to standard Mendelian segregation?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:02:01,792 [INFO] root: ================================================================================
+2025-12-31 21:02:01,792 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:02:18,349 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:02:34,797 [INFO] root: ================================================================================
+2025-12-31 21:02:34,797 [INFO] root: CHUNK 1 RAW LLM OUTPUT:
+2025-12-31 21:02:34,797 [INFO] root: {
+  "rewritten": "What are Mendel's laws of inheritance: segregation of alleles into gametes and independent assortment of different gene alleles?",
+  "subqueries": [
+    {
+      "text": "What is Mendel's Law of Segregation?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How do alleles segregate in gametes according to Mendel's laws?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What is Mendel's Law of Independent Assortment?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:02:34,797 [INFO] root: ================================================================================
+2025-12-31 21:02:34,797 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:02:50,321 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:03:10,348 [INFO] root: ================================================================================
+2025-12-31 21:03:10,348 [INFO] root: CHUNK 2 RAW LLM OUTPUT:
+2025-12-31 21:03:10,348 [INFO] root: {
+  "rewritten": "What is Super-Mendelian inheritance, where an allele is inherited more frequently than predicted by Mendelian laws (greater than 50%), and how can it arise from selfish genetic elements or engineered systems that bias gamete formation or zygote viability?",
+  "subqueries": [
+    {
+      "text": "What is Super-Mendelian inheritance?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How does an allele become inherited more frequently than predicted by Mendelian laws (greater than 50%)?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What are selfish genetic elements or engineered systems that bias gamete formation or zygote viability?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:03:10,348 [INFO] root: ================================================================================
+2025-12-31 21:03:10,348 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:03:26,449 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:03:47,013 [INFO] root: ================================================================================
+2025-12-31 21:03:47,013 [INFO] root: CHUNK 3 RAW LLM OUTPUT:
+2025-12-31 21:03:47,013 [INFO] root: {
+  "rewritten": "Explain CRISPR-based gene drives that force their own inheritance with nearly 100% transmission rate and discuss applications such as mosquito population control and spreading disease-resistant genes.",
+  "subqueries": [
+    {
+      "text": "What are CRISPR-based gene drives?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How do CRISPR-based gene drives copy themselves onto homologous chromosomes?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What is the transmission rate of CRISPR-based gene drives?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What are applications of CRISPR-based gene drives?",
+      "domain": "default",
+      "subject": "default"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:03:47,013 [INFO] root: ================================================================================
+2025-12-31 21:03:47,013 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:04:03,506 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:04:17,178 [INFO] root: ================================================================================
+2025-12-31 21:04:17,178 [INFO] root: CHUNK 4 RAW LLM OUTPUT:
+2025-12-31 21:04:17,179 [INFO] root: {
+  "rewritten": "In mice, the t-haplotype, a selfish genetic element, is transmitted through sperm in approximately 90% of cases.",
+  "subqueries": [
+    {
+      "text": "Selfish genetic elements such as transposable elements and meiotic drive systems manipulate gamete formation",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "the t-haplotype is transmitted in approximately 90% of sperm",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:04:17,179 [INFO] root: ================================================================================
+2025-12-31 21:04:17,179 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:04:33,011 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:04:40,751 [INFO] root: ================================================================================
+2025-12-31 21:04:40,751 [INFO] root: CHUNK 5 RAW LLM OUTPUT:
+2025-12-31 21:04:40,751 [INFO] root: {
+  "rewritten": "Scientists can design alleles that copy themselves during reproduction, enabling rapid spread through a population.",
+  "subqueries": [
+    {
+      "text": "Engineered Super-Mendelian Systems",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:04:40,751 [INFO] root: ================================================================================
+2025-12-31 21:04:40,751 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:04:57,711 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:05:14,446 [INFO] root: ================================================================================
+2025-12-31 21:05:14,446 [INFO] root: CHUNK 6 RAW LLM OUTPUT:
+2025-12-31 21:05:14,446 [INFO] root: {
+  "rewritten": "What are the implications of using genetic techniques for controlling pest populations or disease vectors, including ethical and ecological risks due to rapid spread, and changes from random inheritance patterns?",
+  "subqueries": [
+    {
+      "text": "Implications of population control of pests and disease vectors",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "Ethical and ecological risks due to rapid, potentially irreversible spread",
+      "domain": "default",
+      "subject": "default"
+    },
+    {
+      "text": "Shift from random inheritance to biased, controllable genetic transmission",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:05:14,446 [INFO] root: ================================================================================
+2025-12-31 21:05:14,446 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:05:14,446 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 7 queries
+2025-12-31 21:05:14,447 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 21:05:14,447 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 21:05:14,447 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 21:08:34,792 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 21:08:49,970 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:09:05,523 [INFO] root: ================================================================================
+2025-12-31 21:09:05,524 [INFO] root: CHUNK 0 RAW LLM OUTPUT:
+2025-12-31 21:09:05,524 [INFO] root: {
+  "rewritten": "What are Super-Mendelian genetics inheritance patterns that transmit particular alleles to offspring at rates higher than the standard 50% expected from Mendelian segregation?",
+  "subqueries": [
+    {
+      "text": "Super-Mendelian genetics",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "inheritance patterns beyond classical Mendelian rules",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "transmission of particular alleles to offspring at rates higher than 50%",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:09:05,524 [INFO] root: ================================================================================
+2025-12-31 21:09:05,524 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:09:23,231 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:09:34,235 [INFO] root: ================================================================================
+2025-12-31 21:09:34,235 [INFO] root: CHUNK 1 RAW LLM OUTPUT:
+2025-12-31 21:09:34,235 [INFO] root: {
+  "rewritten": "Mendel's laws of segregation and independent assortment describe how alleles are randomly distributed into gametes during classical inheritance.",
+  "subqueries": [
+    {
+      "text": "Law of Segregation",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "Law of Independent Assortment",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:09:34,235 [INFO] root: ================================================================================
+2025-12-31 21:09:34,235 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:09:51,184 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:10:03,808 [INFO] root: ================================================================================
+2025-12-31 21:10:03,808 [INFO] root: CHUNK 2 RAW LLM OUTPUT:
+2025-12-31 21:10:03,809 [INFO] root: {
+  "rewritten": "Define Super-Mendelian Inheritance where an allele is inherited more than 50% of the time according to Mendel's laws.",
+  "subqueries": [
+    {
+      "text": "What is Super-Mendelian Inheritance?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How does inheritance frequency exceed 50% in Mendelian inheritance?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:10:03,809 [INFO] root: ================================================================================
+2025-12-31 21:10:03,809 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:10:21,033 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:10:38,330 [INFO] root: ================================================================================
+2025-12-31 21:10:38,330 [INFO] root: CHUNK 3 RAW LLM OUTPUT:
+2025-12-31 21:10:38,331 [INFO] root: {
+  "rewritten": "Explain CRISPR-based gene drives that force their own inheritance leading to nearly 100% transmission and discuss applications such as mosquito population control and spreading disease-resistant genes.",
+  "subqueries": [
+    {
+      "text": "What are CRISPR-based gene drives?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How do CRISPR-based gene drives ensure near 100% transmission of the genetic element?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What are applications of CRISPR-based gene drives?",
+      "domain": "default",
+      "subject": "default"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:10:38,331 [INFO] root: ================================================================================
+2025-12-31 21:10:38,331 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:10:54,331 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:11:02,973 [INFO] root: ================================================================================
+2025-12-31 21:11:02,973 [INFO] root: CHUNK 4 RAW LLM OUTPUT:
+2025-12-31 21:11:02,973 [INFO] root: {
+  "rewritten": "In mice, how does the t-haplotype affect sperm transmission with respect to selfish genetic elements?",
+  "subqueries": [
+    {
+      "text": "How does the t-haplotype affect sperm transmission in mice?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:11:02,973 [INFO] root: ================================================================================
+2025-12-31 21:11:02,973 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:11:17,374 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:11:28,212 [INFO] root: ================================================================================
+2025-12-31 21:11:28,212 [INFO] root: CHUNK 5 RAW LLM OUTPUT:
+2025-12-31 21:11:28,213 [INFO] root: {
+  "rewritten": "Scientists can design self-replicating alleles that enable rapid spread through populations during reproduction.",
+  "subqueries": [
+    {
+      "text": "Designing alleles that copy themselves",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "Rapid spread through a population",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:11:28,213 [INFO] root: ================================================================================
+2025-12-31 21:11:28,213 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:11:44,975 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:12:01,940 [INFO] root: ================================================================================
+2025-12-31 21:12:01,941 [INFO] root: CHUNK 6 RAW LLM OUTPUT:
+2025-12-31 21:12:01,941 [INFO] root: {
+  "rewritten": "What are the implications of using genetic engineering to control pest populations and disease vectors, including ethical concerns, ecological risks due to rapid spread, and changes in inheritance patterns?",
+  "subqueries": [
+    {
+      "text": "Population control of pests and disease vectors",
+      "domain": "biology",
+      "subject": "default"
+    },
+    {
+      "text": "Ethical and ecological risks due to rapid, potentially irreversible spread",
+      "domain": "biology",
+      "subject": "default"
+    },
+    {
+      "text": "A shift from random inheritance to biased, controllable genetic transmission",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["default", "genetics"]
+}
+2025-12-31 21:12:01,941 [INFO] root: ================================================================================
+2025-12-31 21:12:01,941 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:12:01,941 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 7 queries
+2025-12-31 21:12:01,941 [WARNING] root: No archived data found
+2025-12-31 21:12:01,942 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 21:12:01,942 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 21:12:01,942 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 21:20:00,396 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 21:29:39,632 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 21:47:44,869 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 21:47:45,415 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 21:50:23,547 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 21:50:43,970 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:50:55,391 [INFO] root: ================================================================================
+2025-12-31 21:50:55,470 [INFO] root: CHUNK 0 RAW LLM OUTPUT:
+2025-12-31 21:50:55,470 [INFO] root: {
+  "rewritten": "Explain what Super-Mendelian genetics refers to and how it deviates from Mendel's inheritance rules.",
+  "subqueries": [
+    {
+      "text": "What is Super-Mendelian genetics?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How do Super-Mendelian systems differ from classical Mendelian inheritance?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:50:55,471 [INFO] root: ================================================================================
+2025-12-31 21:50:55,471 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:51:11,555 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:51:23,959 [INFO] root: ================================================================================
+2025-12-31 21:51:23,959 [INFO] root: CHUNK 1 RAW LLM OUTPUT:
+2025-12-31 21:51:23,959 [INFO] root: {
+  "rewritten": "What are Mendel's laws of inheritance and how do they apply to heterozygote × heterozygote crosses?",
+  "subqueries": [
+    {
+      "text": "What is the Law of Segregation in classical inheritance?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What is the Law of Independent Assortment in classical inheritance?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:51:23,959 [INFO] root: ================================================================================
+2025-12-31 21:51:23,959 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:51:38,718 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:51:53,455 [INFO] root: ================================================================================
+2025-12-31 21:51:53,455 [INFO] root: CHUNK 2 RAW LLM OUTPUT:
+2025-12-31 21:51:53,455 [INFO] root: {
+  "rewritten": "What is super-Mendelian inheritance, where an allele is inherited more frequently than predicted by Mendelian laws (greater than 50%), and how can it arise through selfish genetic elements or engineered systems that bias gamete formation or zygote viability?",
+  "subqueries": [
+    {
+      "text": "Definition of super-Mendelian inheritance",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "Mechanisms leading to super-Mendelian inheritance, such as selfish genetic elements or engineered systems",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:51:53,455 [INFO] root: ================================================================================
+2025-12-31 21:51:53,455 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:52:08,943 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:52:21,793 [INFO] root: ================================================================================
+2025-12-31 21:52:21,794 [INFO] root: CHUNK 3 RAW LLM OUTPUT:
+2025-12-31 21:52:21,794 [INFO] root: {
+  "rewritten": "Explain how CRISPR-based gene drives function to achieve nearly 100% transmission of genetic elements and their potential applications such as mosquito population control and spreading disease-resistant genes.",
+  "subqueries": [
+    {
+      "text": "How do CRISPR-based gene drives work?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What are the applications of CRISPR-based gene drives?",
+      "domain": "default",
+      "subject": "default"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:52:21,794 [INFO] root: ================================================================================
+2025-12-31 21:52:21,794 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:52:36,407 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:52:45,016 [INFO] root: ================================================================================
+2025-12-31 21:52:45,017 [INFO] root: CHUNK 4 RAW LLM OUTPUT:
+2025-12-31 21:52:45,017 [INFO] root: {
+  "rewritten": "In mice, what percentage of sperm does the t-haplotype constitute when considering its transmission?",
+  "subqueries": [
+    {
+      "text": "Transmission percentage of the t-haplotype in sperm",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:52:45,017 [INFO] root: ================================================================================
+2025-12-31 21:52:45,018 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:52:59,448 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:53:12,463 [INFO] root: ================================================================================
+2025-12-31 21:53:12,464 [INFO] root: CHUNK 5 RAW LLM OUTPUT:
+2025-12-31 21:53:12,464 [INFO] root: {
+  "rewritten": "Scientists can design self-copying alleles that enable rapid spread through populations during reproduction.",
+  "subqueries": [
+    {
+      "text": "Engineered Super-Mendelian Systems",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "design alleles that copy themselves",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "rapid spread through a population",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:53:12,464 [INFO] root: ================================================================================
+2025-12-31 21:53:12,464 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:53:27,107 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 21:53:45,106 [INFO] root: ================================================================================
+2025-12-31 21:53:45,106 [INFO] root: CHUNK 6 RAW LLM OUTPUT:
+2025-12-31 21:53:45,106 [INFO] root: {
+  "rewritten": "Investigate the implications of using technology to control pest populations and disease vectors, considering ethical and ecological risks associated with rapid genetic spread, as well as shifts in inheritance patterns towards controllable genetic transmission.",
+  "subqueries": [
+    {
+      "text": "What are the implications of controlling pest populations and disease vectors?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "What ethical and ecological risks arise from rapid, potentially irreversible spread of genetic modifications in pests or disease vectors?",
+      "domain": "biology",
+      "subject": "genetics"
+    },
+    {
+      "text": "How does the shift from random inheritance to biased, controllable genetic transmission impact pest control strategies?",
+      "domain": "biology",
+      "subject": "genetics"
+    }
+  ],
+  "domain": ["biology"],
+  "subject": ["genetics"]
+}
+2025-12-31 21:53:45,106 [INFO] root: ================================================================================
+2025-12-31 21:53:45,107 [INFO] root: Parsed query keys: dict_keys(['rewritten', 'subqueries', 'domain', 'subject'])
+2025-12-31 21:53:45,107 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 7 queries
+2025-12-31 21:53:45,107 [WARNING] root: No archived data found
+2025-12-31 21:53:45,107 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT v1.0
+2025-12-31 21:53:45,107 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT.json v1.0
+2025-12-31 21:53:45,107 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KDTN8K9G360YEQXRKVZA4ZQT
+2025-12-31 22:07:38,303 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 22:07:38,505 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 22:07:38,547 [INFO] cerebrum: No documents matched the filter
+2025-12-31 22:07:38,691 [INFO] cerebrum: ✓ Deleted 5 documents matching filter: {'fingerprint': '6aee5e452a39e989d22329de8afeeacc74b583ec99968866ed1b069b1cbe6cbb'}
+2025-12-31 22:07:38,697 [INFO] cerebrum: ✓ Total deleted across all collections: 5
+2025-12-31 22:08:20,513 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0

@@ -294,7 +294,7 @@ class NoteAnalyserInator:
         # Paths
         self.kb_archives = CerebrumPaths().get_kb_archives()
         self.bubble_cache_path = (
-            CerebrumPaths().get_cache_dir() / "bubble_cache" / "notes"
+            CerebrumPaths().get_cache_root() / "bubble_cache" / "notes"
         )
         self.archive_path = CerebrumPaths().get_note_archives(
             bubble_id=self.note.bubble_id
@@ -330,6 +330,7 @@ class NoteAnalyserInator:
         # Load archived data
         archived_data = self._load_archived_data()
         if not archived_data:
+            logging.warning("No archived data found")
             return "No analysis for this note"
 
         # Check if note already archived
@@ -339,7 +340,16 @@ class NoteAnalyserInator:
         else:
             logging.info(f"Note {self.note.note_id} found in archive")
 
-        # Construct queries and retrieve context
+        # IMPORTANT: Construct routes FIRST before retrieval
+        self._constructor_inator()
+        logging.info(f"Constructed {len(self.constructed_query['routes'])} routes")
+
+        # Check if we have any routes
+        if not self.constructed_query["routes"]:
+            logging.warning("No valid routes constructed - cannot retrieve documents")
+            return "No valid knowledge base paths found for this note"
+
+        # Now retrieve documents
         cache_manager = RetrievalCacheInator(
             self._retrieve_inator(k=top_k_chunks),
             note_id=self.note.note_id,
@@ -349,21 +359,29 @@ class NoteAnalyserInator:
 
         if cached_docs is not None:
             logging.info(
-                f"Using cache retrieval results for analysis of note: f's{self.note.note_id}'"
+                f"Using cache retrieval results for analysis of note: {self.note.note_id}"
             )
             self.retrieved_docs = cached_docs
         else:
-            logging.info("No cache found, perfoming fresh retrieval")
-            self._constructor_inator()
+            logging.info("No cache found, performing fresh retrieval")
             self._retrieve_inator(k=top_k_chunks)
             RetrievalCacheInator(
-                self._retrieve_inator(k=top_k_chunks),
+                self.retrieved_docs,  # Use already retrieved docs
                 note_id=self.note.note_id,
                 bubble_id=self.note.bubble_id,
             ).cache_populator_inator()
 
+        # Log retrieval results
+        logging.info(f"Retrieved {len(self.retrieved_docs)} total documents")
+
+        # Check if we have any retrieved documents
+        if not self.retrieved_docs:
+            logging.warning("No documents retrieved from knowledge base")
+            return "No relevant context found in knowledge base"
+
         # Build context from retrieved documents
         context_text = self._build_context(top_k_chunks)
+        logging.info(f"Built context with {len(context_text)} characters")
 
         # Prepare note content
         flattened_note = NoteToMarkdownInator().flatten(self.note.content)
@@ -375,8 +393,10 @@ class NoteAnalyserInator:
             context=context_text,
         )
 
+        logging.info("Invoking LLM for final analysis")
         response = OllamaLLM(model=self.chat_model).invoke(final_prompt)
-        # cache anaylisis
+        logging.info(f"Analysis complete, response length: {len(response)} characters")
+
         return response
 
     def _load_archived_data(self) -> dict | None:
@@ -581,17 +601,29 @@ class NoteAnalyserInator:
         translated_queries: list[TranslatedQuery] = []
 
         for chunk in self.chunks:
+            parsed_query = None
+            raw_output = None
             try:
                 filled_prompt = translation_prompt_template.format(
-                    user_query=chunk.page_content, available_stores=available_stores
+                    user_note=chunk.page_content,  # ✅ Fixed: changed from user_query
+                    available_stores=available_stores,
                 )
 
                 raw_output = OllamaLLM(model=self.chat_model).invoke(filled_prompt)
-                logging.info(
-                    f"Translated chunk {chunk.metadata['chunk_id']}: {raw_output[:100]}..."
-                )
+
+                # LOG THE FULL RAW OUTPUT
+                logging.info(f"=" * 80)
+                logging.info(f"CHUNK {chunk.metadata['chunk_id']} RAW LLM OUTPUT:")
+                logging.info(f"{raw_output}")
+                logging.info(f"=" * 80)
 
                 parsed_query = self._parse_llm_json_output(raw_output)
+
+                # Log what we got from parsing
+                logging.info(f"Parsed query keys: {parsed_query.keys()}")
+
+                # The parsed_query should now have: rewritten, subqueries, domain, subject
+                # Add chunk metadata
                 parsed_query.update(
                     {
                         "chunk_id": chunk.metadata["chunk_id"],
@@ -604,9 +636,18 @@ class NoteAnalyserInator:
                 tq = TranslatedQuery(**parsed_query)
                 translated_queries.append(tq)
 
-            except Exception as e:
+            except KeyError as e:
                 logging.warning(
-                    f"Failed to translate chunk {chunk.metadata.get('chunk_id', 'unknown')}: {e}"
+                    f"Failed to translate chunk {chunk.metadata.get('chunk_id', 'unknown')}: "
+                    f"Missing key {e}. Parsed data: {parsed_query}"
+                )
+                continue
+            except Exception as e:
+                logging.error(
+                    f"Failed to translate chunk {chunk.metadata.get('chunk_id', 'unknown')}: {e}. "
+                    f"Raw output: {raw_output[:500] if raw_output else 'None'}. "
+                    f"Parsed data: {parsed_query}",
+                    exc_info=True,
                 )
                 continue
 
@@ -705,13 +746,32 @@ class NoteAnalyserInator:
             ValueError: If JSON cannot be parsed
         """
         try:
+            # Try direct parse first
             return json.loads(output)
         except json.JSONDecodeError:
+            # Try to extract JSON from markdown code blocks
             import re
 
+            # Look for ```json ... ``` blocks
+            json_block_match = re.search(
+                r"```json\s*(\{.*?\})\s*```", output, re.DOTALL
+            )
+            if json_block_match:
+                try:
+                    return json.loads(json_block_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+
+            # Look for any JSON object
             match = re.search(r"\{.*\}", output, re.DOTALL)
             if match:
-                return json.loads(match.group())
+                try:
+                    return json.loads(match.group())
+                except json.JSONDecodeError:
+                    pass
+
+            # Log the actual output to debug
+            logging.error(f"Could not parse JSON. Raw output: {output[:500]}")
             raise ValueError(f"Could not parse JSON from: {output[:200]}...")
 
     def refresh_note(self, updated_note: NoteStorage) -> None:

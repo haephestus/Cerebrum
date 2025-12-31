@@ -1,3 +1,7 @@
+"""
+Complete knowledgebase routes with both file registry and vector store management.
+"""
+
 import asyncio
 import json
 from pathlib import Path
@@ -10,6 +14,7 @@ from cerebrum_core.knowledgebase_inator import (
     EmbeddInator,
     MarkdownChunker,
     MarkdownConverter,
+    VectorStoreManager,
 )
 from cerebrum_core.utils.file_util_inator import (
     CerebrumPaths,
@@ -23,9 +28,11 @@ markdown_files_dir = CerebrumPaths().get_kb_artifacts()
 knowledgebase_dir = CerebrumPaths().get_kb_source_files()
 
 
-# -------------------------------
-# Single File Processing Tasks
-# -------------------------------
+# ========================================
+# Background Tasks
+# ========================================
+
+
 def process_single_file_task(file_info: dict, file_registry: FileRegisterInator):
     """
     Process a single file: convert to markdown, chunk, and embed.
@@ -59,7 +66,10 @@ def process_single_file_task(file_info: dict, file_registry: FileRegisterInator)
         # Step 4: Embed chunks
         embedding_manager = EmbeddInator(fingerprint=file_info["fingerprint"])
         embedding_manager.embed_from_chunked_markdown(
-            chunked_markdown=chunked_path, collection_name=metadata.subject
+            chunked_markdown=chunked_path,
+            collection_name=metadata.subject,
+            domain=metadata.domain,
+            subject=metadata.subject,
         )
 
         # Step 5: Mark as embedded
@@ -72,9 +82,6 @@ def process_single_file_task(file_info: dict, file_registry: FileRegisterInator)
         raise
 
 
-# -------------------------------
-# Background Tasks
-# -------------------------------
 def markdown_converter_task(
     unconverted_files: list[dict], file_registry: FileRegisterInator
 ):
@@ -135,7 +142,10 @@ def embedding_task(unembedded_files: list[dict], file_registry: FileRegisterInat
             # Embed using byte-coordinate access
             embedding_manager = EmbeddInator(fingerprint=file_info["fingerprint"])
             embedding_manager.embed_from_chunked_markdown(
-                chunked_markdown=chunked_path, collection_name=subject
+                chunked_markdown=chunked_path,
+                collection_name=subject,
+                domain=domain,
+                subject=subject,
             )
 
             # Mark as embedded in registry
@@ -147,12 +157,14 @@ def embedding_task(unembedded_files: list[dict], file_registry: FileRegisterInat
             print("Progress saved — will resume on next run.")
 
 
-# -------------------------------
-# Routes
-# -------------------------------
+# ========================================
+# File Registry Routes
+# ========================================
+
+
 @router.get("/show")
-async def stats(request: Request):
-    """Show all files in registry."""
+async def show_files(request: Request):
+    """Show all source files in registry."""
     file_registry = request.app.state.file_registry
     return file_registry.show_all_inator() or []
 
@@ -197,13 +209,6 @@ async def upload_pdf(
     return response
 
 
-class DeletePayload(BaseModel):
-    filename: str
-    filepath: str
-    fingerprint: str
-    collection_name: str | None = None
-
-
 @router.post("/process-file/{fingerprint}")
 async def process_single_file(
     request: Request, fingerprint: str, background_tasks: BackgroundTasks
@@ -229,8 +234,6 @@ async def process_single_file(
         }
 
     # Get file info
-    # Note: We need to fetch the file info - adding a helper method would be ideal
-    # For now, we'll fetch from unconverted or use a generic fetch
     all_files = file_registry.show_all_inator()
     file_info = next((f for f in all_files if f["fingerprint"] == fingerprint), None)
 
@@ -337,6 +340,13 @@ async def get_file_status(request: Request, fingerprint: str):
     }
 
 
+class DeletePayload(BaseModel):
+    filename: str
+    filepath: str
+    fingerprint: str
+    collection_name: str | None = None
+
+
 @router.delete("/delete/")
 async def remove_source_file(request: Request, payload: DeletePayload):
     """Remove file from knowledgebase and vector database."""
@@ -345,15 +355,13 @@ async def remove_source_file(request: Request, payload: DeletePayload):
     # Remove from registry and filesystem
     file_registry.remove_inator(payload.filename, payload.fingerprint, payload.filepath)
 
-    # Remove from vector database
-    if payload.collection_name:
-        try:
-            embedding_manager = EmbeddInator(fingerprint=payload.fingerprint)
-            embedding_manager.delete_by_fingerprint(
-                collection_name=payload.collection_name, fingerprint=payload.fingerprint
-            )
-        except Exception as e:
-            print(f"Warning: Failed to delete from archives: {e}")
+    # Remove from vector database across all collections
+    try:
+        manager = VectorStoreManager()
+        count = manager.delete_by_fingerprint_all_collections(payload.fingerprint)
+        print(f"✓ Deleted {count} documents from vector stores")
+    except Exception as e:
+        print(f"Warning: Failed to delete from vector stores: {e}")
 
     return {"detail": "File removed from knowledgebase successfully"}
 
@@ -407,34 +415,240 @@ async def reset_registry(request: Request, status: str, fingerprint: str | None 
     return {"message": f"Reset {status} status", "affected_rows": count}
 
 
+# ========================================
+# Vector Store Management Routes
+# ========================================
+
+
 @router.get("/collections")
-async def list_collections():
-    """List all vector database collections."""
-    embedding_manager = EmbeddInator(fingerprint="dummy")
-    collections = embedding_manager.list_collections()
+async def list_all_collections():
+    """
+    List all vector database collections with their info.
 
-    return {"collections": collections, "count": len(collections)}
+    Returns:
+        List of collections with domain, subject, count, etc.
+    """
+    manager = VectorStoreManager()
+    collections = manager.list_all_collections()
+
+    return {
+        "collections": collections,
+        "count": len(collections),
+    }
 
 
-@router.get("/collections/{collection_name}/count")
-async def get_collection_count(collection_name: str):
-    """Get document count for a collection."""
-    embedding_manager = EmbeddInator(fingerprint="dummy")
+@router.get("/collections/{domain}/{subject}/{collection_name}")
+async def get_collection_details(domain: str, subject: str, collection_name: str):
+    """
+    Get detailed information about a specific collection.
+
+    Returns:
+        Collection info with count, metadata, sample documents
+    """
+    manager = VectorStoreManager()
 
     try:
-        count = embedding_manager.get_collection_count(collection_name)
-        return {"collection": collection_name, "count": count}
+        info = manager.get_collection_info(collection_name, domain, subject)
+        return info
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Collection not found: {e}")
 
 
-@router.delete("/collections/{collection_name}")
-async def delete_collection(collection_name: str):
-    """Delete entire collection from vector database."""
-    embedding_manager = EmbeddInator(fingerprint="dummy")
+@router.get("/collections/{domain}/{subject}/{collection_name}/count")
+async def get_collection_count(domain: str, subject: str, collection_name: str):
+    """Get document count for a specific collection."""
+    manager = VectorStoreManager()
 
     try:
-        embedding_manager.delete_collection(collection_name)
-        return {"message": f"Collection '{collection_name}' deleted successfully"}
+        store = manager.get_store(collection_name, domain, subject)
+        count = store._collection.count()
+        return {
+            "domain": domain,
+            "subject": subject,
+            "collection": collection_name,
+            "count": count,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Collection not found: {e}")
+
+
+@router.delete("/collections/{domain}/{subject}/{collection_name}")
+async def delete_collection(domain: str, subject: str, collection_name: str):
+    """Delete an entire collection."""
+    manager = VectorStoreManager()
+
+    try:
+        manager.delete_collection(collection_name, domain, subject)
+        return {
+            "message": "Collection deleted successfully",
+            "domain": domain,
+            "subject": subject,
+            "collection": collection_name,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete collection: {e}")
+
+
+# ========================================
+# Search Routes
+# ========================================
+
+
+class SearchRequest(BaseModel):
+    query: str
+    domains: list[str] | None = None
+    subjects: list[str] | None = None
+    k: int = 5
+
+
+@router.post("/search")
+async def search_collections(request: SearchRequest):
+    """
+    Search across multiple collections.
+
+    Args:
+        query: Search query text
+        domains: Optional list of domains to search
+        subjects: Optional list of subjects to search
+        k: Number of results per collection
+
+    Returns:
+        List of matching documents with collection info
+    """
+    manager = VectorStoreManager()
+
+    try:
+        results = manager.search_across_collections(
+            query=request.query,
+            domains=request.domains,
+            subjects=request.subjects,
+            k=request.k,
+        )
+
+        return {
+            "query": request.query,
+            "results": results,
+            "count": len(results),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {e}")
+
+
+@router.get("/search/fingerprint/{fingerprint}")
+async def find_by_fingerprint(fingerprint: str):
+    """
+    Find all documents with a specific fingerprint across all collections.
+
+    Args:
+        fingerprint: Document fingerprint to search for
+
+    Returns:
+        List of documents with collection info
+    """
+    manager = VectorStoreManager()
+
+    try:
+        documents = manager.get_documents_by_fingerprint(fingerprint)
+
+        return {
+            "fingerprint": fingerprint,
+            "documents": documents,
+            "count": len(documents),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {e}")
+
+
+# ========================================
+# Delete Routes
+# ========================================
+
+
+class DeleteByMetadataRequest(BaseModel):
+    collection_name: str
+    domain: str = "default"
+    subject: str = "default"
+    metadata_filter: dict
+
+
+@router.delete("/documents/by-metadata")
+async def delete_by_metadata(request: DeleteByMetadataRequest):
+    """
+    Delete documents matching metadata criteria.
+
+    Example request body:
+    {
+        "collection_name": "biology",
+        "domain": "science",
+        "subject": "biology",
+        "metadata_filter": {"author": "Smith"}
+    }
+    """
+    manager = VectorStoreManager()
+
+    try:
+        count = manager.delete_by_metadata(
+            request.collection_name,
+            request.metadata_filter,
+            request.domain,
+            request.subject,
+        )
+
+        return {
+            "message": "Documents deleted successfully",
+            "count": count,
+            "filter": request.metadata_filter,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
+
+
+@router.delete("/documents/fingerprint/{fingerprint}")
+async def delete_by_fingerprint(fingerprint: str):
+    """
+    Delete all documents with a specific fingerprint across ALL collections.
+
+    This is useful when removing a source document from the knowledgebase.
+    """
+    manager = VectorStoreManager()
+
+    try:
+        count = manager.delete_by_fingerprint_all_collections(fingerprint)
+
+        return {
+            "message": "Documents deleted successfully",
+            "fingerprint": fingerprint,
+            "total_deleted": count,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
+
+
+# ========================================
+# Statistics Routes
+# ========================================
+
+
+@router.get("/stats")
+async def get_statistics():
+    """
+    Get overall knowledgebase statistics.
+
+    Returns:
+        Total collections, documents, domains, subjects
+    """
+    manager = VectorStoreManager()
+
+    collections = manager.list_all_collections()
+
+    total_docs = sum(c["count"] for c in collections)
+    unique_domains = len(set(c["domain"] for c in collections))
+    unique_subjects = len(set(c["subject"] for c in collections))
+
+    return {
+        "total_collections": len(collections),
+        "total_documents": total_docs,
+        "unique_domains": unique_domains,
+        "unique_subjects": unique_subjects,
+        "collections": collections,
+    }

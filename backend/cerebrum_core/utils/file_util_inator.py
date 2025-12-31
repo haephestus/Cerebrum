@@ -58,8 +58,8 @@ class CerebrumPaths:
         assesments_dir = bubble_dir / "assesments"
 
         for d in [chat_dir, notes_dir, assesments_dir]:
-            d.mkdir(exist_ok=True)
-            (d / ".archives").mkdir(exist_ok=True)
+            d.mkdir(parents=True, exist_ok=True)
+            (d / ".archives").mkdir(parents=True, exist_ok=True)
 
     def get_bubbles_root(self) -> Path:
         """Return bubbles root directory"""
@@ -118,6 +118,9 @@ class CerebrumPaths:
 
     def get_config_dir(self) -> Path:
         return self.CONFIG_ROOT
+
+    def get_cache_root(self) -> Path:
+        return self.CACHE_ROOT
 
     def get_cache_dir(self, bubble_id) -> Path:
         CACHE_DIR = self.CACHE_ROOT / "analysis_cache" / bubble_id
