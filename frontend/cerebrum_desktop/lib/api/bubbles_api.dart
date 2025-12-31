@@ -187,7 +187,7 @@ class BubbleNotesApi {
   }
 }
 
-class ProjectChatApi {
+class BubbleChatApi {
   static const baseUrl = "http://localhost:8000";
 
   /// Helper to build the base project chat endpoint

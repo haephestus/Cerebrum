@@ -3,7 +3,7 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from platformdirs import PlatformDirs
 
@@ -119,8 +119,9 @@ class CerebrumPaths:
     def get_config_dir(self) -> Path:
         return self.CONFIG_ROOT
 
-    def get_cache_dir(self) -> Path:
-        return self.CACHE_ROOT
+    def get_cache_dir(self, bubble_id) -> Path:
+        CACHE_DIR = self.CACHE_ROOT / "analysis_cache" / bubble_id
+        return CACHE_DIR
 
 
 # init so functions in this file can use it
@@ -273,7 +274,7 @@ class FileRegisterInator:
                 subject = COALESCE(?, subject),
                 sanitized_name = COALESCE(?, sanitized_name),
                 last_updated = CURRENT_TIMESTAMP
-            WHERE fingerprint
+            WHERE fingerprint = ?
             """,
             (domain, subject, sanitized_name, fingerprint),
         )
@@ -296,9 +297,8 @@ class FileRegisterInator:
                 embedded = 1,
                 last_updated = CURRENT_TIMESTAMP
             WHERE fingerprint = ?
-            AND sanitized_name = ?
             """,
-            (fingerprint),
+            (fingerprint,),
         )
 
         conn.commit()
@@ -334,6 +334,8 @@ class FileRegisterInator:
             SELECT
                 original_name,
                 sanitized_name,
+                domain,
+                subject,
                 fingerprint,
                 filepath
             FROM registry
@@ -343,7 +345,14 @@ class FileRegisterInator:
         rows = cursor.fetchall()
         conn.close()
 
-        columns = ["original_name", "sanitized_name", "fingerprint", "filepath"]
+        columns = [
+            "original_name",
+            "sanitized_name",
+            "domain",
+            "subject",
+            "fingerprint",
+            "filepath",
+        ]
         data = [dict(zip(columns, row)) for row in rows]
         return data
 
@@ -380,8 +389,8 @@ class FileRegisterInator:
             "ids",
             "original_name",
             "sanitized_name",
-            "subject",
             "domain",
+            "subject",
             "fingerprint",
             "converted",
             "embedded",
@@ -389,6 +398,33 @@ class FileRegisterInator:
         ]
         data = [dict(zip(columns, row)) for row in rows]
         return data
+
+    def remove_inator(self, filename: str, fingerprint: str, filepath: str):
+        """Removes file from registry and disk"""
+
+        conn = sqlite3.connect(self.DB_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                DELETE FROM registry 
+                WHERE original_name = ? 
+                AND fingerprint = ?
+                """,
+                (filename, fingerprint),
+            )
+            if cursor.rowcount == 0:
+                conn.close()
+                raise FileNotFoundError("Registry entry not found")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        if Path(filepath).exists():
+            Path(filepath).unlink()
 
     def reset_inator(self, status, fingerprint=None):
         VALID_COLUMNS = {"embedded", "converted"}
@@ -439,29 +475,35 @@ class ChunkRegisterInator:
         self.db_path = CEREBRUM_PATHS.get_kb_root() / db_path
         self._init_table()
 
+    # --------------------------------------------------
+    # Table init
+    # --------------------------------------------------
     def _init_table(self):
         conn = sqlite3.connect(self.db_path)
         cur = conn.cursor()
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS chunks (
-            id INTEGER PRIMARY KEY,
-            chunk_fingerprint TEXT NOT NULL, 
-            chunk_index TEXT NOT NULL,
-            byte_start INTEGER NOT NULL,
-            byte_end INTEGER NOT NULL,
-            token_count INTEGER,
-            chunk_type TEXT NOT NULL,
-            parent_chunk_index TEXT,
-            embedded INTEGER DEFAULT 0,
-            UNIQUE (chunk_fingerprint, chunk_index)
+                id INTEGER PRIMARY KEY,
+                chunk_fingerprint TEXT NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                byte_start INTEGER NOT NULL,
+                byte_end INTEGER NOT NULL,
+                token_count INTEGER,
+                chunk_type TEXT NOT NULL,
+                parent_chunk_index INTEGER,
+                embedded INTEGER DEFAULT 0,
+                UNIQUE (chunk_fingerprint, chunk_index)
             )
             """
         )
         conn.commit()
         conn.close()
 
-    def register_chunks(self, chunk_rows: list[tuple]):
+    # --------------------------------------------------
+    # Register chunks
+    # --------------------------------------------------
+    def register_chunks(self, chunk_rows: List[tuple]):
         conn = sqlite3.connect(self.db_path)
         cur = conn.cursor()
         cur.executemany(
@@ -481,9 +523,13 @@ class ChunkRegisterInator:
         conn.commit()
         conn.close()
 
+    # --------------------------------------------------
+    # Embedding progress (FIXED)
+    # --------------------------------------------------
     def get_embedding_progress(self, chunk_fingerprint: str) -> dict:
         """
-        Check embedding progress for a document
+        Returns embedding progress with guaranteed int types.
+        Never returns tuples or NULLs.
         """
         conn = sqlite3.connect(self.db_path)
         cur = conn.cursor()
@@ -491,57 +537,79 @@ class ChunkRegisterInator:
         cur.execute(
             """
             SELECT 
-                COUNT(*) as total,
-                SUM(embedded) as completed,
-                COUNT(*) - SUM(embedded) as remaining
+                COUNT(*) AS total,
+                COALESCE(SUM(embedded), 0) AS completed,
+                COUNT(*) - COALESCE(SUM(embedded), 0) AS remaining
             FROM chunks
             WHERE chunk_fingerprint = ?
             """,
             (chunk_fingerprint,),
         )
-        result = cur.fetchone()
+
+        row = cur.fetchone()
         conn.close()
 
-        if result and result[0] > 0:
-            total, completed, remaining = result
+        if not row:
             return {
-                "total": total,
-                "completed": completed,
-                "remaining": remaining,
-                "progress_pct": (completed / total) * 100,
+                "total": 0,
+                "completed": 0,
+                "remaining": 0,
+                "progress_pct": 0,
             }
-        return {"total": 0, "completed": 0, "remaining": 0, "progress_pct": 0}
 
-    def mark_embedded(self, chunk_fingerprint: str, chunk_index: str):
-        """Mark a chunk as embedded"""
+        total, completed, remaining = map(int, row)
+
+        progress_pct = (completed / total) * 100 if total > 0 else 0
+
+        return {
+            "total": total,
+            "completed": completed,
+            "remaining": remaining,
+            "progress_pct": progress_pct,
+        }
+
+    # --------------------------------------------------
+    # Mark chunk embedded
+    # --------------------------------------------------
+    def mark_embedded(self, chunk_fingerprint: str, chunk_index: int):
         conn = sqlite3.connect(self.db_path)
         cur = conn.cursor()
         cur.execute(
             """
             UPDATE chunks
             SET embedded = 1
-            WHERE  chunk_fingerprint = ? AND chunk_index = ?
+            WHERE chunk_fingerprint = ? AND chunk_index = ?
             """,
             (chunk_fingerprint, chunk_index),
         )
         conn.commit()
         conn.close()
 
-    def get_unembedded_chunks(self, chunk_fingerprint: str) -> list[ChunkRecordInator]:
-        """Get all chunks that have not been embedded yet for a given doucment"""
+    # --------------------------------------------------
+    # Fetch unembedded chunks (ORDER SAFE)
+    # --------------------------------------------------
+    def get_unembedded_chunks(self, chunk_fingerprint: str):
         conn = sqlite3.connect(self.db_path)
         cur = conn.cursor()
         cur.execute(
             """
-        SELECT chunk_fingerprint, chunk_index, byte_start, byte_end,
-        token_count, chunk_type, parent_chunk_index, embedded
-
-        FROM chunks
-        WHERE chunk_fingerprint = ? AND embedded = 0
-        ORDER BY chunk_index
-        """,
+            SELECT
+                chunk_fingerprint,
+                chunk_index,
+                byte_start,
+                byte_end,
+                token_count,
+                chunk_type,
+                parent_chunk_index,
+                embedded
+            FROM chunks
+            WHERE chunk_fingerprint = ?
+              AND embedded = 0
+            ORDER BY chunk_index ASC
+            """,
             (chunk_fingerprint,),
         )
+
         rows = cur.fetchall()
         conn.close()
         return [ChunkRecordInator(*row) for row in rows]

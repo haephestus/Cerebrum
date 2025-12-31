@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:cerebrum_app/api/bubbles_api.dart';
 import 'package:cerebrum_app/features/editor/note_editor_page.dart';
+import 'package:cerebrum_app/ui/desktop/widgets/editable_title.dart';
 
 class DStudyBubblePage extends StatefulWidget {
   final bool addMode;
   final Map<String, dynamic>? bubble;
+  final VoidCallback? onBack;
 
-  const DStudyBubblePage({super.key, this.addMode = false, this.bubble});
+  const DStudyBubblePage({
+    super.key,
+    this.addMode = false,
+    this.bubble,
+    this.onBack,
+  });
 
   @override
   State<DStudyBubblePage> createState() => _DStudyBubblePageState();
@@ -144,7 +151,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   }
 
   // -----------------------
-  // Add a new note
+  //  Rename a note
   // -----------------------
   Future<void> renameNote(
     String bubbleId,
@@ -269,8 +276,22 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
 
                   return ListTile(
                     key: ValueKey(note["filename"]),
-                    title: Text(note["title"] ?? "Untitled"),
-                    subtitle: Text(note["filename"] ?? ""),
+                    title: EditableTitle(
+                      initialTitle: note['title'] ?? 'Untitled',
+                      onTitleChanged: (newTitle) async {
+                        if (newTitle.isNotEmpty && newTitle != note['title']) {
+                          final oldTitle = note['filename'];
+                          setState(() {
+                            note['title'] = newTitle;
+                          });
+                          await renameNote(bubbleId, oldTitle, newTitle);
+                        }
+                      },
+                    ),
+                    subtitle: Text(
+                      note["filename"] ?? "",
+                      style: TextStyle(fontSize: 12),
+                    ),
                     onTap: () {
                       // Ensure note has bubbleId before opening
                       final noteToEdit = Map<String, dynamic>.from(note);
@@ -338,13 +359,28 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.bubble?['name'] ?? "No name",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back, color: Colors.white),
+                      tooltip: "Back to Study Bubbles",
+                      onPressed: () {
+                        if (widget.onBack != null) {
+                          widget.onBack!();
+                        } else {
+                          Navigator.pop(context);
+                        }
+                      },
+                    ),
+                    Text(
+                      widget.bubble?['name'] ?? "No name",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Text(

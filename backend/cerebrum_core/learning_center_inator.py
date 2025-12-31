@@ -82,9 +82,11 @@ def passive_analysis(
 
         # Run analysis (retrieves from KB and generates response)
         analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+        if not analysis_result:
+            return "no analysis for this note"
 
         logger.info(
-            f"✓ Completed analysis for note {note.note_id} v{note.metadata.content_version}"
+            f"Completed analysis for note {note.note_id} v{note.metadata.content_version}"
         )
 
         # Cache the result with metadata

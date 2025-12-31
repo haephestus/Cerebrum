@@ -151,3 +151,786 @@
 2025-12-10 23:20:08,473 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
 2025-12-10 23:25:57,153 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
 2025-12-11 11:20:24,618 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-27 11:05:51,631 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-27 12:20:16,920 [INFO] api.routes_bubble: Major version bump detected for note 01KDFKBSDPS2N6WAZ7H32A2557 (v1) — scheduling analysis
+2025-12-27 12:20:16,935 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDFKBSDPS2N6WAZ7H32A2557 v1
+2025-12-27 12:20:16,944 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 12:20:16,944 [WARNING] root: Failed to translate chunk 1: 'user_note'
+2025-12-27 12:20:16,944 [WARNING] root: Failed to translate chunk 2: 'user_note'
+2025-12-27 12:20:16,944 [WARNING] root: Failed to translate chunk 3: 'user_note'
+2025-12-27 12:20:16,944 [WARNING] root: Failed to translate chunk 4: 'user_note'
+2025-12-27 12:20:16,944 [WARNING] root: Failed to translate chunk 5: 'user_note'
+2025-12-27 12:20:16,944 [WARNING] root: Failed to translate chunk 6: 'user_note'
+2025-12-27 12:20:16,945 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 7 chunks, 0 queries
+2025-12-27 12:20:16,945 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KDFKBSDPS2N6WAZ7H32A2557: 404: No note:Untitled Note found for bubble:new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 323, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 378, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 123, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note:Untitled Note found for bubble:new
+2025-12-27 12:31:43,729 [INFO] api.routes_bubble: Major version bump detected for note 01KDFKBSDPS2N6WAZ7H32A2557 (v2) — scheduling analysis
+2025-12-27 12:31:43,733 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDFKBSDPS2N6WAZ7H32A2557 v2
+2025-12-27 12:31:43,740 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 12:31:43,741 [WARNING] root: Failed to translate chunk 1: 'user_note'
+2025-12-27 12:31:43,741 [WARNING] root: Failed to translate chunk 2: 'user_note'
+2025-12-27 12:31:43,741 [WARNING] root: Failed to translate chunk 3: 'user_note'
+2025-12-27 12:31:43,741 [WARNING] root: Failed to translate chunk 4: 'user_note'
+2025-12-27 12:31:43,741 [WARNING] root: Failed to translate chunk 5: 'user_note'
+2025-12-27 12:31:43,741 [WARNING] root: Failed to translate chunk 6: 'user_note'
+2025-12-27 12:31:43,741 [WARNING] root: Failed to translate chunk 7: 'user_note'
+2025-12-27 12:31:43,741 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 8 chunks, 0 queries
+2025-12-27 12:31:43,741 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KDFKBSDPS2N6WAZ7H32A2557: 404: No note:Untitled Note found for bubble:new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 323, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 378, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 123, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note:Untitled Note found for bubble:new
+2025-12-27 12:32:18,056 [INFO] api.routes_bubble: Major version bump detected for note 01KDFNVAMNQ4FJCKSJFJEWG5NC (v1) — scheduling analysis
+2025-12-27 12:32:18,060 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDFNVAMNQ4FJCKSJFJEWG5NC v1
+2025-12-27 12:32:18,067 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 12:32:18,067 [WARNING] root: Failed to translate chunk 1: 'user_note'
+2025-12-27 12:32:18,067 [WARNING] root: Failed to translate chunk 2: 'user_note'
+2025-12-27 12:32:18,067 [WARNING] root: Failed to translate chunk 3: 'user_note'
+2025-12-27 12:32:18,068 [WARNING] root: Failed to translate chunk 4: 'user_note'
+2025-12-27 12:32:18,068 [WARNING] root: Failed to translate chunk 5: 'user_note'
+2025-12-27 12:32:18,068 [WARNING] root: Failed to translate chunk 6: 'user_note'
+2025-12-27 12:32:18,068 [WARNING] root: Failed to translate chunk 7: 'user_note'
+2025-12-27 12:32:18,068 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 8 chunks, 0 queries
+2025-12-27 12:32:18,068 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KDFNVAMNQ4FJCKSJFJEWG5NC: 404: No note:Untitled Note found for bubble:new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 323, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 378, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 123, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note:Untitled Note found for bubble:new
+2025-12-27 12:32:48,672 [INFO] api.routes_bubble: Major version bump detected for note 01KDFNW6N364YV5RYWJYDMPWKD (v1) — scheduling analysis
+2025-12-27 12:32:48,675 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDFNW6N364YV5RYWJYDMPWKD v1
+2025-12-27 12:32:48,685 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 12:32:48,685 [WARNING] root: Failed to translate chunk 1: 'user_note'
+2025-12-27 12:32:48,685 [WARNING] root: Failed to translate chunk 2: 'user_note'
+2025-12-27 12:32:48,685 [WARNING] root: Failed to translate chunk 3: 'user_note'
+2025-12-27 12:32:48,685 [WARNING] root: Failed to translate chunk 4: 'user_note'
+2025-12-27 12:32:48,686 [WARNING] root: Failed to translate chunk 5: 'user_note'
+2025-12-27 12:32:48,686 [WARNING] root: Failed to translate chunk 6: 'user_note'
+2025-12-27 12:32:48,686 [WARNING] root: Failed to translate chunk 7: 'user_note'
+2025-12-27 12:32:48,686 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 8 chunks, 0 queries
+2025-12-27 12:32:48,686 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KDFNW6N364YV5RYWJYDMPWKD: 404: No note:Untitled Note found for bubble:new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 323, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 378, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 123, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note:Untitled Note found for bubble:new
+2025-12-27 12:33:20,597 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-27 12:33:23,169 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-27 12:33:36,676 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-27 18:17:10,175 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-27 18:30:29,777 [INFO] api.routes_bubble: Major version bump detected for note 01KDGAAJE567S7MHZRQXYW96K3 (v0.01) — scheduling analysis
+2025-12-27 18:30:29,781 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDGAAJE567S7MHZRQXYW96K3 v0.01
+2025-12-27 18:30:29,785 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 18:30:29,786 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-27 18:30:29,787 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KDGAAJE567S7MHZRQXYW96K3: 404: No note:Untitled Note found for bubble:new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 323, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 378, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 123, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note:Untitled Note found for bubble:new
+2025-12-27 19:10:36,961 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 19:10:36,963 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 19:10:36,965 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 19:10:36,965 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-27 19:10:36,966 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: 404: No note:Untitled Note found for bubble:new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 323, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 378, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 123, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note:Untitled Note found for bubble:new
+2025-12-27 19:10:44,136 [INFO] api.routes_bubble: Major version bump detected for note 01KDGAAJE567S7MHZRQXYW96K3 (v1) — scheduling analysis
+2025-12-27 19:10:44,141 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KDGAAJE567S7MHZRQXYW96K3 v1
+2025-12-27 19:10:44,142 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 19:10:44,142 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-27 19:10:44,143 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KDGAAJE567S7MHZRQXYW96K3: 404: No note:Understanding flutter found for bubble:new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 323, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 378, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 123, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note:Understanding flutter found for bubble:new
+2025-12-27 19:10:51,688 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-27 19:13:37,976 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 19:13:37,977 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 19:13:37,977 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: list assignment index out of range
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 74, in passive_analysis
+    analyzer = NoteAnalyserInator(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 301, in __init__
+    self._initialize()
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 305, in _initialize
+    self.chunks = self._note_chunker()
+                  ^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 430, in _note_chunker
+    flat_note = NoteToMarkdownInator().flatten(self.note.content)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 191, in flatten
+    result = handler(block)
+             ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 215, in _handle_table
+    return self._flatten_table(block)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 241, in _flatten_table
+    matrix[row][col] = self._extract_text(inner_block) if inner_block else ""
+    ~~~~~~~~~~~^^^^^
+IndexError: list assignment index out of range
+2025-12-27 19:13:49,892 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 19:13:49,894 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 19:13:49,894 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: list assignment index out of range
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 74, in passive_analysis
+    analyzer = NoteAnalyserInator(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 301, in __init__
+    self._initialize()
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 305, in _initialize
+    self.chunks = self._note_chunker()
+                  ^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 430, in _note_chunker
+    flat_note = NoteToMarkdownInator().flatten(self.note.content)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 191, in flatten
+    result = handler(block)
+             ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 215, in _handle_table
+    return self._flatten_table(block)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 241, in _flatten_table
+    matrix[row][col] = self._extract_text(inner_block) if inner_block else ""
+    ~~~~~~~~~~~^^^^^
+IndexError: list assignment index out of range
+2025-12-27 19:14:06,275 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 19:14:06,280 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 19:14:06,282 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: list assignment index out of range
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 74, in passive_analysis
+    analyzer = NoteAnalyserInator(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 301, in __init__
+    self._initialize()
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 305, in _initialize
+    self.chunks = self._note_chunker()
+                  ^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 430, in _note_chunker
+    flat_note = NoteToMarkdownInator().flatten(self.note.content)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 191, in flatten
+    result = handler(block)
+             ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 215, in _handle_table
+    return self._flatten_table(block)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 241, in _flatten_table
+    matrix[row][col] = self._extract_text(inner_block) if inner_block else ""
+    ~~~~~~~~~~~^^^^^
+IndexError: list assignment index out of range
+2025-12-27 19:14:13,443 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 19:14:13,444 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 19:14:13,444 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: list assignment index out of range
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 74, in passive_analysis
+    analyzer = NoteAnalyserInator(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 301, in __init__
+    self._initialize()
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 305, in _initialize
+    self.chunks = self._note_chunker()
+                  ^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 430, in _note_chunker
+    flat_note = NoteToMarkdownInator().flatten(self.note.content)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 191, in flatten
+    result = handler(block)
+             ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 215, in _handle_table
+    return self._flatten_table(block)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 241, in _flatten_table
+    matrix[row][col] = self._extract_text(inner_block) if inner_block else ""
+    ~~~~~~~~~~~^^^^^
+IndexError: list assignment index out of range
+2025-12-27 19:14:19,659 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 19:14:19,665 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 19:14:19,667 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: list assignment index out of range
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 74, in passive_analysis
+    analyzer = NoteAnalyserInator(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 301, in __init__
+    self._initialize()
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 305, in _initialize
+    self.chunks = self._note_chunker()
+                  ^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 430, in _note_chunker
+    flat_note = NoteToMarkdownInator().flatten(self.note.content)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 191, in flatten
+    result = handler(block)
+             ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 215, in _handle_table
+    return self._flatten_table(block)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 241, in _flatten_table
+    matrix[row][col] = self._extract_text(inner_block) if inner_block else ""
+    ~~~~~~~~~~~^^^^^
+IndexError: list assignment index out of range
+2025-12-27 20:53:54,292 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-27 20:54:36,662 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 20:54:36,664 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 20:54:36,665 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: argument of type 'NoneType' is not iterable
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 74, in passive_analysis
+    analyzer = NoteAnalyserInator(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 308, in __init__
+    self._initialize()
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 312, in _initialize
+    self.chunks = self._note_chunker()
+                  ^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 437, in _note_chunker
+    flat_note = NoteToMarkdownInator().flatten(self.note.content)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 191, in flatten
+    result = handler(block)
+             ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 215, in _handle_table
+    return self._flatten_table(block)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 246, in _flatten_table
+    if row is None or col in None:
+                      ^^^^^^^^^^^
+TypeError: argument of type 'NoneType' is not iterable
+2025-12-27 20:57:06,857 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 20:57:06,858 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 20:57:06,859 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: argument of type 'NoneType' is not iterable
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 74, in passive_analysis
+    analyzer = NoteAnalyserInator(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 308, in __init__
+    self._initialize()
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 312, in _initialize
+    self.chunks = self._note_chunker()
+                  ^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 437, in _note_chunker
+    flat_note = NoteToMarkdownInator().flatten(self.note.content)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 191, in flatten
+    result = handler(block)
+             ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 215, in _handle_table
+    return self._flatten_table(block)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 246, in _flatten_table
+    if row is None or col in None:
+                      ^^^^^^^^^^^
+TypeError: argument of type 'NoneType' is not iterable
+2025-12-27 20:58:18,080 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 20:58:18,082 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 20:58:18,083 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 20:58:18,084 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-27 20:58:18,084 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: 404: No note:Untitled Note found for bubble:new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 330, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 385, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 123, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note:Untitled Note found for bubble:new
+2025-12-27 21:06:39,462 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-27 21:06:39,464 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-27 21:06:39,466 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-27 21:06:39,466 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-27 21:06:39,466 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: 404: No note: Untitled Note found for bubble: new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 332, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 387, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 125, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404: No note: Untitled Note found for bubble: new
+2025-12-28 16:31:49,587 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-28 16:31:49,625 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-28 16:31:49,628 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-28 16:31:49,628 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-28 16:31:49,628 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: 404:  
+ No note: 01KCBDVK5B6XZ44E9DH0GZY776.json found for bubble: new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 333, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 388, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 125, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404:  
+ No note: 01KCBDVK5B6XZ44E9DH0GZY776.json found for bubble: new
+2025-12-28 16:32:31,211 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-28 16:32:31,213 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-28 16:32:31,216 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-28 16:32:31,216 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-28 16:32:31,217 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: 404:  
+ No note: 01KCBDVK5B6XZ44E9DH0GZY776.json found for bubble: new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 333, in analyser_inator
+    archived_data = self._load_archived_data()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 388, in _load_archived_data
+    ).archive_browser_inator(self.note.bubble_id)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 125, in archive_browser_inator
+    raise HTTPException(
+fastapi.exceptions.HTTPException: 404:  
+ No note: 01KCBDVK5B6XZ44E9DH0GZY776.json found for bubble: new
+2025-12-28 18:11:46,273 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-28 18:11:46,279 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-28 18:11:46,287 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-28 18:11:46,287 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-28 18:11:46,288 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: 404:  
+ No note: 01KCBDVK5B6XZ44E9DH0GZY776.json found for bubble: new
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 333, in analyser_inator
+    return "No analysis for this note"
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 388, in _load_archived_data
+    )
+      
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 125, in archive_browser_inator
+    f" \n No note: {self.note.note_id}.json found for bubble: {bubble_id}",
+fastapi.exceptions.HTTPException: 404:  
+ No note: 01KCBDVK5B6XZ44E9DH0GZY776.json found for bubble: new
+2025-12-28 18:13:54,262 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-28 18:13:54,265 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-28 18:13:54,268 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-28 18:13:54,268 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-28 18:13:54,538 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-28 18:13:55,567 [INFO] root: Note 01KCBDVK5B6XZ44E9DH0GZY776 not in archive, will archive
+2025-12-28 18:13:59,550 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-28 18:13:59,632 [INFO] root: Archived note 01KCBDVK5B6XZ44E9DH0GZY776
+2025-12-28 18:13:59,654 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-28 18:13:59,719 [ERROR] cerebrum_core.utils.cache_inator: Failed to fetch cached documents: Expected where to have exactly one operator, got {'note_id': '01KCBDVK5B6XZ44E9DH0GZY776', 'bubble_id': 'new'} in get.
+2025-12-28 18:13:59,722 [INFO] root: No cache found, perfoming fresh retrieval
+2025-12-28 18:13:59,724 [INFO] root: Constructed 0 routes
+2025-12-28 18:13:59,724 [WARNING] cerebrum_core.utils.cache_inator: No documents to cache for note 01KCBDVK5B6XZ44E9DH0GZY776
+2025-12-28 18:14:13,490 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-28 18:37:47,192 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: peer closed connection without sending complete message body (incomplete chunked read)
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 127, in __iter__
+    for part in self._httpcore_stream:
+                ^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 407, in __iter__
+    raise exc from None
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py", line 403, in __iter__
+    for part in self._stream:
+                ^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/http11.py", line 342, in __iter__
+    raise exc
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/http11.py", line 334, in __iter__
+    for chunk in self._connection._receive_response_body(**kwargs):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/http11.py", line 203, in _receive_response_body
+    event = self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_sync/http11.py", line 213, in _receive_event
+    with map_exceptions({h11.RemoteProtocolError: RemoteProtocolError}):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 378, in analyser_inator
+    response = OllamaLLM(model=self.chat_model).invoke(final_prompt)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 390, in invoke
+    self.generate_prompt(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 789, in generate_prompt
+    return self.generate(prompt_strings, stop=stop, callbacks=callbacks, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 1000, in generate
+    return self._generate_helper(
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/language_models/llms.py", line 815, in _generate_helper
+    self._generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 443, in _generate
+    final_chunk = self._stream_with_aggregation(
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 402, in _stream_with_aggregation
+    for stream_resp in self._create_generate_stream(prompt, stop, **kwargs):
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/llms.py", line 346, in _create_generate_stream
+    yield from self._client.generate(
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 172, in inner
+    for line in r.iter_lines():
+                ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_models.py", line 929, in iter_lines
+    for text in self.iter_text():
+                ^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_models.py", line 916, in iter_text
+    for byte_content in self.iter_bytes():
+                        ^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_models.py", line 897, in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_models.py", line 951, in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_client.py", line 153, in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 126, in __iter__
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/kjvgj2n3yn70hmjifg6y0bk9m4rf7jba-python3-3.12.10/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.RemoteProtocolError: peer closed connection without sending complete message body (incomplete chunked read)
+2025-12-30 10:20:39,335 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 10:53:02,264 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 10:55:20,925 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 11:18:12,151 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 11:18:24,791 [INFO] cerebrum_core.knowledgebase_inator: {
+  "title": "super-mendelian-inheritance-mediated-by-crispr/cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": ["crispr", "cas9", "genetics", "mouse", "germline"]
+}
+2025-12-30 11:18:28,256 [INFO] root: PDF → MD finished in -0.00s (38159 chars)
+2025-12-30 12:23:03,541 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 12:30:53,183 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 404 Not Found"
+2025-12-30 12:30:54,153 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 404 Not Found"
+2025-12-30 12:31:39,327 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 12:31:51,776 [INFO] cerebrum_core.knowledgebase_inator: {
+  "title": "super-mendelian-inheritance-mediated-by-crispr-cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-Ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": ["mendelian", "inheritance", "crispr-cas9", "germline"]
+}
+2025-12-30 13:04:04,116 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 13:04:18,134 [INFO] cerebrum_core.knowledgebase_inator: {
+  "title": "super-mendelian-inheritance-mediated-by-crisper-cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": ["super-mendelian", "inheritance", "crisper-cas9", "mouse germline", "2019"]
+}
+2025-12-30 13:07:37,733 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 13:07:51,081 [INFO] cerebrum_core.knowledgebase_inator: {
+  "title": "super-mendelian-inheritance-mediated-by-crisper-cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-Ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": [
+    "genetics",
+    "crisper-cas9",
+    "mouse-germline",
+    "super-mendelian-inheritance"
+  ]
+}
+2025-12-30 15:21:51,249 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 15:22:03,345 [INFO] cerebrum_core.knowledgebase_inator: {
+  "title": "super-mendelian-inheritance-mediated-by-crispr-cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-Ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": ["crispr", "cas9", "germline", "mouse"]
+}
+2025-12-30 23:26:21,302 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-30 23:26:34,491 [INFO] cerebrum_core.knowledgebase_inator: {
+  "title": "super-mendelian-inheritance-mediated-by-crisper-cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": ["super-mendelian", "inheritance", "crisper", "cas9", "mouse germline"]
+}
+2025-12-31 00:38:00,645 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 00:38:04,979 [INFO] cerebrum: LLM sanitization response: {
+  "title": "nihms-1516304",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [],
+  "keywords": ["nihms", "1516304"]
+}
+2025-12-31 00:38:07,908 [INFO] cerebrum: Converted nihms-1516304.pdf → /home/harbinger/.local/share/cerebrum/knowledgebase/markdown_artifacts/biology/genetics/nihms-1516304.md
+2025-12-31 00:38:08,204 [INFO] cerebrum: Chunked 5 chunks → /home/harbinger/.local/share/cerebrum/knowledgebase/markdown_artifacts/biology/genetics/nihms-1516304.chunked.md
+2025-12-31 00:56:33,023 [INFO] cerebrum: Extracted PDF metadata: {'authors': ['Hannah A. Grunwald', 'Valentino M. Gantz', 'Gunnar Poplawski', 'Xiang-ru S. Xu', 'Ethan Bier', 'Kimberly L. Cooper'], 'title': 'Super-Mendelian inheritance mediated by CRISPR/Cas9 in the female mouse germline', 'creator': 'AH XSL Formatter V6.3 R1 for Linux64 : 6.3.1.23495 (2016/02/03 14:39JST)', 'producer': 'Antenna House PDF Output Library 6.3.752 (Linux64)'}
+2025-12-31 00:56:50,619 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 00:57:03,455 [INFO] cerebrum: LLM sanitization response: {
+  "title": "super-mendelian-inheritance-mediated-by-crispr/cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": ["crispr", "cas9", "genetics", "mouse"]
+}
+2025-12-31 00:59:01,518 [INFO] cerebrum: Extracted PDF metadata: {'authors': ['Hannah A. Grunwald', 'Valentino M. Gantz', 'Gunnar Poplawski', 'Xiang-ru S. Xu', 'Ethan Bier', 'Kimberly L. Cooper'], 'title': 'Super-Mendelian inheritance mediated by CRISPR/Cas9 in the female mouse germline', 'creator': 'AH XSL Formatter V6.3 R1 for Linux64 : 6.3.1.23495 (2016/02/03 14:39JST)', 'producer': 'Antenna House PDF Output Library 6.3.752 (Linux64)'}
+2025-12-31 00:59:01,760 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 00:59:14,806 [INFO] cerebrum: LLM sanitization response: {
+  "title": "super-mendelian-inheritance-mediated-by-crispr/cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-Ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": ["crispr", "cas9", "mouse germline", "genetics"]
+}
+2025-12-31 00:59:17,891 [INFO] cerebrum: Converted nihms-1516304.pdf → /home/harbinger/.local/share/cerebrum/knowledgebase/markdown_artifacts/biology/genetics/super-mendelian-inheritance-mediated-by-crispr-cas9-in-the-female-mouse-germline.md
+2025-12-31 00:59:18,091 [INFO] cerebrum: Chunked 5 chunks → /home/harbinger/.local/share/cerebrum/knowledgebase/markdown_artifacts/biology/genetics/super-mendelian-inheritance-mediated-by-crispr-cas9-in-the-female-mouse-germline.chunked.md
+2025-12-31 01:00:07,436 [INFO] cerebrum: Resuming: 0/5 completed (0.0%)
+2025-12-31 01:00:08,135 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 01:01:58,951 [INFO] cerebrum: Resuming: 0/5 completed (0.0%)
+2025-12-31 01:01:59,004 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 01:04:49,071 [INFO] cerebrum: Resuming: 0/5 completed (0.0%)
+2025-12-31 01:04:49,116 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 01:04:50,833 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:04:50,960 [INFO] cerebrum: ✓ Embedded chunk 0
+2025-12-31 01:04:52,272 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:04:52,305 [INFO] cerebrum: ✓ Embedded chunk 1
+2025-12-31 01:05:35,345 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:05:35,381 [INFO] cerebrum: ✓ Embedded chunk 2
+2025-12-31 01:06:17,715 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:06:17,743 [INFO] cerebrum: ✓ Embedded chunk 3
+2025-12-31 01:06:44,442 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:06:44,480 [INFO] cerebrum: ✓ Embedded chunk 4
+2025-12-31 01:06:44,480 [INFO] cerebrum: ✓ Embedding complete
+2025-12-31 01:23:57,123 [INFO] cerebrum: Extracted PDF metadata: {'authors': ['Hannah A. Grunwald', 'Valentino M. Gantz', 'Gunnar Poplawski', 'Xiang-ru S. Xu', 'Ethan Bier', 'Kimberly L. Cooper'], 'title': 'Super-Mendelian inheritance mediated by CRISPR/Cas9 in the female mouse germline', 'creator': 'AH XSL Formatter V6.3 R1 for Linux64 : 6.3.1.23495 (2016/02/03 14:39JST)', 'producer': 'Antenna House PDF Output Library 6.3.752 (Linux64)'}
+2025-12-31 01:24:14,527 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 01:24:26,810 [INFO] cerebrum: LLM sanitization response: {
+  "title": "super-mendelian-inheritance-mediated-by-crispr/cas9-in-the-female-mouse-germline",
+  "domain": "biology",
+  "subject": "genetics",
+  "authors": [
+    "Hannah A. Grunwald",
+    "Valentino M. Gantz",
+    "Gunnar Poplawski",
+    "Xiang-Ru S. Xu",
+    "Ethan Bier",
+    "Kimberly L. Cooper"
+  ],
+  "keywords": ["crispr", "cas9", "genetics"]
+}
+2025-12-31 01:24:29,738 [INFO] cerebrum: Converted nihms-1516304.pdf → /home/harbinger/.local/share/cerebrum/knowledgebase/markdown_artifacts/biology/genetics/super-mendelian-inheritance-mediated-by-crispr-cas9-in-the-female-mouse-germline.md
+2025-12-31 01:24:29,970 [INFO] cerebrum: Chunked 5 chunks → /home/harbinger/.local/share/cerebrum/knowledgebase/markdown_artifacts/biology/genetics/super-mendelian-inheritance-mediated-by-crispr-cas9-in-the-female-mouse-germline.chunked.md
+2025-12-31 01:25:32,567 [INFO] cerebrum: Resuming: 0/5 completed (0.0%)
+2025-12-31 01:25:33,087 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 01:25:35,013 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:25:35,056 [INFO] cerebrum: ✓ Embedded chunk 0
+2025-12-31 01:25:36,575 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:25:36,610 [INFO] cerebrum: ✓ Embedded chunk 1
+2025-12-31 01:26:13,486 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:26:13,523 [INFO] cerebrum: ✓ Embedded chunk 2
+2025-12-31 01:26:48,119 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:26:48,150 [INFO] cerebrum: ✓ Embedded chunk 3
+2025-12-31 01:27:10,529 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 01:27:10,565 [INFO] cerebrum: ✓ Embedded chunk 4
+2025-12-31 01:27:10,565 [INFO] cerebrum: ✓ Embedding complete
+2025-12-31 01:52:45,237 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 12:05:50,062 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-31 12:05:50,104 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-31 12:05:50,107 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-31 12:05:50,107 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-31 12:05:50,366 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 12:05:51,393 [INFO] root: Note 01KCBDVK5B6XZ44E9DH0GZY776 not in archive, will archive
+2025-12-31 12:05:51,428 [ERROR] cerebrum_core.learning_center_inator: Failed to analyze note 01KCBDVK5B6XZ44E9DH0GZY776: Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. https://ollama.com/download
+Traceback (most recent call last):
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/learning_center_inator.py", line 84, in passive_analysis
+    analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 338, in analyser_inator
+    self._archive_note()
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 399, in _archive_note
+    ).archive_populator_inator()
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/cerebrum_core/utils/note_util_inator.py", line 102, in archive_populator_inator
+    self._get_archives().add_documents(note)
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_core/vectorstores/base.py", line 279, in add_documents
+    return self.add_texts(texts, metadatas, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_chroma/vectorstores.py", line 623, in add_texts
+    embeddings = self._embedding_function.embed_documents(texts)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/langchain_ollama/embeddings.py", line 288, in embed_documents
+    return self._client.embed(
+           ^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 368, in embed
+    return self._request(
+           ^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 180, in _request
+    return cls(**self._request_raw(*args, **kwargs).json())
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/media/harbinger/nixfiles/projects/cerebrum/backend/.direnv/python-3.12/lib/python3.12/site-packages/ollama/_client.py", line 126, in _request_raw
+    raise ConnectionError(CONNECTION_ERROR_MESSAGE) from None
+ConnectionError: Failed to connect to Ollama. Please check that Ollama is downloaded, running and accessible. https://ollama.com/download
+2025-12-31 12:06:11,165 [INFO] api.routes_bubble: Major version bump detected for note 01KCBDVK5B6XZ44E9DH0GZY776 (v0.0) — scheduling analysis
+2025-12-31 12:06:11,167 [INFO] cerebrum_core.learning_center_inator: Starting passive analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-31 12:06:11,171 [WARNING] root: Failed to translate chunk 0: 'user_note'
+2025-12-31 12:06:11,171 [INFO] cerebrum_core.learning_center_inator: Initialized analyzer: 1 chunks, 0 queries
+2025-12-31 12:06:11,201 [INFO] root: Note 01KCBDVK5B6XZ44E9DH0GZY776 not in archive, will archive
+2025-12-31 12:06:14,802 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/embed "HTTP/1.1 200 OK"
+2025-12-31 12:06:14,833 [INFO] root: Archived note 01KCBDVK5B6XZ44E9DH0GZY776
+2025-12-31 12:06:14,848 [INFO] chromadb.telemetry.product.posthog: Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-12-31 12:06:14,863 [ERROR] cerebrum_core.utils.cache_inator: Failed to fetch cached documents: Expected where to have exactly one operator, got {'note_id': '01KCBDVK5B6XZ44E9DH0GZY776', 'bubble_id': 'new'} in get.
+2025-12-31 12:06:14,864 [INFO] root: No cache found, perfoming fresh retrieval
+2025-12-31 12:06:14,865 [INFO] root: Constructed 0 routes
+2025-12-31 12:06:14,865 [WARNING] cerebrum_core.utils.cache_inator: No documents to cache for note 01KCBDVK5B6XZ44E9DH0GZY776
+2025-12-31 12:06:59,379 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/generate "HTTP/1.1 200 OK"
+2025-12-31 12:07:50,430 [INFO] cerebrum_core.learning_center_inator: Completed analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-31 12:07:50,431 [INFO] cerebrum_core.utils.cache_inator: Cached analysis for note 01KCBDVK5B6XZ44E9DH0GZY776 v0.0
+2025-12-31 12:07:50,431 [INFO] cerebrum_core.learning_center_inator: Cached analysis for note 01KCBDVK5B6XZ44E9DH0GZY776
+2025-12-31 13:10:26,901 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 13:53:40,029 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 13:55:47,519 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 14:58:57,851 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 15:13:53,583 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 15:14:27,768 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 15:18:01,538 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 15:35:47,343 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0
+2025-12-31 17:15:45,773 [INFO] cerebrum_core.utils.cache_inator: Cache HIT for note 01KCBDVK5B6XZ44E9DH0GZY776 v0

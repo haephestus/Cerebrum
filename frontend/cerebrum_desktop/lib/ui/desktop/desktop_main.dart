@@ -39,7 +39,16 @@ class _DesktopUIState extends State<DesktopUI> {
     } else if (selectedPage == 3) {
       return SettingPage();
     } else if (selectedPage == 4) {
-      return DStudyBubblePage(addMode: false, bubble: payload);
+      return DStudyBubblePage(
+        addMode: false,
+        bubble: payload,
+        onBack: () {
+          setState(() {
+            selectedPage = 1;
+            payload = null;
+          });
+        },
+      );
     }
 
     return Center(child: Text('Unknown Page'));

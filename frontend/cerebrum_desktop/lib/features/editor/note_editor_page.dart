@@ -1,10 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cerebrum_app/api/bubbles_api.dart';
+import 'package:cerebrum_app/api/learning_center_api.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_drawing_board/flutter_drawing_board.dart';
 import 'package:flutter_drawing_board/paint_contents.dart';
-import 'helpers/note_editor_commands.dart'; // Import your shortcuts
+import 'helpers/note_editor_commands.dart';
 
 class NoteEditorPage extends StatefulWidget {
   final Map<String, dynamic> note;
@@ -25,44 +26,34 @@ class NoteEditorPage extends StatefulWidget {
 class _NoteEditorPageState extends State<NoteEditorPage> {
   late EditorState _editorState;
   late DrawingController _drawingController;
+
   Timer? _debounce;
   bool _isSaving = false;
   bool drawingEnabled = true;
   String _lastSavedState = '';
 
+  String? _cachedAnalysis;
+  bool _isLoadingAnalysis = false;
+  bool _showAnalysisPanel = false;
+
+  String? _noteIdFromFilename(String? filename) {
+    if (filename == null || filename.isEmpty) return null;
+    return filename.endsWith('.json')
+        ? filename.substring(0, filename.length - 5)
+        : filename;
+  }
+
   @override
   void initState() {
     super.initState();
 
-    debugPrint('Initializing NoteEditorPage with note: ${widget.note}');
-
-    if (!widget.note.containsKey('bubble_id') ||
-        widget.note['bubble_id'] == null) {
-      throw Exception(
-        "NoteEditorPage: missing bubble_id in incoming note: ${widget.note}",
-      );
-    }
-
-    // Initialize editor with saved content or blank
-    Map<String, dynamic>? contentData =
+    final contentData =
         widget.initialTextJson ??
         widget.note['content'] as Map<String, dynamic>?;
 
-    Map<String, dynamic> docJson;
-
-    if (contentData != null) {
-      // Unwrap document key safely
-      var doc = contentData['document'];
-      if (doc is Map<String, dynamic>) {
-        // Handle double-wrapped document
-        if (doc.containsKey('document') &&
-            doc['document'] is Map<String, dynamic>) {
-          docJson = doc['document'] as Map<String, dynamic>;
-        } else {
-          docJson = doc;
-        }
-      } else {
-        docJson = {
+    final docJson =
+        contentData?['document'] ??
+        {
           "type": "page",
           "children": [
             {
@@ -75,123 +66,48 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
             },
           ],
         };
-      }
-    } else {
-      docJson = {
-        "type": "page",
-        "children": [
-          {
-            "type": "paragraph",
-            "data": {
-              "delta": [
-                {"insert": ""},
-              ],
-            },
-          },
-        ],
-      };
-    }
-
-    debugPrint('Document JSON for editor: $docJson');
 
     try {
       _editorState = EditorState(
         document: Document.fromJson({'document': docJson}),
       );
-    } catch (e) {
-      debugPrint('Error loading document: $e');
+    } catch (_) {
       _editorState = EditorState.blank();
     }
 
-    // Initialize DrawingBoard
     _drawingController = DrawingController();
 
-    // Load initial ink strokes
     if (widget.initialInkJson != null) {
       _loadInkFromJson(widget.initialInkJson!);
     } else if (widget.note['ink'] != null) {
       _loadInkFromJson(List<Map<String, dynamic>>.from(widget.note['ink']));
     }
 
-    // Autosave setup
     _setupAutosave();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateLastSavedState();
-    });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _updateLastSavedState(),
+    );
   }
 
   void _setupAutosave() {
-    _editorState.transactionStream.listen(
-      (_) => _scheduleSave(),
-      onError: (error) => debugPrint('Editor transaction stream error: $error'),
-    );
-
-    _drawingController.addListener(() => _scheduleSave());
+    _editorState.transactionStream.listen((_) => _scheduleSave());
+    _drawingController.addListener(_scheduleSave);
   }
 
   void _updateLastSavedState() {
-    try {
-      final documentJson = _editorState.document.toJson();
-      final inkJson = _drawingController.getJsonList();
-      _lastSavedState = '$documentJson|$inkJson';
-    } catch (e) {
-      debugPrint('Error updating last saved state: $e');
-      _lastSavedState = '';
-    }
+    final doc = _editorState.document.toJson();
+    final ink = _drawingController.getJsonList();
+    _lastSavedState = '$doc|$ink';
   }
 
   bool _hasUnsavedChanges() {
-    try {
-      final documentJson = _editorState.document.toJson();
-      final inkJson = _drawingController.getJsonList();
-      final currentState = '$documentJson|$inkJson';
-      return currentState != _lastSavedState;
-    } catch (e) {
-      debugPrint('Error checking unsaved changes: $e');
-      return false;
-    }
-  }
-
-  void _loadInkFromJson(List<Map<String, dynamic>> jsonList) {
-    final List<PaintContent> contents = [];
-    for (var item in jsonList) {
-      final type = item['type'] as String;
-      try {
-        switch (type) {
-          case 'SimpleLine':
-            contents.add(SimpleLine.fromJson(item));
-            break;
-          case 'SmoothLine':
-            contents.add(SmoothLine.fromJson(item));
-            break;
-          case 'StraightLine':
-            contents.add(StraightLine.fromJson(item));
-            break;
-          case 'Circle':
-            contents.add(Circle.fromJson(item));
-            break;
-          case 'Rectangle':
-            contents.add(Rectangle.fromJson(item));
-            break;
-          case 'Eraser':
-            contents.add(Eraser.fromJson(item));
-            break;
-          default:
-            debugPrint('Unknown PaintContent type: $type');
-        }
-      } catch (e) {
-        debugPrint('Error loading PaintContent of type $type: $e');
-      }
-    }
-    if (contents.isNotEmpty) {
-      _drawingController.addContents(contents);
-    }
+    final doc = _editorState.document.toJson();
+    final ink = _drawingController.getJsonList();
+    return '$doc|$ink' != _lastSavedState;
   }
 
   void _scheduleSave() {
     if (!_hasUnsavedChanges()) return;
-
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 2), _save);
   }
@@ -202,142 +118,81 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     setState(() => _isSaving = true);
 
     try {
-      final documentJson = _editorState.document.toJson();
-      final inkJson = _drawingController.getJsonList();
-
-      // Ensure correct wrapping
-      final contentForApi = {
-        'document': documentJson['document'] ?? documentJson,
-      };
-
-      String? bubbleId = widget.note['bubble_id'] as String?;
-
-      if (bubbleId == null || bubbleId.isEmpty) {
-        throw Exception('Missing bubbleId for note.');
-      }
-
+      final bubbleId = widget.note['bubble_id'] as String;
       final filename = widget.note['filename'] as String?;
-      Map<String, dynamic> updatedNote;
 
-      if (filename != null && filename.isNotEmpty) {
-        updatedNote = await BubbleNotesApi.updateNote(
-          bubbleId: bubbleId,
-          filename: filename,
-          title: widget.note['title'] ?? 'Untitled Note',
-          content: contentForApi,
-          ink: inkJson,
-        );
-      } else {
-        updatedNote = await BubbleNotesApi.createNote(
-          bubbleId: bubbleId,
-          title: widget.note['title'] ?? 'Untitled Note',
-          content: contentForApi,
-          ink: inkJson,
-        );
-        setState(() {
-          widget.note['filename'] = updatedNote['filename'];
-        });
-      }
+      final updated =
+          filename != null
+              ? await BubbleNotesApi.updateNote(
+                bubbleId: bubbleId,
+                filename: filename,
+                title: widget.note['title'] ?? 'Untitled',
+                content: {
+                  'document': _editorState.document.toJson()['document'],
+                },
+                ink: _drawingController.getJsonList(),
+              )
+              : await BubbleNotesApi.createNote(
+                bubbleId: bubbleId,
+                title: widget.note['title'] ?? 'Untitled',
+                content: {
+                  'document': _editorState.document.toJson()['document'],
+                },
+                ink: _drawingController.getJsonList(),
+              );
 
-      // Update local state
-      setState(() {
-        widget.note['content'] = updatedNote['content'];
-        widget.note['ink'] = updatedNote['ink'];
-        widget.note['bubble_id'] =
-            updatedNote['bubble_id'] ?? widget.note['bubble_id'];
-      });
-
+      widget.note.addAll(updated);
       _updateLastSavedState();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Note saved'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Save error: $e\n$stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  Future<bool> _onWillPop() async {
-    if (_hasUnsavedChanges()) {
-      final shouldPop = await showDialog<bool>(
-        context: context,
-        builder:
-            (context) => AlertDialog(
-              title: const Text('Unsaved Changes'),
-              content: const Text(
-                'You have unsaved changes. Save before leaving?',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('Discard'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    await _save();
-                    if (mounted) Navigator.of(context).pop(true);
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            ),
+  Future<void> _loadAnalysis() async {
+    final bubbleId = widget.note['bubble_id'] as String?;
+    final noteId = _noteIdFromFilename(widget.note['filename'] as String?);
+    final version = widget.note['version'] as int? ?? 0;
+
+    if (bubbleId == null || noteId == null) return;
+
+    setState(() => _isLoadingAnalysis = true);
+
+    try {
+      final analysis = await LearningCenterApi.getNoteAnalysis(
+        bubbleId: bubbleId,
+        noteId: noteId,
+        version: version,
       );
-      return shouldPop ?? false;
+
+      setState(() {
+        _cachedAnalysis = analysis ?? 'No cached analysis found for this note.';
+        _showAnalysisPanel = true;
+        _isLoadingAnalysis = false;
+      });
+    } catch (e) {
+      setState(() {
+        _cachedAnalysis = 'Error loading analysis:\n$e';
+        _showAnalysisPanel = true;
+        _isLoadingAnalysis = false;
+      });
     }
-    return true;
   }
 
-  void _toggleMode() {
-    setState(() {
-      drawingEnabled = !drawingEnabled;
-      if (drawingEnabled) FocusScope.of(context).unfocus();
-    });
-  }
-
-  void _clearDrawing() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Clear Drawing'),
-            content: const Text('Are you sure you want to clear all drawings?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Clear'),
-              ),
-            ],
-          ),
-    );
-
-    if (confirmed == true) {
-      _drawingController.clear();
-      _scheduleSave();
+  void _loadInkFromJson(List<Map<String, dynamic>> jsonList) {
+    for (final item in jsonList) {
+      try {
+        final type = item['type'];
+        final content = switch (type) {
+          'SimpleLine' => SimpleLine.fromJson(item),
+          'SmoothLine' => SmoothLine.fromJson(item),
+          'StraightLine' => StraightLine.fromJson(item),
+          'Circle' => Circle.fromJson(item),
+          'Rectangle' => Rectangle.fromJson(item),
+          'Eraser' => Eraser.fromJson(item),
+          _ => null,
+        };
+        if (content != null) _drawingController.addContent(content);
+      } catch (_) {}
     }
   }
 
@@ -350,141 +205,130 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        final shouldPop = await _onWillPop();
-        if (shouldPop && context.mounted) Navigator.of(context).pop();
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.note['title'] ?? 'Edit Note'),
-          actions: [
-            if (_isSaving)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                ),
-              )
-            else if (_hasUnsavedChanges())
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Icon(Icons.circle, size: 8, color: Colors.orange),
-              ),
-            IconButton(
-              icon: Icon(drawingEnabled ? Icons.brush : Icons.text_fields),
-              tooltip:
-                  drawingEnabled
-                      ? 'Switch to Text Mode'
-                      : 'Switch to Drawing Mode',
-              onPressed: _toggleMode,
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.note['title'] ?? 'Edit Note'),
+        actions: [
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
-            if (drawingEnabled)
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert),
-                onSelected: (value) {
-                  switch (value) {
-                    case 'undo':
-                      _drawingController.undo();
-                      break;
-                    case 'redo':
-                      _drawingController.redo();
-                      break;
-                    case 'clear':
-                      _clearDrawing();
-                      break;
-                  }
-                },
-                itemBuilder:
-                    (context) => [
-                      const PopupMenuItem(
-                        value: 'undo',
-                        child: Row(
+          IconButton(
+            icon: Icon(drawingEnabled ? Icons.brush : Icons.text_fields),
+            tooltip:
+                drawingEnabled
+                    ? 'Switch to Text Mode'
+                    : 'Switch to Drawing Mode',
+            onPressed: () {
+              setState(() {
+                drawingEnabled = !drawingEnabled;
+                if (drawingEnabled) FocusScope.of(context).unfocus();
+              });
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.analytics),
+            onPressed:
+                _isLoadingAnalysis
+                    ? null
+                    : () {
+                      if (_cachedAnalysis != null) {
+                        setState(() {
+                          _showAnalysisPanel = !_showAnalysisPanel;
+                        });
+                      } else {
+                        _loadAnalysis();
+                      }
+                    },
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Editor + Drawing board share same space
+            Positioned.fill(
+              child: Stack(
+                children: [
+                  // Text Editor
+                  AbsorbPointer(
+                    absorbing: drawingEnabled,
+                    child: AppFlowyEditor(
+                      editorState: _editorState,
+                      commandShortcutEvents: [
+                        ...standardCommandShortcutEvents,
+                        ...EditorShortcuts.getCustomShortcuts(),
+                      ],
+                    ),
+                  ),
+                  // Drawing Board
+                  IgnorePointer(
+                    ignoring: !drawingEnabled,
+                    child: DrawingBoard(
+                      controller: _drawingController,
+                      background: Container(color: Colors.transparent),
+                      showDefaultActions: drawingEnabled,
+                      showDefaultTools: drawingEnabled,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Analysis Panel
+            if (_showAnalysisPanel && _cachedAnalysis != null)
+              Positioned(
+                top: 80,
+                left: 16,
+                right: 16,
+                child: Material(
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 400),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Icon(Icons.undo),
-                            SizedBox(width: 8),
-                            Text('Undo'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'redo',
-                        child: Row(
-                          children: [
-                            Icon(Icons.redo),
-                            SizedBox(width: 8),
-                            Text('Redo'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'clear',
-                        child: Row(
-                          children: [
-                            Icon(Icons.clear_all, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text(
-                              'Clear All',
-                              style: TextStyle(color: Colors.red),
+                            const Text(
+                              'Note Analysis',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                setState(() {
+                                  _showAnalysisPanel = false;
+                                });
+                              },
                             ),
                           ],
                         ),
-                      ),
-                    ],
-              ),
-          ],
-        ),
-        body: Stack(
-          children: [
-            AbsorbPointer(
-              absorbing: drawingEnabled,
-              child: AppFlowyEditor(
-                editorState: _editorState,
-                commandShortcutEvents: [
-                  ...standardCommandShortcutEvents,
-                  ...EditorShortcuts.getCustomShortcuts(),
-                ],
-                characterShortcutEvents: [...standardCharacterShortcutEvents],
-              ),
-            ),
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: !drawingEnabled,
-                child: Opacity(
-                  opacity: drawingEnabled ? 1.0 : 0.3,
-                  child: DrawingBoard(
-                    controller: _drawingController,
-                    background: Container(color: Colors.transparent),
-                    showDefaultActions: drawingEnabled,
-                    showDefaultTools: drawingEnabled,
+                        const Divider(),
+                        Flexible(
+                          child: SingleChildScrollView(
+                            child: Text(_cachedAnalysis!),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _save,
-          tooltip: 'Save Note',
-          child:
-              _isSaving
-                  ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                  : const Icon(Icons.save),
-        ),
+      ),
+
+      floatingActionButton: FloatingActionButton(
+        onPressed: _save,
+        child: const Icon(Icons.save),
       ),
     );
   }

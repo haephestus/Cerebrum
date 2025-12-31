@@ -29,7 +29,7 @@ class AnalysisCacheInator:
     def __init__(self, bubble_id: str, note_id: str):
         self.bubble_id = bubble_id
         self.note_id = note_id
-        self.cache_dir = CerebrumPaths().get_cache_dir() / "analysis_cache" / bubble_id
+        self.cache_dir = CerebrumPaths().get_cache_dir(bubble_id)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_file = self.cache_dir / f"{note_id}.json"
 
@@ -130,7 +130,7 @@ class RetrievalCacheInator:
         self.note_id = note_id
         self.bubble_id = bubble_id
         self.retrieved_docs = retrieved_docs
-        self.cache_path = CerebrumPaths().get_cache_dir() / "retrieved_docs"
+        self.cache_path = CerebrumPaths().get_cache_dir(bubble_id)
         self.cache_path.mkdir(parents=True, exist_ok=True)
 
     def _get_cache(self) -> Chroma:
@@ -264,8 +264,8 @@ class AnalysisHistoryCache:
     Useful for tracking how analysis changes over versions.
     """
 
-    def __init__(self, in_memory: bool = False):
-        cache_dir = CerebrumPaths().get_cache_dir()
+    def __init__(self, bubble_id, in_memory: bool = False):
+        cache_dir = CerebrumPaths().get_cache_dir(bubble_id)
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         db_path = ":memory:" if in_memory else str(cache_dir / "analysis_history.db")

@@ -147,57 +147,63 @@ class _DHomescreenState extends State<DHomescreen> {
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: Colors.grey.shade300)),
       ),
-      child: ListView.builder(
-        itemCount: _registry.length,
-        itemBuilder: (context, index) {
-          final file = _registry[index];
+      child: Row(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemCount: _registry.length,
+              itemBuilder: (context, index) {
+                final file = _registry[index];
 
-          return Card(
-            child: ListTile(
-              leading: const Icon(Icons.picture_as_pdf),
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.picture_as_pdf),
 
-              title: Text(
-                (file['original_name'] ?? 'Unnamed file').toString(),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+                    title: Text(
+                      (file['original_name'] ?? 'Unnamed file').toString(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
 
-              subtitle: Text(
-                "Converted: ${file['converted'] == 1 ? 'Yes' : 'No'} • "
-                "Embedded: ${file['embedded'] == 1 ? 'Yes' : 'No'}",
-              ),
+                    subtitle: Text(
+                      "Converted: ${file['converted'] == 1 ? 'Yes' : 'No'} • "
+                      "Embedded: ${file['embedded'] == 1 ? 'Yes' : 'No'}",
+                    ),
 
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.transform),
-                    tooltip: "Convert file",
-                    onPressed: () {
-                      //TODO: add conversion handler
-                      _addFile(file);
-                    },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.transform),
+                          tooltip: "Convert file",
+                          onPressed: () {
+                            //TODO: add conversion handler
+                            _addFile(file);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.memory),
+                          tooltip: "Embedd file",
+                          onPressed: () {
+                            //TODO: add embedd handler
+                            _addFile(file);
+                          },
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          tooltip: "Delete file",
+                          onPressed: () {
+                            _confirmDelete(file);
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.memory),
-                    tooltip: "Embedd file",
-                    onPressed: () {
-                      //TODO: add embedd handler
-                      _addFile(file);
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete),
-                    tooltip: "Delete file",
-                    onPressed: () {
-                      _confirmDelete(file);
-                    },
-                  ),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -205,7 +211,7 @@ class _DHomescreenState extends State<DHomescreen> {
   /// ───── ACTION HANDLERS ─────
 
   void _addFile(Map<String, dynamic> file) {
-    debugPrint("Add file: ${file['id']}");
+    print("Add file: ${file['id']}");
     // TODO: hook into bubble / workspace logic
   }
 
@@ -213,7 +219,7 @@ class _DHomescreenState extends State<DHomescreen> {
     showDialog(
       context: context,
       builder:
-          (_) => AlertDialog(
+          (dialogContext) => AlertDialog(
             title: const Text("Delete file"),
             content: Text(
               "Are you sure you want to delete "
@@ -221,12 +227,12 @@ class _DHomescreenState extends State<DHomescreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
                 child: const Text("Cancel"),
               ),
               TextButton(
                 onPressed: () {
-                  Navigator.pop(context);
+                  Navigator.of(dialogContext).pop(true);
                   _deleteFile(file);
                 },
                 child: const Text("Delete"),
@@ -237,10 +243,34 @@ class _DHomescreenState extends State<DHomescreen> {
   }
 
   Future<void> _deleteFile(Map<String, dynamic> file) async {
-    debugPrint("Deleting file: ${file['id']}");
-    // TODO: call delete endpoint
+    print("Deleting file: ${file['id']}");
+    try {
+      await KnowledgebaseApi.deleteFiles(
+        file['original_name'],
+        file['filepath'],
+        file['fingerprint'],
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+    }
     setState(() {
       _registry.remove(file);
     });
+  }
+
+  Future<void> _convertToMarkdown() async {
+    try {
+      await KnowledgebaseApi.convertMarkdown();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+    }
+  }
+
+  Future<void> _embeddFiles() async {
+    try {
+      await KnowledgebaseApi.embedFiles();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
+    }
   }
 }

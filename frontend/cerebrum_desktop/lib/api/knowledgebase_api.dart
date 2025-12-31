@@ -94,4 +94,24 @@ class KnowledgebaseApi {
     }
     throw Exception("Embedding failed");
   }
+
+  static Future<dynamic> deleteFiles(
+    String filename,
+    String filepath,
+    String fingerprint,
+  ) async {
+    //delete from file and from registry
+    final response = await http.delete(
+      Uri.parse("$knowledgebaseEndpoint/delete/"),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'filename': filename,
+        'filepath': filepath,
+        'fingerprint': fingerprint,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception("Failed to delete");
+    }
+  }
 }

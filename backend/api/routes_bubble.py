@@ -7,11 +7,12 @@ from typing import Any, Dict, List
 
 import jsonpatch
 import ulid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from agents.rose import RosePrompts
-from cerebrum_core.file_processor_inator import RetrieverInator
+from cerebrum_core.knowledgebase_inator import RetrieverInator
+from cerebrum_core.learning_center_inator import passive_analysis
 from cerebrum_core.model_inator import (
     ContentDiff,
     CreateStudyBubble,
@@ -27,6 +28,7 @@ from cerebrum_core.user_inator import (
     DEFAULT_EMBED_MODEL,
     ConfigManager,
 )
+from cerebrum_core.utils.cache_inator import AnalysisCacheInator
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
 from cerebrum_core.utils.note_util_inator import ArchiveInator, diff_collapser_inator
 
@@ -106,9 +108,9 @@ def calculate_version_increment(old_doc: dict, new_doc: dict) -> float:
 
     # ----- Decision -----
 
-    if added_chars > 250 or added_children > 10:
+    if added_chars > 125 or added_children > 10:
         return 1.0  # major bump
-    elif added_chars > 125 or added_children > 5:
+    elif added_chars > 75 or added_children > 5:
         return 0.1  # medium bump
     elif added_chars > 0:
         return 0.01  # minor bump
@@ -233,16 +235,19 @@ def create_note(bubble_id: str, note: NoteBase):
     note.content.document = ensure_valid_document(note.content.document)
 
     safe_title = note.title.replace(" ", "_")
-    filename = f"{safe_title}.json"
-    file_path = notes_dir / filename
     note_id = ulid.ulid()
+    filename = f"{note_id}.json"
+    file_path = notes_dir / filename
 
     # Avoid collisions
+    # Obsolete? because of uuids?
+    """
     counter = 1
     while file_path.exists():
         filename = f"{safe_title}_{counter}.json"
         file_path = notes_dir / filename
         counter += 1
+    """
 
     storage = NoteStorage(
         note_id=note_id,
@@ -303,30 +308,47 @@ async def debug_create_note(bubble_id: str, request: Request):
 
 # Update a note
 @bubble_router.put("/{bubble_id}/notes/update/{filename}", response_model=NoteOut)
-def update_note(bubble_id: str, filename: str, note: NoteBase):
+def update_note(
+    bubble_id: str,
+    filename: str,
+    note: NoteBase,
+    background_tasks: BackgroundTasks,
+):
     notes_dir = CerebrumPaths().get_notes_root(bubble_id)
     file_path = notes_dir / filename
+
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
-    # Load existing storage
-    stored_note_data = json.loads(file_path.read_text(encoding="utf-8"))
-    stored_note = NoteStorage(**stored_note_data)
+    # ------------------------------------------------------------------
+    # Load existing note
+    # ------------------------------------------------------------------
+    stored_data = json.loads(file_path.read_text(encoding="utf-8"))
+    stored_note = NoteStorage(**stored_data)
 
-    # Ensure document valid
+    # Ensure document validity
     note.content.document = ensure_valid_document(note.content.document)
 
-    # ---------- CREATE DIFFS -------------
-    # ---------- CONTENT DIFF ----------
+    old_doc = stored_note.content.document
+    new_doc = note.content.document
+
+    # ------------------------------------------------------------------
+    # Versioning decision
+    # ------------------------------------------------------------------
+    increment = calculate_version_increment(old_doc, new_doc)
+    is_created = stored_note.metadata.content_version == 0
+    is_major = increment >= 1.0
+
     old_content = stored_note.content.model_dump()
     new_content = note.content.model_dump()
-    version = stored_note.metadata.content_version
-    increment = calculate_version_increment(
-        old_doc=stored_note.content.document, new_doc=note.content.document
-    )
-
+    print(f"Contents equal: {old_content == new_content}")
+    print(f"Version increment: {increment}")
+    # ------------------------------------------------------------------
+    # CONTENT DIFF + VERSION BUMP
+    # ------------------------------------------------------------------
     if old_content != new_content:
         patch_ops = jsonpatch.make_patch(old_content, new_content).patch
+
         stored_note.history.content.append(
             ContentDiff(
                 version=stored_note.metadata.content_version,
@@ -334,71 +356,97 @@ def update_note(bubble_id: str, filename: str, note: NoteBase):
                 ops=patch_ops,
             )
         )
+        print()
 
-        version = int(version) + 1 if increment == 1 else version + increment
+        # Apply version bump
+        if is_major:
+            stored_note.metadata.content_version = (
+                int(stored_note.metadata.content_version) + 1
+            )
+        else:
+            stored_note.metadata.content_version += increment
 
         stored_note.content = note.content
         stored_note.metadata.content_hash = hash_obj(new_content)
 
-    # ---------- INK DIFF ----------
-    # TODO: revisit when ink has been incorporated
-    """
-    old_ink = [s.model_dump() for s in stored_note.ink]
-    new_ink = [s.model_dump() for s in note.ink or []]
-    if old_ink != new_ink:
-        # Simple full replace diff for now
-        ops = [{"op": "replace", "strokes": new_ink}]
-        stored_note.history.ink.append(
-            InkDiff(
-                version=stored_note.metadata.ink_version, ts=datetime.now(), ops=ops
-            )
-        )
-        # TODO: add major/minor version handlers
-        stored_note.metadata.ink_version += 1
-        stored_note.ink = note.ink or []
-        stored_note.metadata.ink_hash = hash_obj(new_ink)
-    """
-
-    # ----------------- COMPRESS DIFFS -------------------
+    # ------------------------------------------------------------------
+    # DIFF COMPRESSION
+    # ------------------------------------------------------------------
     stored_note = diff_collapser_inator(stored_note)
 
-    # Save updated note
-    file_path.write_text(stored_note.model_dump_json(indent=2), encoding="utf-8")
+    # ------------------------------------------------------------------
+    # SAVE NOTE
+    # ------------------------------------------------------------------
+    file_path.write_text(
+        stored_note.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
 
+    # ------------------------------------------------------------------
+    # 🚀 AUTOMATIC ANALYSIS TRIGGER (MAJOR BUMPS ONLY)
+    # ------------------------------------------------------------------
+    should_analyze = is_major or is_created
+    if should_analyze:
+        logger.info(
+            f"Major version bump detected for note {stored_note.note_id} "
+            f"(v{stored_note.metadata.content_version}) — scheduling analysis"
+        )
+
+        prompt = RosePrompts.get_prompt("rose_note_analyser")
+
+        if prompt:
+            cache_manager = AnalysisCacheInator(
+                bubble_id=bubble_id,
+                note_id=stored_note.note_id,
+            )
+
+            # Avoid duplicate scheduling
+            cache_info = cache_manager.get_cache_info()
+            if (
+                not cache_info
+                or cache_info["content_version"] != stored_note.metadata.content_version
+            ):
+                background_tasks.add_task(
+                    passive_analysis,
+                    note=stored_note,
+                    prompt=prompt,
+                    cache_manager=cache_manager,
+                )
+        else:
+            logger.warning("Analysis prompt not found — skipping analysis")
+
+    # ------------------------------------------------------------------
+    # RESPONSE
+    # ------------------------------------------------------------------
     return NoteOut(
         filename=filename,
-        ink=stored_note.ink,
         title=stored_note.title,
         content=stored_note.content,
+        ink=stored_note.ink,
         bubble_id=stored_note.bubble_id,
     )
 
 
+# ------------------------------------------------------------------
+# Rename a note
+# ------------------------------------------------------------------
+class RenamePayload(BaseModel):
+    title: str
+
+
 @bubble_router.put("/{bubble_id}/notes/rename/{filename}", response_model=NoteOut)
-def rename_note(bubble_id: str, filename: str, payload: NoteBase):
+def rename_note(bubble_id: str, filename: str, payload: RenamePayload):
     notes_dir = CerebrumPaths().get_notes_root(bubble_id)
-    old_path = notes_dir / filename
+    stored_note = notes_dir / filename
 
-    if not old_path.exists():
-        raise HTTPException(status_code=404, detail="Origincal note not found")
-
+    if not stored_note.exists():
+        raise HTTPException(404, "Note not found")
     # Load old note into memory
-    old_data = json.loads(old_path.read_text(encoding="utf-8"))
-    old_note = NoteStorage(**old_data)
-
+    note = NoteStorage(**json.loads(stored_note.read_text(encoding="utf-8")))
     # Capture payload data
-    old_note.title = payload.title
-    new_filename = f"{payload.title}.json"
-    new_path = notes_dir / new_filename
-
-    if new_path.exists():
-        raise HTTPException(status_code=409, detail="Target filename already exists")
-
-    # Write new note data to disk
-    new_path.write_text(old_note.model_dump_json(indent=2), encoding="utf-8")
-    old_path.unlink()
-
-    return NoteOut(**old_note.model_dump(), filename=new_filename)
+    note.title = payload.title
+    stored_note.write_text(note.model_dump_json(indent=2))
+    return NoteOut(**note.model_dump(), filename=stored_note.name)
 
 
 # Delete a note

@@ -1,3 +1,4 @@
+import subprocess
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -19,7 +20,6 @@ config_manager = ConfigManager()
 async def lifespan(app: FastAPI):
     cerebrum_paths = CerebrumPaths()
     cerebrum_paths.init_cerebrum_dirs()
-
     # SQL DBs necessary for file processing
     app.state.file_registry = FileRegisterInator()
     app.state.chunk_registry = ChunkRegisterInator()

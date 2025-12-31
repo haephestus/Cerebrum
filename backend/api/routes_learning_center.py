@@ -192,7 +192,7 @@ def get_analysis_status(bubble_id: str, filename: str):
     )
 
 
-@router_learn.delete("/analysis_cache/{bubble_id}/{filename}")
+@router_learn.delete("/invalidate_analysis_cache/{bubble_id}/{filename}")
 def invalidate_analysis_cache(bubble_id: str, filename: str):
     """
     Manually invalidate (delete) cached analysis for a note.
@@ -311,6 +311,23 @@ def generate_engram(
 # ============================================================================
 # CACHE MANAGEMENT (TODO)
 # ============================================================================
+@router_learn.get("/fetch/analysis")
+def get_cached_note_analysis(bubble_id: str, note_id: str, version: int) -> str | None:
+    """
+    Get cached analysis for a note.
+
+    TODO: Show:
+    - Total notes cached
+    - Cache hit rate
+    - Stale cache entries
+    - Storage used
+
+    Returns:
+        Cache analysis
+    """
+    cache_manager = AnalysisCacheInator(bubble_id=bubble_id, note_id=note_id)
+    cached_analysis = cache_manager.get_cached_analysis(content_version=version)
+    return cached_analysis
 
 
 @router_learn.get("/cache/stats/{bubble_id}")

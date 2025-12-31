@@ -51,7 +51,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         checkingStatus = false;
       });
     } catch (e) {
-      debugPrint("Error checking Ollama status: $e");
+      print("Error checking Ollama status: $e");
       setState(() {
         ollamaInstalled = false;
         ollamaRunning = false;
@@ -92,7 +92,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
       setState(() => loading = false);
     } catch (e) {
-      debugPrint("Error loading models: $e");
+      print("Error loading models: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -143,7 +143,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
           );
         }
       } catch (e) {
-        debugPrint("Download error: $e");
+        print("Download error: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -167,7 +167,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         );
       }
     } catch (e) {
-      debugPrint("Update error: $e");
+      print("Update error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -217,7 +217,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
           );
         }
       } catch (e) {
-        debugPrint("Download error: $e");
+        print("Download error: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -241,7 +241,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         );
       }
     } catch (e) {
-      debugPrint("Update error: $e");
+      print("Update error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

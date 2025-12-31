@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional
 
 import yaml
-from fastapi import HTTPException
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
@@ -113,22 +112,24 @@ class ArchiveInator:
         except Exception as e:
             print(f"Collection not found or error: {self.note.note_id} - {e}")
 
-    def archive_browser_inator(self, bubble_id):
-        note_file = CerebrumPaths().get_notes_root(bubble_id) / self.note.title
+    def archive_browser_inator(self, bubble_id) -> dict | None:
+        note_file = (
+            CerebrumPaths().get_notes_root(bubble_id) / f"{self.note.note_id}.json"
+        )
 
         if not Path(self.archives_path).exists():
-            raise HTTPException(404, f"No archive found for bubble:{bubble_id}")
+            return None
 
         if not note_file.exists():
-            raise HTTPException(
-                404, f"No note:{self.note.title} found for bubble:{bubble_id}"
+            print(
+                f" \n No note: {self.note.note_id}.json found for bubble: {bubble_id}",
             )
 
         raw_data = self._get_archives().get()
 
         versions = []
         for doc_content, metadata in zip(raw_data["documents"], raw_data["metadatas"]):
-            version = metadata.get("version", 0.0)
+            version = metadata.get("version", self.note.metadata.content_version)
             versions.append(
                 ArchivedNoteContent(
                     version=float(version),
@@ -217,6 +218,9 @@ class NoteToMarkdownInator:
     # ---------------- Helpers -----------------#
     def _extract_text(self, block):
         """Extracts linear text from delta[].insert"""
+        if not block:
+            return ""
+
         delta = block.get("data", {}).get("delta", [])
         text = ""
         for item in delta:
@@ -230,28 +234,32 @@ class NoteToMarkdownInator:
         """Converts Appflowy table -> markdown table."""
         rows = table_block["data"]["rowsLen"]
         cols = table_block["data"]["colsLen"]
-        cells = table_block["children"]
+        cells = table_block.get("children", [])
 
         matrix = [["" for _ in range(cols)] for _ in range(rows)]
 
         for cell in cells:
-            row = cell["data"]["rowPosition"]
-            col = cell["data"]["rowPosition"]
-            inner_block = cell["children"][0] if cell["children"] else None
-            matrix[row][col] = self._extract_text(inner_block) if inner_block else ""
+            data = cell.get("data", [])
+            row = data.get("rowPosition")
+            col = data.get("colPosition")
 
-        md_rows = []
+            # Defensive checks
+            if row is None or col is None:
+                continue
+            if row < 0 or row >= rows or col < 0 or col >= cols:
+                continue
 
-        # Header row
-        header = "| " + " | ".join(matrix[0]) + " |"
-        separator = "| " + " | ".join(["---"] * cols) + " |"
-        md_rows.append(header)
-        md_rows.append(separator)
+            inner = cell["children"][0] if cell.get("children") else None
+            matrix[row][col] = self._extract_text(inner)
+
+        md = []
+        md.append("| " + " | ".join(matrix[0]) + " |")
+        md.append("| " + " | ".join(["---"] * cols) + " |")
 
         for row in matrix[1:]:
-            md_rows.append("| " + " | ".join(row) + " |")
+            md.append("| " + " | ".join(row) + " |")
 
-        return "\n".join(md_rows)
+        return "\n".join(md)
 
 
 # Claude helped big time T_T (review it though)
@@ -321,6 +329,8 @@ class NoteAnalyserInator:
         """
         # Load archived data
         archived_data = self._load_archived_data()
+        if not archived_data:
+            return "No analysis for this note"
 
         # Check if note already archived
         if self.note.note_id not in archived_data:
@@ -369,13 +379,16 @@ class NoteAnalyserInator:
         # cache anaylisis
         return response
 
-    def _load_archived_data(self) -> dict:
+    def _load_archived_data(self) -> dict | None:
         """Load archived note data for this bubble."""
-        return ArchiveInator(
+        archive_manager = ArchiveInator(
             note=self.note,
             archives_path=str(self.archive_path),
             chunks=self.chunks,
-        ).archive_browser_inator(self.note.bubble_id)
+        )
+        if not archive_manager:
+            return None
+        return archive_manager.archive_browser_inator(self.note.bubble_id)
 
     def _archive_note(self) -> None:
         """Archive the current note with its chunks."""
