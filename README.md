@@ -1,8 +1,7 @@
 
 # Cerebrum
 
-#### Video Demo: <PASTE YOUR YOUTUBE / UNLISTED VIDEO URL HERE>
-
+#### Video Demo: https://youtu.be/d2a07zjdi3Y
 ---
 
 ## 1. Project Overview
