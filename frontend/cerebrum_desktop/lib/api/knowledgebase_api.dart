@@ -35,7 +35,6 @@ class KnowledgebaseApi {
 
     // Desktop platforms (Linux, macOS, Windows) use file paths
     if (file.path != null) {
-      print("Uploading from path: ${file.path}");
       request.files.add(
         await http.MultipartFile.fromPath(
           'file',
@@ -46,7 +45,6 @@ class KnowledgebaseApi {
     }
     // Web/mobile might use bytes
     else if (file.bytes != null) {
-      print("Uploading from bytes");
       request.files.add(
         http.MultipartFile.fromBytes('file', file.bytes!, filename: file.name),
       );
@@ -54,12 +52,8 @@ class KnowledgebaseApi {
       throw Exception("No file path or bytes available");
     }
 
-    print("Sending request to: $uri");
     final response = await request.send();
     final body = await response.stream.bytesToString();
-
-    print("Response status: ${response.statusCode}");
-    print("Response body: $body");
 
     if (response.statusCode == 200) {
       final decoded = jsonDecode(body);
@@ -73,32 +67,19 @@ class KnowledgebaseApi {
     throw Exception("Upload failed (${response.statusCode}): $body");
   }
 
-  // Trigger markdown conversion
-  static Future<Map<String, dynamic>> convertMarkdown() async {
+  static Future<dynamic> processFile(String fileFingerprint) async {
     final response = await http.post(
-      Uri.parse("$knowledgebaseEndpoint/markdowninator"),
+      Uri.parse("$knowledgebaseEndpoint/process-file/$fileFingerprint"),
     );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception("Failed to delete");
     }
-    throw Exception("Conversion failed");
-  }
-
-  // Trigger embedding
-  static Future<Map<String, dynamic>> embedFiles() async {
-    final response = await http.post(
-      Uri.parse("$knowledgebaseEndpoint/embeddinator"),
-    );
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    }
-    throw Exception("Embedding failed");
   }
 
   static Future<dynamic> deleteFiles(
     String filename,
     String filepath,
-    String fingerprint,
+    String fileFingerprint,
   ) async {
     //delete from file and from registry
     final response = await http.delete(
@@ -107,7 +88,7 @@ class KnowledgebaseApi {
       body: jsonEncode({
         'filename': filename,
         'filepath': filepath,
-        'fingerprint': fingerprint,
+        'file_fingerprint': fileFingerprint,
       }),
     );
     if (response.statusCode != 200) {

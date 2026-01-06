@@ -5,27 +5,25 @@ Complete knowledgebase routes with both file registry and vector store managemen
 import asyncio
 import json
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from cerebrum_core.knowledgebase_inator import (
-    EmbeddInator,
+from cerebrum_core.knowledgebase_inator import KnowledgebaseManager
+from cerebrum_core.utils.embedd_inator import EmbeddInator
+from cerebrum_core.utils.file_util_inator import CerebrumPaths
+from cerebrum_core.utils.markdown_handler_inator import (
     MarkdownChunker,
     MarkdownConverter,
-    VectorStoreManager,
 )
-from cerebrum_core.utils.file_util_inator import (
-    CerebrumPaths,
-    ChunkRegisterInator,
-    FileRegisterInator,
-)
+from cerebrum_core.utils.registry_inator import ChunkRegisterInator, FileRegisterInator
 
 router = APIRouter(prefix="/knowledgebase")
-archives_dir = CerebrumPaths().get_kb_archives()
-markdown_files_dir = CerebrumPaths().get_kb_artifacts()
-knowledgebase_dir = CerebrumPaths().get_kb_source_files()
+archives_dir = CerebrumPaths().kb_archives_path()
+markdown_files_dir = CerebrumPaths().kb_artifacts_path()
+knowledgebase_dir = CerebrumPaths().kb_source_files_path()
 
 
 # ========================================
@@ -52,19 +50,19 @@ def process_single_file_task(file_info: dict, file_registry: FileRegisterInator)
         # Step 2: Chunk Markdown
         chunker = MarkdownChunker()
         chunked_path = chunker.chunk(
-            markdown_path=markdown_path, doc_fingerprint=file_info["fingerprint"]
+            markdown_path=markdown_path, doc_fingerprint=file_info["file_fingerprint"]
         )
 
         # Step 3: Update file registry (mark as converted)
         file_registry.mark_converted_inator(
-            fingerprint=file_info["fingerprint"],
+            file_fingerprint=file_info["file_fingerprint"],
             domain=metadata.domain,
             subject=metadata.subject,
             sanitized_name=metadata.title,
         )
 
         # Step 4: Embed chunks
-        embedding_manager = EmbeddInator(fingerprint=file_info["fingerprint"])
+        embedding_manager = EmbeddInator(file_fingerprint=file_info["file_fingerprint"])
         embedding_manager.embed_from_chunked_markdown(
             chunked_markdown=chunked_path,
             collection_name=metadata.subject,
@@ -73,12 +71,14 @@ def process_single_file_task(file_info: dict, file_registry: FileRegisterInator)
         )
 
         # Step 5: Mark as embedded
-        file_registry.mark_embedded_inator(fingerprint=file_info["fingerprint"])
+        file_registry.mark_embedded_inator(
+            file_fingerprint=file_info["file_fingerprint"]
+        )
 
-        print(f"✓ Completed: {file_info['original_name']}")
+        print(f"Completed: {file_info['original_name']}")
 
     except Exception as e:
-        print(f"✗ Failed processing {file_info['original_name']}: {e}")
+        print(f"Failed processing {file_info['original_name']}: {e}")
         raise
 
 
@@ -103,21 +103,22 @@ def markdown_converter_task(
             # Chunk Markdown
             chunker = MarkdownChunker()
             chunked_path = chunker.chunk(
-                markdown_path=markdown_path, doc_fingerprint=file_info["fingerprint"]
+                markdown_path=markdown_path,
+                doc_fingerprint=file_info["chunk_fingerprint"],
             )
 
             # Update file registry
             file_registry.mark_converted_inator(
-                fingerprint=file_info["fingerprint"],
+                file_fingerprint=file_info["file_fingerprint"],
                 domain=metadata.domain,
                 subject=metadata.subject,
                 sanitized_name=metadata.title,
             )
 
-            print(f"✓ Converted & chunked: {file_info['original_name']}")
+            print(f"Converted & chunked: {file_info['original_name']}")
 
         except Exception as e:
-            print(f"✗ Failed for {file_info['original_name']}: {e}")
+            print(f"Failed for {file_info['original_name']}: {e}")
 
 
 def embedding_task(unembedded_files: list[dict], file_registry: FileRegisterInator):
@@ -140,7 +141,9 @@ def embedding_task(unembedded_files: list[dict], file_registry: FileRegisterInat
                 continue
 
             # Embed using byte-coordinate access
-            embedding_manager = EmbeddInator(fingerprint=file_info["fingerprint"])
+            embedding_manager = EmbeddInator(
+                file_fingerprint=file_info["file_fingerprint"],
+            )
             embedding_manager.embed_from_chunked_markdown(
                 chunked_markdown=chunked_path,
                 collection_name=subject,
@@ -149,11 +152,13 @@ def embedding_task(unembedded_files: list[dict], file_registry: FileRegisterInat
             )
 
             # Mark as embedded in registry
-            file_registry.mark_embedded_inator(fingerprint=file_info["fingerprint"])
-            print(f"✓ Embedded: {sanitized_name}")
+            file_registry.mark_embedded_inator(
+                file_fingerprint=file_info["file_fingerprint"]
+            )
+            print(f"Embedded: {sanitized_name}")
 
         except Exception as e:
-            print(f"✗ Failed embedding {file_info['sanitized_name']}: {e}")
+            print(f"Failed embedding {file_info['sanitized_name']}: {e}")
             print("Progress saved — will resume on next run.")
 
 
@@ -167,6 +172,13 @@ async def show_files(request: Request):
     """Show all source files in registry."""
     file_registry = request.app.state.file_registry
     return file_registry.show_all_inator() or []
+
+
+@router.get("/show/chunks")
+async def show_chunks(request: Request):
+    """Show all source files in registry."""
+    chunk_registry = request.app.state.chunk_registry
+    return chunk_registry.show_all_inator() or []
 
 
 @router.post("/upload")
@@ -209,9 +221,59 @@ async def upload_pdf(
     return response
 
 
-@router.post("/process-file/{fingerprint}")
+# batch embed and convert files
+@router.post("/process/batch")
+async def process_batch(
+    request: Request,
+    batch_size: int = 10,
+):
+    """
+    Immediate batch processing:
+    - N artifacts -> ONE chunked markdown
+    - Embed after conversion
+    - No background tasks
+    """
+
+    file_registry = request.app.state.file_registry
+    unconverted = file_registry.fetch_unconverted_file_inator()
+
+    if not unconverted:
+        return {
+            "message": "Nothing to process",
+            "count": 0,
+        }
+
+    batches = []
+    for i in range(0, len(unconverted), batch_size):
+        batches.append(unconverted[i : i + batch_size])
+
+    processed = 0
+
+    for batch in batches:
+        # 1️⃣ Convert → ONE markdown file
+        markdown_path = markdown_converter_task(
+            batch,
+            file_registry,
+        )
+
+        # 2️⃣ Embed ONLY AFTER conversion
+        if markdown_path:
+            embedding_task(
+                [markdown_path],
+                file_registry,
+            )
+            processed += 1
+
+    return {
+        "message": "Batch processing complete",
+        "batches_processed": processed,
+        "batch_size": batch_size,
+    }
+
+
+@router.post("/process-file/{file_fingerprint}")
 async def process_single_file(
-    request: Request, fingerprint: str, background_tasks: BackgroundTasks
+    request: Request, file_fingerprint: str, background_tasks: BackgroundTasks
 ):
     """
     Process a single file immediately (convert + embed).
@@ -222,20 +284,22 @@ async def process_single_file(
     file_registry = request.app.state.file_registry
 
     # Check if file exists
-    if not file_registry.check_inator(fingerprint):
+    if not file_registry.check_inator(file_fingerprint):
         raise HTTPException(status_code=404, detail="File not found")
 
     # Check if already processed
-    if file_registry.check_inator(fingerprint, "embedded"):
+    if file_registry.check_inator(file_fingerprint, "embedded"):
         return {
             "message": "File already processed",
-            "fingerprint": fingerprint,
+            "file_fingerprint": file_fingerprint,
             "status": "completed",
         }
 
     # Get file info
     all_files = file_registry.show_all_inator()
-    file_info = next((f for f in all_files if f["fingerprint"] == fingerprint), None)
+    file_info = next(
+        (f for f in all_files if f["file_fingerprint"] == file_fingerprint), None
+    )
 
     if not file_info:
         raise HTTPException(status_code=404, detail="File info not found")
@@ -245,14 +309,14 @@ async def process_single_file(
 
     return {
         "message": "File queued for processing",
-        "fingerprint": fingerprint,
+        "file_fingerprint": file_fingerprint,
         "status": "processing",
-        "progress_stream": f"/knowledgebase/stream-progress/{fingerprint}",
+        "progress_stream": f"/knowledgebase/stream-progress/{file_fingerprint}",
     }
 
 
-@router.get("/stream-progress/{fingerprint}")
-async def stream_progress(fingerprint: str):
+@router.get("/stream-progress/{file_fingerprint}")
+async def stream_progress(file_fingerprint: str):
     """
     Server-Sent Events (SSE) endpoint for real-time progress updates.
 
@@ -271,7 +335,7 @@ async def stream_progress(fingerprint: str):
         while True:
             try:
                 # Get embedding progress
-                progress = chunk_registry.get_embedding_progress(fingerprint)
+                progress = chunk_registry.get_embedding_progress(file_fingerprint)
 
                 # Only send update if progress changed
                 if progress["progress_pct"] != last_progress:
@@ -279,7 +343,7 @@ async def stream_progress(fingerprint: str):
 
                     # SSE format: "data: {json}\n\n"
                     data = {
-                        "fingerprint": fingerprint,
+                        "file_fingerprint": file_fingerprint,
                         "total": progress["total"],
                         "completed": progress["completed"],
                         "remaining": progress["remaining"],
@@ -314,8 +378,8 @@ async def stream_progress(fingerprint: str):
     )
 
 
-@router.get("/file-status/{fingerprint}")
-async def get_file_status(request: Request, fingerprint: str):
+@router.get("/file-status/{file_fingerprint}")
+async def get_file_status(request: Request, file_fingerprint: str):
     """
     Get current status of a file (polling alternative to SSE).
 
@@ -324,15 +388,15 @@ async def get_file_status(request: Request, fingerprint: str):
     file_registry = request.app.state.file_registry
     chunk_registry = ChunkRegisterInator()
 
-    if not file_registry.check_inator(fingerprint):
+    if not file_registry.check_inator(file_fingerprint):
         raise HTTPException(status_code=404, detail="File not found")
 
-    converted = file_registry.check_inator(fingerprint, "converted")
-    embedded = file_registry.check_inator(fingerprint, "embedded")
-    chunk_progress = chunk_registry.get_embedding_progress(fingerprint)
+    converted = file_registry.check_inator(file_fingerprint, "converted")
+    embedded = file_registry.check_inator(file_fingerprint, "embedded")
+    chunk_progress = chunk_registry.get_embedding_progress(file_fingerprint)
 
     return {
-        "fingerprint": fingerprint,
+        "file_fingerprint": file_fingerprint,
         "converted": converted,
         "embedded": embedded,
         "chunk_progress": chunk_progress,
@@ -343,8 +407,8 @@ async def get_file_status(request: Request, fingerprint: str):
 class DeletePayload(BaseModel):
     filename: str
     filepath: str
-    fingerprint: str
-    collection_name: str | None = None
+    file_fingerprint: str
+    collection_name: Optional[str] = None
 
 
 @router.delete("/delete/")
@@ -353,55 +417,25 @@ async def remove_source_file(request: Request, payload: DeletePayload):
     file_registry = request.app.state.file_registry
 
     # Remove from registry and filesystem
-    file_registry.remove_inator(payload.filename, payload.fingerprint, payload.filepath)
+    file_registry.remove_inator(
+        payload.filename, payload.file_fingerprint, payload.filepath
+    )
 
     # Remove from vector database across all collections
     try:
-        manager = VectorStoreManager()
-        count = manager.delete_by_fingerprint_all_collections(payload.fingerprint)
-        print(f"✓ Deleted {count} documents from vector stores")
+        manager = KnowledgebaseManager()
+        count = manager.delete_by_fingerprint_all_collections(payload.file_fingerprint)
+        print(f"Deleted {count} documents from vector stores")
     except Exception as e:
         print(f"Warning: Failed to delete from vector stores: {e}")
 
     return {"detail": "File removed from knowledgebase successfully"}
 
 
-@router.post("/markdowninator")
-async def convert_files(request: Request, background_task: BackgroundTasks):
-    """Queue unconverted files for markdown conversion."""
-    file_registry = request.app.state.file_registry
-    unconverted = file_registry.fetch_unconverted_file_inator()
-
-    if not unconverted:
-        return {"message": "No files to convert", "count": 0}
-
-    background_task.add_task(markdown_converter_task, unconverted, file_registry)
-
-    return {
-        "message": f"Queued {len(unconverted)} files for conversion",
-        "count": len(unconverted),
-    }
-
-
-@router.post("/embeddinator")
-async def embedd_files(request: Request, background_task: BackgroundTasks):
-    """Queue converted files for embedding."""
-    file_registry = request.app.state.file_registry
-    unembedded = file_registry.fetch_unembedded_file_inator()
-
-    if not unembedded:
-        return {"message": "No files to embed", "count": 0}
-
-    background_task.add_task(embedding_task, unembedded, file_registry)
-
-    return {
-        "message": f"Queued {len(unembedded)} files for embedding",
-        "count": len(unembedded),
-    }
-
-
 @router.post("/reset/{status}")
-async def reset_registry(request: Request, status: str, fingerprint: str | None = None):
+async def reset_registry(
+    request: Request, status: str, file_fingerprint: Optional[str]
+):
     """Reset conversion or embedding status in registry."""
     file_registry = request.app.state.file_registry
 
@@ -410,8 +444,9 @@ async def reset_registry(request: Request, status: str, fingerprint: str | None 
             status_code=400, detail="Status must be 'converted' or 'embedded'"
         )
 
-    count = file_registry.reset_inator(status, fingerprint)
+    count = file_registry.reset_inator(status, file_fingerprint)
 
+    # TODO: add method for clearing registry and cache
     return {"message": f"Reset {status} status", "affected_rows": count}
 
 
@@ -428,7 +463,7 @@ async def list_all_collections():
     Returns:
         List of collections with domain, subject, count, etc.
     """
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
     collections = manager.list_all_collections()
 
     return {
@@ -445,7 +480,7 @@ async def get_collection_details(domain: str, subject: str, collection_name: str
     Returns:
         Collection info with count, metadata, sample documents
     """
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
 
     try:
         info = manager.get_collection_info(collection_name, domain, subject)
@@ -457,7 +492,7 @@ async def get_collection_details(domain: str, subject: str, collection_name: str
 @router.get("/collections/{domain}/{subject}/{collection_name}/count")
 async def get_collection_count(domain: str, subject: str, collection_name: str):
     """Get document count for a specific collection."""
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
 
     try:
         store = manager.get_store(collection_name, domain, subject)
@@ -475,7 +510,7 @@ async def get_collection_count(domain: str, subject: str, collection_name: str):
 @router.delete("/collections/{domain}/{subject}/{collection_name}")
 async def delete_collection(domain: str, subject: str, collection_name: str):
     """Delete an entire collection."""
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
 
     try:
         manager.delete_collection(collection_name, domain, subject)
@@ -496,8 +531,8 @@ async def delete_collection(domain: str, subject: str, collection_name: str):
 
 class SearchRequest(BaseModel):
     query: str
-    domains: list[str] | None = None
-    subjects: list[str] | None = None
+    domains: Optional[list[str]]
+    subjects: Optional[list[str]]
     k: int = 5
 
 
@@ -515,7 +550,7 @@ async def search_collections(request: SearchRequest):
     Returns:
         List of matching documents with collection info
     """
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
 
     try:
         results = manager.search_across_collections(
@@ -535,7 +570,7 @@ async def search_collections(request: SearchRequest):
 
 
 @router.get("/search/fingerprint/{fingerprint}")
-async def find_by_fingerprint(fingerprint: str):
+async def find_by_fingerprint(file_fingerprint: str):
     """
     Find all documents with a specific fingerprint across all collections.
 
@@ -545,13 +580,13 @@ async def find_by_fingerprint(fingerprint: str):
     Returns:
         List of documents with collection info
     """
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
 
     try:
-        documents = manager.get_documents_by_fingerprint(fingerprint)
+        documents = manager.get_documents_by_fingerprint(file_fingerprint)
 
         return {
-            "fingerprint": fingerprint,
+            "file_fingerprint": file_fingerprint,
             "documents": documents,
             "count": len(documents),
         }
@@ -584,7 +619,7 @@ async def delete_by_metadata(request: DeleteByMetadataRequest):
         "metadata_filter": {"author": "Smith"}
     }
     """
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
 
     try:
         count = manager.delete_by_metadata(
@@ -603,21 +638,21 @@ async def delete_by_metadata(request: DeleteByMetadataRequest):
         raise HTTPException(status_code=500, detail=f"Delete failed: {e}")
 
 
-@router.delete("/documents/fingerprint/{fingerprint}")
-async def delete_by_fingerprint(fingerprint: str):
+@router.delete("/documents/delete/{file_fingerprint}")
+async def delete_by_fingerprint(file_fingerprint: str):
     """
     Delete all documents with a specific fingerprint across ALL collections.
 
     This is useful when removing a source document from the knowledgebase.
     """
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
 
     try:
-        count = manager.delete_by_fingerprint_all_collections(fingerprint)
+        count = manager.delete_by_fingerprint_all_collections(file_fingerprint)
 
         return {
             "message": "Documents deleted successfully",
-            "fingerprint": fingerprint,
+            "file_fingerprint": file_fingerprint,
             "total_deleted": count,
         }
     except Exception as e:
@@ -637,7 +672,7 @@ async def get_statistics():
     Returns:
         Total collections, documents, domains, subjects
     """
-    manager = VectorStoreManager()
+    manager = KnowledgebaseManager()
 
     collections = manager.list_all_collections()
 

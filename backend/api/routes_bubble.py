@@ -11,7 +11,6 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from agents.rose import RosePrompts
-from cerebrum_core.knowledgebase_inator import RetrieverInator
 from cerebrum_core.learning_center_inator import passive_analysis
 from cerebrum_core.model_inator import (
     ContentDiff,
@@ -28,9 +27,11 @@ from cerebrum_core.user_inator import (
     DEFAULT_EMBED_MODEL,
     ConfigManager,
 )
+from cerebrum_core.utils.archive_inator import AnalysisArchiveInator
 from cerebrum_core.utils.cache_inator import AnalysisCacheInator
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
-from cerebrum_core.utils.note_util_inator import ArchiveInator, diff_collapser_inator
+from cerebrum_core.utils.note_util_inator import diff_collapser_inator
+from cerebrum_core.utils.retrieve_inator import RetrieverInator
 
 bubble_router = APIRouter(prefix="/bubbles", tags=["Study Bubble API"])
 
@@ -123,7 +124,7 @@ def calculate_version_increment(old_doc: dict, new_doc: dict) -> float:
 
 @bubble_router.get("/", response_model=List[StudyBubble])
 def list_study_bubbles():
-    STUDY_BUBBLES_ROOT = CerebrumPaths().get_bubbles_root()
+    STUDY_BUBBLES_ROOT = CerebrumPaths().bubbles_root_dir()
     """
     List all study bubbles.
     """
@@ -149,7 +150,7 @@ def create_study_bubble(data: CreateStudyBubble) -> StudyBubble:
     Create a study bubble folder and info file.
     """
     bubble_id = data.name.replace(" ", "_").lower()
-    bubble = CerebrumPaths().get_bubble_path(bubble_id)
+    bubble = CerebrumPaths().bubble_path(bubble_id)
 
     if bubble.exists():
         raise HTTPException(status_code=400, detail="Bubble already exists")
@@ -180,7 +181,7 @@ def get_study_bubble(bubble_id: str) -> StudyBubble:
     Fetch a single study bubble's info.
     """
 
-    bubble_path = CerebrumPaths().get_bubble_path(bubble_id)
+    bubble_path = CerebrumPaths().bubble_path(bubble_id)
     info_file = bubble_path / "info.json"
 
     if not info_file.exists():
@@ -195,7 +196,7 @@ def delete_study_bubble(bubble_id: str):
     """
     Delete a bubble and its notes.
     """
-    bubble_path = CerebrumPaths().get_bubble_path(bubble_id)
+    bubble_path = CerebrumPaths().bubble_path(bubble_id)
 
     if not bubble_path.exists():
         raise HTTPException(status_code=404, detail="Study bubble not found")
@@ -212,7 +213,7 @@ def delete_study_bubble(bubble_id: str):
 # List notes
 @bubble_router.get("/{bubble_id}/notes", response_model=List[NoteOut])
 def list_notes_in_bubble(bubble_id: str):
-    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     notes = []
     for file in notes_dir.glob("*.json"):
         storage_data = json.loads(file.read_text(encoding="utf-8"))
@@ -231,7 +232,7 @@ def list_notes_in_bubble(bubble_id: str):
 # Create a new note
 @bubble_router.post("/{bubble_id}/create/notes", response_model=NoteOut)
 def create_note(bubble_id: str, note: NoteBase):
-    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     notes_dir.mkdir(parents=True, exist_ok=True)
     note.content.document = ensure_valid_document(note.content.document)
 
@@ -273,7 +274,7 @@ def create_note(bubble_id: str, note: NoteBase):
 # Get a single note
 @bubble_router.get("/{bubble_id}/notes/get/{filename}", response_model=NoteOut)
 def get_note(bubble_id: str, filename: str):
-    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     file_path = notes_dir / filename
 
     if not file_path.exists():
@@ -315,7 +316,7 @@ def update_note(
     note: NoteBase,
     background_tasks: BackgroundTasks,
 ):
-    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     file_path = notes_dir / filename
 
     if not file_path.exists():
@@ -437,7 +438,7 @@ class RenamePayload(BaseModel):
 
 @bubble_router.put("/{bubble_id}/notes/rename/{filename}", response_model=NoteOut)
 def rename_note(bubble_id: str, filename: str, payload: RenamePayload):
-    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     stored_note = notes_dir / filename
 
     if not stored_note.exists():
@@ -453,7 +454,7 @@ def rename_note(bubble_id: str, filename: str, payload: RenamePayload):
 # Delete a note
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
 def delete_note(bubble_id: str, filename: str):
-    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     filepath = notes_dir / filename
 
     if not filepath.exists():
@@ -461,7 +462,7 @@ def delete_note(bubble_id: str, filename: str):
 
     # TODO: delete note from the archive
     data = json.loads(filepath.read_text())
-    ArchiveInator(
+    AnalysisArchiveInator(
         note=NoteStorage(**data), archives_path=str(filepath)
     ).archive_cleaner_inator()
 
@@ -484,7 +485,7 @@ async def chat_in_bubble(
     """
     Chat inside a specific study bubble.
     """
-    archives_root = CerebrumPaths().get_kb_archives()
+    archives_root = CerebrumPaths().kb_archives_path()
     chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
     embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
     translation_prompt = RosePrompts.get_prompt("rose_query_translator")

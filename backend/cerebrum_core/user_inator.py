@@ -15,7 +15,7 @@ from cerebrum_core.utils.file_util_inator import CerebrumPaths
 OLLAMA_URL = "http://127.0.0.1:11434"
 LIBRARY_URL = "https://ollama.com/library"
 
-CONFIG_ROOT = CerebrumPaths().get_config_dir()
+CONFIG_ROOT = CerebrumPaths().config_root_dir()
 CONFIG_FILE = CONFIG_ROOT / "user_config.json"
 
 EMBED_PATTERN = re.compile(r"(embed|embedding)", re.IGNORECASE)

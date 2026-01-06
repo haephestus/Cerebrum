@@ -72,7 +72,7 @@ User query: {user_query}
 1. Rewrite the query as a precise, fact-seeking statement.
 2. If the query contains multiple ideas, decompose it into smaller subqueries.
 3. For each subquery:
-   - Assign a domain and subject ONLY from the provided available_stores list.
+   - Assign a domain and subject ONLY from the provided available_stores list, domain and subject are to be strings ONLY.
    - Use exact matches from the available stores; do NOT invent new domains or subjects.
    - If multiple matches are possible, choose the one that is most semantically relevant to the subquery.
    - If no exact match is found, select the subject that is closest in meaning; NEVER leave the subject or domain null, empty, or None.

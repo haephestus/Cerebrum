@@ -29,9 +29,9 @@ class AnalysisCacheInator:
     def __init__(self, bubble_id: str, note_id: str):
         self.bubble_id = bubble_id
         self.note_id = note_id
-        self.cache_dir = CerebrumPaths().get_cache_dir(bubble_id)
+        self.cache_dir = CerebrumPaths().analysis_cache_path(bubble_id)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_file = self.cache_dir / f"{note_id}.json"
+        self.cache_file = self.cache_dir / note_id
 
     def get_cached_analysis(self, content_version: float) -> Optional[str]:
         """
@@ -123,14 +123,12 @@ class RetrievalCacheInator:
 
     def __init__(
         self,
-        retrieved_docs: list[Document],
         note_id: str,
         bubble_id: str,
     ) -> None:
         self.note_id = note_id
         self.bubble_id = bubble_id
-        self.retrieved_docs = retrieved_docs
-        self.cache_path = CerebrumPaths().get_cache_dir(bubble_id)
+        self.cache_path = CerebrumPaths().analysis_cache_path(bubble_id)
         self.cache_path.mkdir(parents=True, exist_ok=True)
 
     def _get_cache(self) -> Chroma:
@@ -139,7 +137,6 @@ class RetrievalCacheInator:
         assert embedding_model is not None, "Embedding model not configured"
 
         return Chroma(
-            collection_name=self.bubble_id,
             persist_directory=str(self.cache_path),
             embedding_function=OllamaEmbeddings(model=embedding_model),
             collection_metadata={
@@ -148,16 +145,19 @@ class RetrievalCacheInator:
             },
         )
 
-    def cache_populator_inator(self) -> None:
+    def cache_populator_inator(
+        self,
+        retrieved_docs: list[Document] | None,
+    ) -> None:
         """
         Cache retrieved documents with metadata.
         """
-        if not self.retrieved_docs:
+        if not retrieved_docs:
             logger.warning(f"No documents to cache for note {self.note_id}")
             return
 
         cached_docs = []
-        for doc in self.retrieved_docs:
+        for doc in retrieved_docs:
             # Preserve original metadata and add cache metadata
             metadata = doc.metadata.copy() if doc.metadata else {}
             metadata.update(
@@ -180,7 +180,7 @@ class RetrievalCacheInator:
         except Exception as e:
             logger.error(f"Failed to cache documents: {e}")
 
-    def deterministic_cache_fetcher(self) -> Optional[list[Document]]:
+    def deterministic_fetcher(self) -> Optional[list[Document]]:
         """
         Fetch cached documents by exact note_id match.
 
@@ -190,8 +190,10 @@ class RetrievalCacheInator:
         try:
             data = self._get_cache().get(
                 where={
-                    "note_id": self.note_id,
-                    "bubble_id": self.bubble_id,
+                    "$and": [
+                        {"note_id": self.note_id},
+                        {"bubble_id": self.bubble_id},
+                    ]
                 }
             )
 
@@ -265,7 +267,7 @@ class AnalysisHistoryCache:
     """
 
     def __init__(self, bubble_id, in_memory: bool = False):
-        cache_dir = CerebrumPaths().get_cache_dir(bubble_id)
+        cache_dir = CerebrumPaths().analysis_cache_path(bubble_id)
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         db_path = ":memory:" if in_memory else str(cache_dir / "analysis_history.db")

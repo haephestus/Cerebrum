@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from langchain_core.callbacks import file
 from pydantic import BaseModel
 
 from agents.rose import RosePrompts
@@ -69,7 +70,7 @@ def run_passive_analysis(
         AnalysisResponse with status and analysis (if cached)
     """
     # Load note
-    note_path = CerebrumPaths().get_note_path(bubble_id, filename)
+    note_path = CerebrumPaths().note_path(bubble_id, filename)
 
     if not note_path.exists():
         raise HTTPException(status_code=404, detail=f"Note not found: {filename}")
@@ -90,7 +91,7 @@ def run_passive_analysis(
         cached_analysis = cache_manager.get_cached_analysis(current_version)
 
         if cached_analysis:
-            logger.info(f"✓ Cache HIT for note {note.note_id} v{current_version}")
+            logger.info(f"Cache HIT for note {note.note_id} v{current_version}")
             return AnalysisResponse(
                 status="completed",
                 cached=True,
@@ -152,7 +153,7 @@ def get_analysis_status(bubble_id: str, filename: str):
         CacheStatusResponse with cache metadata
     """
     # Load note
-    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     note_path = notes_dir / filename
 
     if not note_path.exists():
@@ -210,7 +211,7 @@ def invalidate_analysis_cache(bubble_id: str, filename: str):
         Success message
     """
     # Load note to get note_id
-    notes_dir = CerebrumPaths().get_notes_root(bubble_id)
+    notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     note_path = notes_dir / filename
 
     if not note_path.exists():

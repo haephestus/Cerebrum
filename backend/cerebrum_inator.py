@@ -7,11 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api import routes_bubble, routes_knowledgebase, routes_learning_center, routes_user
 from cerebrum_core.user_inator import ConfigManager
-from cerebrum_core.utils.file_util_inator import (
-    CerebrumPaths,
-    ChunkRegisterInator,
-    FileRegisterInator,
-)
+from cerebrum_core.utils.file_util_inator import CerebrumPaths
+from cerebrum_core.utils.registry_inator import ChunkRegisterInator, FileRegisterInator
 
 config_manager = ConfigManager()
 

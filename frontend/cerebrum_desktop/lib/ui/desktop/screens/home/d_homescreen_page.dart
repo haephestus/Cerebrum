@@ -174,19 +174,10 @@ class _DHomescreenState extends State<DHomescreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.transform),
-                          tooltip: "Convert file",
-                          onPressed: () {
-                            //TODO: add conversion handler
-                            _addFile(file);
-                          },
-                        ),
-                        IconButton(
                           icon: const Icon(Icons.memory),
-                          tooltip: "Embedd file",
+                          tooltip: "Process File",
                           onPressed: () {
-                            //TODO: add embedd handler
-                            _addFile(file);
+                            _processFile(file["file_fingerprint"]);
                           },
                         ),
                         IconButton(
@@ -211,7 +202,6 @@ class _DHomescreenState extends State<DHomescreen> {
   /// ───── ACTION HANDLERS ─────
 
   void _addFile(Map<String, dynamic> file) {
-    print("Add file: ${file['id']}");
     // TODO: hook into bubble / workspace logic
   }
 
@@ -243,12 +233,11 @@ class _DHomescreenState extends State<DHomescreen> {
   }
 
   Future<void> _deleteFile(Map<String, dynamic> file) async {
-    print("Deleting file: ${file['id']}");
     try {
       await KnowledgebaseApi.deleteFiles(
         file['original_name'],
         file['filepath'],
-        file['fingerprint'],
+        file['file_fingerprint'],
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
@@ -258,17 +247,9 @@ class _DHomescreenState extends State<DHomescreen> {
     });
   }
 
-  Future<void> _convertToMarkdown() async {
+  Future<void> _processFile(String fileFingerprint) async {
     try {
-      await KnowledgebaseApi.convertMarkdown();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
-    }
-  }
-
-  Future<void> _embeddFiles() async {
-    try {
-      await KnowledgebaseApi.embedFiles();
+      await KnowledgebaseApi.processFile(fileFingerprint);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
     }

@@ -3,9 +3,9 @@ import logging
 
 from agents.rose import RosePrompts
 from cerebrum_core.model_inator import NoteStorage
+from cerebrum_core.utils.analyser_inator import NoteAnalyserInator
 from cerebrum_core.utils.cache_inator import AnalysisCacheInator
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
-from cerebrum_core.utils.note_util_inator import NoteAnalyserInator
 
 logger = logging.getLogger(__name__)
 
@@ -70,12 +70,8 @@ def passive_analysis(
             f"Starting passive analysis for note {note.note_id} v{note.metadata.content_version}"
         )
 
-        notes_path = CerebrumPaths().get_notes_root(note.bubble_id)
-
         # Initialize analyzer (this chunks and archives the note)
-        analyzer = NoteAnalyserInator(
-            note=note, notes_path=notes_path, generate_artifact=True
-        )
+        analyzer = NoteAnalyserInator(note=note, generate_artifact=True)
 
         logger.info(
             f"Initialized analyzer: {len(analyzer.chunks)} chunks, "
@@ -113,10 +109,8 @@ def passive_analysis(
 
 
 def active_analysis(bubble_id: str, filename: str):
-    if not filename.endswith(".json"):
-        filename = f"{filename}.json"
 
-    stored_note = CerebrumPaths().get_note_path(bubble_id=bubble_id, filename=filename)
+    stored_note = CerebrumPaths().note_path(bubble_id=bubble_id, filename=filename)
     note = NoteStorage(**json.loads(stored_note.read_text(encoding="utf-8")))
     cache_manager = AnalysisCacheInator(bubble_id, filename)
 
@@ -126,15 +120,11 @@ def active_analysis(bubble_id: str, filename: str):
 
     try:
         logger.info(
-            f"Starting passive analysis for note {note.note_id} v{note.metadata.content_version}"
+            f"Starting active analysis for note {note.note_id} v{note.metadata.content_version}"
         )
-
-        notes_path = CerebrumPaths().get_notes_root(note.bubble_id)
 
         # Initialize analyzer (this chunks and archives the note)
-        analyzer = NoteAnalyserInator(
-            note=note, notes_path=notes_path, generate_artifact=True
-        )
+        analyzer = NoteAnalyserInator(note=note, generate_artifact=True)
 
         logger.info(
             f"Initialized analyzer: {len(analyzer.chunks)} chunks, "
@@ -144,7 +134,7 @@ def active_analysis(bubble_id: str, filename: str):
         # Run analysis (retrieves from KB and generates response)
         analysis_result = analyzer.analyser_inator(prompt=prompt, top_k_chunks=5)
         if not analysis_result:
-            print("no analysis for this note, analysing now")
+            logger.info("No analysis for this note")
 
         logger.info(
             f"Completed analysis for note {note.note_id} v{note.metadata.content_version}"
