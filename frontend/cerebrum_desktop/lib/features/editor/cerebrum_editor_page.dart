@@ -5,14 +5,14 @@ import 'package:cerebrum_app/api/learning_center_api.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_drawing_board/flutter_drawing_board.dart';
 import 'package:flutter_drawing_board/paint_contents.dart';
-import 'helpers/note_editor_commands.dart';
+import 'helpers/editor_commands.dart';
 
-class NoteEditorPage extends StatefulWidget {
+class CerebrumEditorPage extends StatefulWidget {
   final Map<String, dynamic> note;
   final Map<String, dynamic>? initialTextJson;
   final List<Map<String, dynamic>>? initialInkJson;
 
-  const NoteEditorPage({
+  const CerebrumEditorPage({
     super.key,
     required this.note,
     this.initialTextJson,
@@ -20,10 +20,10 @@ class NoteEditorPage extends StatefulWidget {
   });
 
   @override
-  State<NoteEditorPage> createState() => _NoteEditorPageState();
+  State<CerebrumEditorPage> createState() => _CerebrumEditorPageState();
 }
 
-class _NoteEditorPageState extends State<NoteEditorPage> {
+class _CerebrumEditorPageState extends State<CerebrumEditorPage> {
   late EditorState _editorState;
   late DrawingController _drawingController;
 

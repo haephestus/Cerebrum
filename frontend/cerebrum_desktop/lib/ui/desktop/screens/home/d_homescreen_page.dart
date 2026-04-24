@@ -1,3 +1,8 @@
+import 'package:cerebrum_app/ui/desktop/screens/home/file_library.dart';
+import 'package:cerebrum_app/ui/desktop/screens/home/notes.dart';
+import 'package:cerebrum_app/ui/desktop/screens/home/quizes.dart';
+import 'package:cerebrum_app/ui/desktop/screens/home/suggested_reading.dart';
+import 'package:cerebrum_app/ui/desktop/screens/home/tasks.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum_app/api/knowledgebase_api.dart';
 
@@ -81,52 +86,23 @@ class _DHomescreenState extends State<DHomescreen> {
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// ───── TOP HALF ─────
-            Expanded(
-              flex: 1,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Upcoming quizzes",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text("Results from last quiz"),
-                  const SizedBox(height: 24),
-
-                  const Text(
-                    "Add file to knowledgebase",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-
-                  ElevatedButton(
-                    onPressed: _uploading ? null : _handleUpload,
-                    child:
-                        _uploading
-                            ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : const Text("Upload PDF"),
-                  ),
-
-                  if (_status != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(_status!),
-                    ),
-                ],
-              ),
+            SizedBox(height: 100, width: double.infinity, child: Tasks()),
+            Row(
+              children: [
+                Expanded(flex: 2, child: SizedBox(height: 400, child: Notes())),
+                Expanded(child: SizedBox(height: 400, child: Quizes())),
+              ],
             ),
-
-            const Divider(),
-
-            /// ───── BOTTOM HALF ─────
-            Expanded(flex: 1, child: _buildRegistry()),
+            Row(
+              children: [
+                Expanded(child: SizedBox(height: 400, child: FileLibrary())),
+                Expanded(
+                  child: SizedBox(height: 400, child: SuggestedReading()),
+                ),
+              ],
+            ),
           ],
         ),
       ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cerebrum_app/api/bubbles_api.dart';
-import 'package:cerebrum_app/features/editor/note_editor_page.dart';
+import 'package:cerebrum_app/features/editor/cerebrum_editor_page.dart';
 import 'package:cerebrum_app/ui/desktop/widgets/editable_title.dart';
 
 class DStudyBubblePage extends StatefulWidget {
@@ -128,7 +128,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
           context,
           MaterialPageRoute(
             builder:
-                (_) => NoteEditorPage(
+                (_) => CerebrumEditorPage(
                   note: newNote,
                   initialTextJson: newNote['content'],
                   initialInkJson: List<Map<String, dynamic>>.from(
@@ -300,7 +300,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => NoteEditorPage(note: noteToEdit),
+                          builder: (_) => CerebrumEditorPage(note: noteToEdit),
                         ),
                       ).then((_) {
                         // Reload notes when returning from editor
