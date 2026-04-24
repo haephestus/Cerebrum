@@ -9,19 +9,16 @@ from langchain_ollama import OllamaEmbeddings
 from langchain_ollama.llms import OllamaLLM
 
 from agents.rose import RosePrompts
+from cerebrum_core.constants import DEFAULT_CHAT_MODEL, DEFAULT_EMBED_MODEL
 from cerebrum_core.model_inator import ArchivedNote, NoteStorage, TranslatedQuery
-from cerebrum_core.user_inator import (
-    DEFAULT_CHAT_MODEL,
-    DEFAULT_EMBED_MODEL,
-    ConfigManager,
-)
+from cerebrum_core.user_inator import ConfigManager
 from cerebrum_core.utils.archive_inator import AnalysisArchiveInator
 from cerebrum_core.utils.cache_inator import RetrievalCacheInator
 from cerebrum_core.utils.file_util_inator import (
     CerebrumPaths,
     knowledgebase_index_inator,
 )
-from cerebrum_core.utils.note_util_inator import NoteToMarkdownInator
+from cerebrum_core.utils.note_util_inator import NoteChunkerInator, NoteToMarkdownInator
 
 
 # Claude helped big time T_T (review it though)
@@ -68,44 +65,30 @@ class NoteAnalyserInator:
         self.embedding_model = config.models.embedding_model or DEFAULT_EMBED_MODEL
         self.chat_model = config.models.chat_model or DEFAULT_CHAT_MODEL
 
-        # WARN: TO GO
         # Initialize on creation
         self._initialize()
 
     def _initialize(self) -> None:
-        """Initialize chunks and translations on instantiation."""
-        # WARN: TO GO
+        pass
 
     def analyser_inator(self, prompt: str, top_k_chunks: int = 5) -> str:
-        """
-        Main analysis method. Analyzes note content against knowledge base.
-
-        Args:
-            prompt: Analysis prompt template with placeholders for:
-                    {archived_data}, {current_note}, {context}
-            top_k_chunks: Number of top chunks to use for context
-
-        Returns:
-            LLM analysis response
-        """
         filename = self.note.note_id
-        # Load archived data
         archived_data = self._load_archived_data() or {}
-        if not archived_data:
-            logging.warning("No archived data found")
 
-        # Check if note already archived
         if filename not in archived_data.keys():
             logging.info(f"Note {self.note.note_id} not in archive, will archive")
             self._archive_note()
         else:
             logging.info(f"Note {self.note.note_id} found in archive")
 
-        # IMPORTANT: Construct routes FIRST before retrieval
+        # 1. Translate chunks → queries
+        self.translation_results = self._note_to_query()
+        logging.info(f"Translated {len(self.translation_results)} queries")
+
+        # 2. Build routes from translated queries
         self._constructor_inator()
         logging.info(f"Constructed {len(self.constructed_query['routes'])} routes")
 
-        # Check if we have any routes
         if not self.constructed_query["routes"]:
             logging.warning("No valid routes constructed - cannot retrieve documents")
             return "No valid knowledge base paths found for this note"
@@ -143,7 +126,13 @@ class NoteAnalyserInator:
         logging.info(f"Built context with {len(context_text)} characters")
 
         # Prepare note content
+        # read note content from caches instead
+        # chunk by chunk analysis can happend at this point
         flattened_note = NoteToMarkdownInator().flatten(self.note.content)
+        NoteChunkerInator().chunk_markdown(
+            markdown_text=flattened_note, note_id=self.note.note_id
+        )
+        logging.info("Notes chunked successfully")
 
         # Generate analysis
         final_prompt = prompt.format(
@@ -170,7 +159,43 @@ class NoteAnalyserInator:
         return archive_manager.archive_browser_inator(self.note.bubble_id)
 
     def _archive_note(self) -> None:
-        """Archive the current note with its chunks."""
+        if not self.chunks:
+            flattened = NoteToMarkdownInator().flatten(self.note.content)
+            _, raw_chunks = NoteChunkerInator().chunk(
+                flattened_note=flattened,
+                note_id=self.note.note_id,
+                bubble_id=self.note.bubble_id,
+            )
+
+            # Normalize metadata keys for archiving
+            self.chunks = [
+                Document(
+                    page_content=chunk.page_content,
+                    metadata={
+                        "note_id": self.note.note_id,
+                        "chunk_id": chunk.metadata.get("chunk_index"),
+                        "fingerprint": chunk.metadata.get("chunk_fingerprint")
+                        or chunk.metadata.get("fingerprint"),
+                        "header": chunk.metadata.get("header", ""),
+                        "generated_at": None,
+                        "header_level": next(
+                            (
+                                v
+                                for k, v in chunk.metadata.items()
+                                if k.startswith("header_")
+                            ),
+                            None,
+                        ),
+                        "content_version": self.note.metadata.content_version,
+                    },
+                )
+                for chunk in raw_chunks
+            ]
+
+        if not self.chunks:
+            logging.warning(f"No chunks for note {self.note.note_id}, skipping archive")
+            return
+
         AnalysisArchiveInator(
             note=self.note,
             archives_path=str(self.archive_path),
@@ -223,7 +248,7 @@ class NoteAnalyserInator:
         if not translation_prompt_template:
             raise ValueError("Prompt 'rose_note_to_query' not found in RosePrompts")
 
-        available_stores = knowledgebase_index_inator(Path(self.kb_archives))
+        available_stores, _ = knowledgebase_index_inator(Path(self.kb_archives))
         translated_queries: list[TranslatedQuery] = []
 
         for chunk in self.chunks:
@@ -239,8 +264,8 @@ class NoteAnalyserInator:
 
                 # LOG THE FULL RAW OUTPUT
                 logging.info("=" * 80)
-                logging.info("CHUNK {chunk.metadata['chunk_id']} RAW LLM OUTPUT:")
-                logging.info("{raw_output}")
+                logging.info(f"CHUNK {chunk.metadata['chunk_id']} RAW LLM OUTPUT:")
+                logging.info(f"{raw_output}")
                 logging.info("=" * 80)
 
                 parsed_query = self._parse_llm_json_output(raw_output)
@@ -252,10 +277,10 @@ class NoteAnalyserInator:
                 # Add chunk metadata
                 parsed_query.update(
                     {
-                        "chunk_id": chunk.metadata["chunk_id"],
-                        "chunk_fingerprint": chunk.metadata["fingerprint"],
-                        "header": chunk.metadata["header"],
-                        "header_level": chunk.metadata["header_level"],
+                        "chunk_id": chunk.metadata.get("chunk_id"),
+                        "chunk_fingerprint": chunk.metadata.get("fingerprint"),
+                        "header": chunk.metadata.get("header", ""),
+                        "header_level": chunk.metadata.get("header_level"),
                     }
                 )
 
@@ -280,34 +305,47 @@ class NoteAnalyserInator:
         return translated_queries
 
     def _constructor_inator(self) -> dict[str, Any]:
-        """
-        Construct query routes from translated queries.
-
-        Returns:
-            Dictionary with validated routes
-        """
         available_stores, _ = knowledgebase_index_inator(Path(self.kb_archives))
 
-        # Build valid path set
-        valid_paths = set()
+        # DEBUG
+        logging.info(f"available_stores raw: {available_stores}")
+
+        # Cartesian product (old/wrong)
+        cartesian_paths = set()
         for domain in available_stores["domains"]:
             for subject in available_stores["subjects"]:
-                valid_paths.add((domain, subject))
+                cartesian_paths.add((domain, subject))
+        logging.info(f"Cartesian paths (OLD): {cartesian_paths}")
 
-        # Construct routes
+        # Zip pairs (new/correct)
+        zip_paths = set(
+            zip(
+                available_stores["domains"],
+                available_stores["subjects"],
+            )
+        )
+        logging.info(f"Zip paths (NEW): {zip_paths}")
+
+        # Use the correct one
+        valid_paths = zip_paths
+
+        seen_routes = set()
+
+        # After building valid_paths, deduplicate routes by (domain, subject) only
+        # One route per unique collection — let MMR handle diversity within it
+        seen_collections: set[tuple] = set()
+
         for query in self.translation_results:
             for route in query.subqueries:
                 if not route.domain or not route.subject:
-                    logging.warning(
-                        f"Skipping subquery with missing domain/subject: {route}"
-                    )
+                    continue
+                if (route.domain, route.subject) not in valid_paths:
                     continue
 
-                if (route.domain, route.subject) not in valid_paths:
-                    logging.warning(
-                        f"Invalid path ({route.domain}, {route.subject}), skipping"
-                    )
+                collection_key = (route.domain, route.subject)
+                if collection_key in seen_collections:
                     continue
+                seen_collections.add(collection_key)
 
                 path = self.kb_archives / route.domain / route.subject
                 self.constructed_query["routes"].append(
@@ -318,20 +356,14 @@ class NoteAnalyserInator:
                         "subject": route.subject,
                     }
                 )
-
-        logging.info(f"Constructed {len(self.constructed_query['routes'])} routes")
+                logging.info(
+                    f"Constructed {len(self.constructed_query['routes'])} unique routes"
+                )
         return self.constructed_query
 
     def _retrieve_inator(self, k: int = 3) -> list[Document]:
-        """
-        Retrieve relevant documents from knowledge base.
+        seen_content: set[str] = set()
 
-        Args:
-            k: Number of documents to retrieve per query
-
-        Returns:
-            List of retrieved document sets
-        """
         for route in self.constructed_query["routes"]:
             try:
                 store = Chroma(
@@ -339,19 +371,20 @@ class NoteAnalyserInator:
                     persist_directory=route["path"],
                     embedding_function=OllamaEmbeddings(model=self.embedding_model),
                 )
-
                 retriever = store.as_retriever(
                     search_type="mmr", search_kwargs={"k": k, "fetch_k": 15}
                 )
-
                 results = retriever.invoke(route["subquery"].text)
-                for result in results:
-                    self.retrieved_docs.append(result)
+
+                new_docs = [d for d in results if d.page_content not in seen_content]
+                for doc in new_docs:
+                    seen_content.add(doc.page_content)
+                    self.retrieved_docs.append(doc)
 
                 logging.info(
-                    f"Retrieved {len(results)} docs for {route['domain']}/{route['subject']}"
+                    f"Retrieved {len(new_docs)} new docs (of {len(results)}) "
+                    f"for {route['domain']}/{route['subject']}"
                 )
-
             except Exception as e:
                 logging.error(f"Failed to retrieve from {route['path']}: {e}")
                 continue

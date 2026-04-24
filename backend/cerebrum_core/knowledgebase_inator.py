@@ -8,6 +8,10 @@ from langchain_ollama import OllamaEmbeddings
 
 from cerebrum_core.user_inator import ConfigManager
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
+from cerebrum_core.utils.markdown_handler_inator import MarkdownChunker
+from cerebrum_core.utils.registry.file_chunk_registry_inator import (
+    FileChunkRegisterInator,
+)
 
 os.makedirs("./logs", exist_ok=True)
 logging.basicConfig(
@@ -353,3 +357,27 @@ class KnowledgebaseManager:
 
         logger.info(f"Total deleted across all collections: {total_deleted}")
         return total_deleted
+
+
+class FileMarkdownChunker(MarkdownChunker):
+    """
+    Chunks markdown files from knowledgebase
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.file_chunk_registry = FileChunkRegisterInator()
+
+    def chunk(self, markdown_path: Path, file_fingerprint: str) -> Path:
+        markdown_text = markdown_path.read_text(encoding="utf-8")
+
+        annotated_md, registry_rows, _ = self.chunk_markdown(
+            markdown_text,
+            file_fingerprint=file_fingerprint,
+        )
+
+        chunked_path = markdown_path.with_name(markdown_path.stem + ".chunked.md")
+        chunked_path.write_text(annotated_md, encoding="utf-8")
+
+        self.file_chunk_registry.register_chunks(registry_rows)
+        return chunked_path

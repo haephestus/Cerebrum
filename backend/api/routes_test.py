@@ -18,14 +18,14 @@ def get_note_cache(bubble_id: str, note_id: str):
 # convert one file at a time
 @router_test.post("/markdowninator")
 async def convert_files(
-    file_fingerprint: str, request: Request, background_task: BackgroundTasks
+    note_id: str, request: Request, background_task: BackgroundTasks
 ):
     """Queue unconverted files for markdown conversion."""
     file_registry = request.app.state.file_registry
     unconverted = file_registry.fetch_unconverted_file_inator()
 
-    if file_fingerprint not in unconverted:
-        return {"message": f"File: {file_fingerprint} already converted", "count": 0}
+    if note_id not in unconverted:
+        return {"message": f"File: {note_id} already converted", "count": 0}
 
     background_task.add_task(markdown_converter_task, unconverted, file_registry)
 

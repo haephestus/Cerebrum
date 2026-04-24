@@ -5,12 +5,7 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
 
-from cerebrum_core.model_inator import (
-    ArchivedNote,
-    ArchivedNoteContent,
-    NoteContent,
-    NoteStorage,
-)
+from cerebrum_core.model_inator import ArchivedNote, ArchivedNoteContent, NoteStorage
 from cerebrum_core.user_inator import ConfigManager
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
 

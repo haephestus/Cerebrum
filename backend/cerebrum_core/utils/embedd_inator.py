@@ -1,5 +1,4 @@
 import hashlib
-import json
 import logging
 import os
 from pathlib import Path
@@ -7,7 +6,9 @@ from pathlib import Path
 from langchain_core.documents import Document
 
 from cerebrum_core.knowledgebase_inator import KnowledgebaseManager
-from cerebrum_core.utils.registry_inator import ChunkRegisterInator
+from cerebrum_core.utils.registry.file_chunk_registry_inator import (
+    FileChunkRegisterInator,
+)
 
 os.makedirs("./logs", exist_ok=True)
 logging.basicConfig(
@@ -27,9 +28,10 @@ class EmbeddInator:
     Use this when you have a specific document to embed.
     """
 
-    def __init__(self, file_fingerprint: str):
+    def __init__(self, original_name: str, file_fingerprint: str):
+        self.original_name = original_name
         self.file_fingerprint = file_fingerprint
-        self.registry = ChunkRegisterInator()
+        self.registry = FileChunkRegisterInator()
         self.vector_manager = KnowledgebaseManager()
 
     def embed_from_chunked_markdown(
@@ -83,6 +85,7 @@ class EmbeddInator:
             ).hexdigest()
 
             doc_metadata = {
+                "original_name": self.original_name,
                 "file_fingerprint": self.file_fingerprint,
                 "chunk_fingerprint": chunk_fingerprint,
                 "chunk_index": record.chunk_index,

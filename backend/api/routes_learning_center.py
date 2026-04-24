@@ -2,8 +2,7 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
-from langchain_core.callbacks import file
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from agents.rose import RosePrompts
@@ -41,6 +40,36 @@ class CacheStatusResponse(BaseModel):
 
 
 # ============================================================================
+# ACTIVE ANALYSIS (TODO)
+# ============================================================================
+
+
+@router_learn.post("/active_analysis/{bubble_id}/{filename}")
+def run_active_analysis(request: Request, bubble_id: str, filename: str):
+    """
+    Run user-directed analysis with a specific question/prompt.
+
+    TODO: Implement interactive analysis where user asks specific questions
+    about their notes (e.g., "What are the key concepts?" or
+    "Generate practice questions from this section")
+
+    Args:
+        bubble_id: ID of the study bubble
+        filename: Note filename
+        user_query: User's specific question/request
+
+    Returns:
+        Analysis result tailored to user query
+    """
+
+    result = active_analysis(bubble_id, filename)
+    request.app.state.note_registry.mark_analysed_inator(
+        note_id=filename.strip(".json")
+    )
+    return {"status": "Success", "result": result}
+
+
+# ============================================================================
 # PASSIVE ANALYSIS - WITH CACHING
 # ============================================================================
 
@@ -49,6 +78,7 @@ class CacheStatusResponse(BaseModel):
     "/passive_analysis/{bubble_id}/{filename}", response_model=AnalysisResponse
 )
 def run_passive_analysis(
+    request: Request,
     bubble_id: str,
     filename: str,
     background_tasks: BackgroundTasks,
@@ -117,8 +147,12 @@ def run_passive_analysis(
     logger.info(f"Scheduling analysis for note {note.note_id} v{current_version}")
 
     background_tasks.add_task(
-        passive_analysis, note=note, prompt=prompt, cache_manager=cache_manager
+        passive_analysis,
+        note=note,
+        prompt=prompt,
+        cache_manager=cache_manager,
     )
+    request.app.state.note_registry.mark_analysed_inator(note_id=note.note_id)
 
     return AnalysisResponse(
         status="scheduled",
@@ -233,32 +267,6 @@ def invalidate_analysis_cache(bubble_id: str, filename: str):
         "note_id": note.note_id,
         "bubble_id": bubble_id,
     }
-
-
-# ============================================================================
-# ACTIVE ANALYSIS (TODO)
-# ============================================================================
-
-
-@router_learn.post("/active_analysis/{bubble_id}/{filename}")
-def run_active_analysis(bubble_id: str, filename: str):
-    """
-    Run user-directed analysis with a specific question/prompt.
-
-    TODO: Implement interactive analysis where user asks specific questions
-    about their notes (e.g., "What are the key concepts?" or
-    "Generate practice questions from this section")
-
-    Args:
-        bubble_id: ID of the study bubble
-        filename: Note filename
-        user_query: User's specific question/request
-
-    Returns:
-        Analysis result tailored to user query
-    """
-    result = active_analysis(bubble_id, filename)
-    return {"status": "Success", "result": result}
 
 
 # ============================================================================

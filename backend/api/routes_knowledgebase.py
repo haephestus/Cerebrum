@@ -11,14 +11,14 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, Up
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from cerebrum_core.knowledgebase_inator import KnowledgebaseManager
+from cerebrum_core.knowledgebase_inator import FileMarkdownChunker, KnowledgebaseManager
 from cerebrum_core.utils.embedd_inator import EmbeddInator
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
-from cerebrum_core.utils.markdown_handler_inator import (
-    MarkdownChunker,
-    MarkdownConverter,
+from cerebrum_core.utils.markdown_handler_inator import MarkdownConverter
+from cerebrum_core.utils.registry.file_chunk_registry_inator import (
+    FileChunkRegisterInator,
 )
-from cerebrum_core.utils.registry_inator import ChunkRegisterInator, FileRegisterInator
+from cerebrum_core.utils.registry.file_registry_inator import FileRegisterInator
 
 router = APIRouter(prefix="/knowledgebase")
 archives_dir = CerebrumPaths().kb_archives_path()
@@ -48,9 +48,9 @@ def process_single_file_task(file_info: dict, file_registry: FileRegisterInator)
         markdown_path, metadata = converter.convert(metadata=None)
 
         # Step 2: Chunk Markdown
-        chunker = MarkdownChunker()
+        chunker = FileMarkdownChunker()
         chunked_path = chunker.chunk(
-            markdown_path=markdown_path, doc_fingerprint=file_info["file_fingerprint"]
+            markdown_path=markdown_path, file_fingerprint=file_info["file_fingerprint"]
         )
 
         # Step 3: Update file registry (mark as converted)
@@ -62,7 +62,10 @@ def process_single_file_task(file_info: dict, file_registry: FileRegisterInator)
         )
 
         # Step 4: Embed chunks
-        embedding_manager = EmbeddInator(file_fingerprint=file_info["file_fingerprint"])
+        embedding_manager = EmbeddInator(
+            file_fingerprint=file_info["file_fingerprint"],
+            original_name=file_info["original_name"],
+        )
         embedding_manager.embed_from_chunked_markdown(
             chunked_markdown=chunked_path,
             collection_name=metadata.subject,
@@ -101,10 +104,10 @@ def markdown_converter_task(
             markdown_path, metadata = converter.convert(metadata=None)
 
             # Chunk Markdown
-            chunker = MarkdownChunker()
-            chunked_path = chunker.chunk(
+            chunker = FileMarkdownChunker()
+            chunker.chunk(
                 markdown_path=markdown_path,
-                doc_fingerprint=file_info["chunk_fingerprint"],
+                file_fingerprint=file_info["chunk_fingerprint"],
             )
 
             # Update file registry
@@ -142,6 +145,7 @@ def embedding_task(unembedded_files: list[dict], file_registry: FileRegisterInat
 
             # Embed using byte-coordinate access
             embedding_manager = EmbeddInator(
+                original_name=file_info["original_name"],
                 file_fingerprint=file_info["file_fingerprint"],
             )
             embedding_manager.embed_from_chunked_markdown(
@@ -177,8 +181,8 @@ async def show_files(request: Request):
 @router.get("/show/chunks")
 async def show_chunks(request: Request):
     """Show all source files in registry."""
-    chunk_registry = request.app.state.chunk_registry
-    return chunk_registry.show_all_inator() or []
+    file_chunk_registry = request.app.state.file_chunk_registry
+    return file_chunk_registry.show_all_inator() or []
 
 
 @router.post("/upload")
@@ -329,13 +333,13 @@ async def stream_progress(file_fingerprint: str):
     """
 
     async def event_generator():
-        chunk_registry = ChunkRegisterInator()
+        file_chunk_registry = FileChunkRegisterInator()
         last_progress = -1
 
         while True:
             try:
                 # Get embedding progress
-                progress = chunk_registry.get_embedding_progress(file_fingerprint)
+                progress = file_chunk_registry.get_embedding_progress(file_fingerprint)
 
                 # Only send update if progress changed
                 if progress["progress_pct"] != last_progress:
@@ -386,14 +390,14 @@ async def get_file_status(request: Request, file_fingerprint: str):
     Returns file conversion and embedding status.
     """
     file_registry = request.app.state.file_registry
-    chunk_registry = ChunkRegisterInator()
+    file_chunk_registry = FileChunkRegisterInator()
 
     if not file_registry.check_inator(file_fingerprint):
         raise HTTPException(status_code=404, detail="File not found")
 
     converted = file_registry.check_inator(file_fingerprint, "converted")
     embedded = file_registry.check_inator(file_fingerprint, "embedded")
-    chunk_progress = chunk_registry.get_embedding_progress(file_fingerprint)
+    chunk_progress = file_chunk_registry.get_embedding_progress(file_fingerprint)
 
     return {
         "file_fingerprint": file_fingerprint,
@@ -418,7 +422,7 @@ async def remove_source_file(request: Request, payload: DeletePayload):
 
     # Remove from registry and filesystem
     file_registry.remove_inator(
-        payload.filename, payload.file_fingerprint, payload.filepath
+        payload.filename, payload.filepath, payload.file_fingerprint
     )
 
     # Remove from vector database across all collections

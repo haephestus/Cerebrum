@@ -4,12 +4,11 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import pymupdf4llm
 import tiktoken
 import yaml
-from langchain_core.documents import Document
 from langchain_ollama import OllamaLLM
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
@@ -17,10 +16,10 @@ from langchain_text_splitters import (
 )
 
 from agents.rose import RosePrompts
+from cerebrum_core.constants import DEFAULT_CHAT_MODEL
 from cerebrum_core.model_inator import FileMetadata
-from cerebrum_core.user_inator import DEFAULT_CHAT_MODEL, ConfigManager
+from cerebrum_core.user_inator import ConfigManager
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
-from cerebrum_core.utils.registry_inator import ChunkRegisterInator
 
 os.makedirs("./logs", exist_ok=True)
 logging.basicConfig(
@@ -111,8 +110,19 @@ class MarkdownConverter:
         try:
             parsed_response = json.loads(sanitized_response)
         except json.JSONDecodeError:
-            raise ValueError(f"LLM did not return valid JSON: {sanitized_response}")
 
+            match = re.search(
+                r"```json\s*(\{.*?\})\s*```", sanitized_response, re.DOTALL
+            )
+            if match:
+                try:
+                    parsed_response = json.loads(match.group(1))
+                except json.JSONDecodeError:
+                    raise ValueError(
+                        f"LLM did not return valid JSON: {sanitized_response}"
+                    )
+            else:
+                raise ValueError(f"LLM did not return valid JSON: {sanitized_response}")
         return FileMetadata(**parsed_response)
 
     def _fingerprint_inator(self, filepath: Path) -> str:
@@ -221,42 +231,47 @@ class MarkdownChunker:
     """
     Splits markdown into semantic chunks with byte-coordinate tracking.
     Generates .chunked.md files with HTML comment annotations.
+
+    Args:
+        use_file_registry:  toggles between file_registry or note_registry
     """
 
     def __init__(self):
-        self.registry = ChunkRegisterInator()
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
-        self.chunks: List[Document] = []
 
-    def chunk(
+    def chunk_markdown(
         self,
-        markdown_path: Path,
-        doc_fingerprint: Optional[str] = None,
+        markdown_text: str,
+        *,
+        file_fingerprint: Optional[str] = None,
         note_id: Optional[str] = None,
-    ) -> Path:
+    ):
         """
         Split markdown by headers and token limits, annotate with HTML comments.
 
         Args:
             markdown_path: Path to .md file with YAML frontmatter
-            doc_fingerprint: Unique identifier for the document
+            file_fingerprint: Unique identifier for the document
 
         Returns:
             Path to .chunked.md file with HTML comment annotations
         """
-        full_text = markdown_path.read_text(encoding="utf-8")
+        if file_fingerprint:
+            source_id = file_fingerprint
+        else:
+            source_id = note_id
         max_chunk_tokens = 4000
 
         # Extract YAML frontmatter
         yaml_pattern = re.compile(r"^(---\n.*?\n---\n\n)", re.S)
-        yaml_match = yaml_pattern.match(full_text)
+        yaml_match = yaml_pattern.match(markdown_text)
 
         if yaml_match:
             yaml_frontmatter = yaml_match.group(1)
-            text = full_text[len(yaml_frontmatter) :]  # Content after YAML
+            text = markdown_text[len(yaml_frontmatter) :]  # Content after YAML
         else:
             yaml_frontmatter = ""
-            text = full_text
+            text = markdown_text
 
         # Split by markdown headers
         header_levels = [
@@ -342,7 +357,7 @@ class MarkdownChunker:
             # Register chunk in database
             registry_rows.append(
                 (
-                    doc_fingerprint if doc_fingerprint else note_id,
+                    source_id,
                     chunk_fingerprint,
                     chunk_idx,
                     byte_cursor,
@@ -357,16 +372,13 @@ class MarkdownChunker:
 
         # Write chunked markdown (same directory as original .md)
         # Include YAML frontmatter at the top
-        chunked_path = markdown_path.with_name(markdown_path.stem + ".chunked.md")
 
         final_output = yaml_frontmatter + "\n".join(output_lines)
-        chunked_path.write_text(final_output, encoding="utf-8")
 
         # Register all chunks in database
-        self.registry.register_chunks(registry_rows)
-        logger.info(f"Chunked {len(processed_chunks)} chunks → {chunked_path}")
+        logger.info(f"Chunked {len(processed_chunks)} chunks → (in-memory)")
 
-        return chunked_path
+        return final_output, registry_rows, processed_chunks
 
     def _chunk_fingerprint(self, content):
         return hashlib.sha256(content.encode("utf-8")).hexdigest()

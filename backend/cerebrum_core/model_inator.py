@@ -235,13 +235,17 @@ class ResearchProject(CreateResearchProject):
 
 
 # ---------------------------ARCHIVE MODELS---------------------------
+class _AnalysedChunks(BaseModel):
+    chunk_fingerprint: str
+    chunk_index: str
+    analysis: str
+
+
 # not in use
-class NoteChunks(BaseModel):
-    chunk_id: str
-    note_id: str
+class CachedChunkAnalysis(BaseModel):
     bubble_id: str
-    content: str
-    fingerprint: str
+    note_id: str
+    analyses: List[_AnalysedChunks]
 
 
 class ArchivedNoteContent(BaseModel):

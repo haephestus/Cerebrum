@@ -45,22 +45,31 @@ Filename: {filename}
 Existing Metadata: {metadata}
 
 ### Tasks:
-1. Rename the file title(and only the file title) into a clean, lowercase slug (use hyphens, remove redundant words or version tags, no spaces).
-
-2. Preserve metadata fields:
-    - title
-    - *domain*, domain of knowledge ( i.e biology, mathematics, physics,chemistry))
-    - subject, pertaining to the field of study deduced from the title/filename
-      choose one word that best decribes the subject
-    - authors, fullnames (capitalise first letter of each name, i.e John F. Doe),
-    - keywords, short list of lowercase identifiers describing the content,
+1. Rename the file title (and only the file title) into a clean, lowercase slug
+   (use hyphens, remove redundant words or version tags, no spaces).
+2. Preserve and populate metadata fields:
+    - title:    lowercase slug of the file title
+    - domain:   the top-level academic discipline in ONE lowercase word
+                (e.g. biology, mathematics, physics, chemistry, history)
+    - subject:  the specific field of study within the domain, in ONE lowercase word
+                chosen ONLY from this controlled vocabulary:
+                  biology    → genetics, anatomy, physiology, microbiology,
+                               ecology, neuroscience, immunology, biochemistry
+                  chemistry  → organic, inorganic, analytical, physical, biochemistry
+                  physics    → mechanics, electromagnetism, thermodynamics, quantum, optics
+                  mathematics→ algebra, calculus, statistics, geometry, topology
+                  history    → ancient, medieval, modern, political, cultural
+                If the domain is not listed above, choose the single most accurate
+                lowercase field name and stay consistent across files.
+    - authors:  full names, capitalise first letter of each part (e.g. John F. Doe)
+    - keywords: short list of lowercase identifiers describing the content,
                 include year of release if available.
+3. Capitalisation rules:
+    - authors → Title Case only (e.g. John F. Doe)
+    - ALL other fields (title, domain, subject, keywords) → lowercase only
 
-3. Ensure capitalisation consistency.
-    - Only authors names should use title case (e.g John F. Doe)
-    - All other text (title, domain, subject, keywords) should be lowercase
-
-### Output as JSON *ONLY* with keys: title, domain, subject, authors, keywords
+### Output as JSON ONLY with keys: title, domain, subject, authors, keywords
+Be sure the JSON is syntactically valid. Return ONLY the JSON, no extra text.
 """,
         # ========================================================
         "rose_query_translator": """

@@ -1,4 +1,4 @@
-import subprocess
+import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -8,9 +8,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from api import routes_bubble, routes_knowledgebase, routes_learning_center, routes_user
 from cerebrum_core.user_inator import ConfigManager
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
-from cerebrum_core.utils.registry_inator import ChunkRegisterInator, FileRegisterInator
+from cerebrum_core.utils.registry.file_chunk_registry_inator import (
+    FileChunkRegisterInator,
+)
+from cerebrum_core.utils.registry.file_registry_inator import FileRegisterInator
+from cerebrum_core.utils.registry.note_chunk_registry_inator import (
+    NoteChunkRegisterInator,
+)
+from cerebrum_core.utils.registry.note_registry_inator import NoteRegisterInator
 
 config_manager = ConfigManager()
+logging.getLogger("watchfiles.main").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -19,7 +27,9 @@ async def lifespan(app: FastAPI):
     cerebrum_paths.init_cerebrum_dirs()
     # SQL DBs necessary for file processing
     app.state.file_registry = FileRegisterInator()
-    app.state.chunk_registry = ChunkRegisterInator()
+    app.state.note_registry = NoteRegisterInator()
+    app.state.file_chunk_registry = FileChunkRegisterInator()
+    app.state.note_chunk_registry = NoteChunkRegisterInator()
 
     # ROUTES for api level control
     app.include_router(routes_user.configs_router)
@@ -27,6 +37,7 @@ async def lifespan(app: FastAPI):
     app.include_router(routes_bubble.bubble_router)
     # app.include_router(routes_projects.project_router)
     app.include_router(routes_learning_center.router_learn)
+
     yield
 
 

@@ -5,6 +5,7 @@ import subprocess
 import requests
 from bs4 import BeautifulSoup
 
+from cerebrum_core.constants import DEFAULT_CHAT_MODEL, DEFAULT_EMBED_MODEL
 from cerebrum_core.model_inator import ModelConfig, UserConfig
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
 
@@ -19,9 +20,6 @@ CONFIG_ROOT = CerebrumPaths().config_root_dir()
 CONFIG_FILE = CONFIG_ROOT / "user_config.json"
 
 EMBED_PATTERN = re.compile(r"(embed|embedding)", re.IGNORECASE)
-
-DEFAULT_CHAT_MODEL = "llama3.2:3b"
-DEFAULT_EMBED_MODEL = "mxbai-embed-large:335m"
 
 
 # ─────────────────────────────────────────────────────────────

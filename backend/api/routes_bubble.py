@@ -7,10 +7,11 @@ from typing import Any, Dict, List
 
 import jsonpatch
 import ulid
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from agents.rose import RosePrompts
+from cerebrum_core.constants import DEFAULT_CHAT_MODEL, DEFAULT_EMBED_MODEL
 from cerebrum_core.learning_center_inator import passive_analysis
 from cerebrum_core.model_inator import (
     ContentDiff,
@@ -22,11 +23,7 @@ from cerebrum_core.model_inator import (
     StudyBubble,
     UserConfig,
 )
-from cerebrum_core.user_inator import (
-    DEFAULT_CHAT_MODEL,
-    DEFAULT_EMBED_MODEL,
-    ConfigManager,
-)
+from cerebrum_core.user_inator import ConfigManager
 from cerebrum_core.utils.archive_inator import AnalysisArchiveInator
 from cerebrum_core.utils.cache_inator import AnalysisCacheInator
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
@@ -231,23 +228,27 @@ def list_notes_in_bubble(bubble_id: str):
 
 # Create a new note
 @bubble_router.post("/{bubble_id}/create/notes", response_model=NoteOut)
-def create_note(bubble_id: str, note: NoteBase):
+def create_note(request: Request, bubble_id: str, note: NoteBase):
+    note_registry = request.app.state.note_registry
     notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     notes_dir.mkdir(parents=True, exist_ok=True)
     note.content.document = ensure_valid_document(note.content.document)
 
-    safe_title = note.title.replace(" ", "_")
+    # safe_title = note.title.replace(" ", "_")
     note_id = ulid.ulid()
     filename = f"{note_id}.json"
-    file_path = notes_dir / filename
+    filepath = notes_dir / filename
 
+    note_registry.register_inator(
+        note_id=note_id, bubble_id=bubble_id, filepath=str(filepath)
+    )
     # Avoid collisions
     # Obsolete? because of uuids?
     """
     counter = 1
-    while file_path.exists():
+    while filepath.exists():
         filename = f"{safe_title}_{counter}.json"
-        file_path = notes_dir / filename
+        filepath = notes_dir / filename
         counter += 1
     """
 
@@ -261,7 +262,7 @@ def create_note(bubble_id: str, note: NoteBase):
     storage.metadata.content_hash = hash_obj(storage.content.model_dump())
     storage.metadata.ink_hash = hash_obj([s.model_dump() for s in storage.ink])
 
-    file_path.write_text(storage.model_dump_json(indent=2), encoding="utf-8")
+    filepath.write_text(storage.model_dump_json(indent=2), encoding="utf-8")
 
     return NoteOut(
         title=storage.title,
@@ -275,12 +276,12 @@ def create_note(bubble_id: str, note: NoteBase):
 @bubble_router.get("/{bubble_id}/notes/get/{filename}", response_model=NoteOut)
 def get_note(bubble_id: str, filename: str):
     notes_dir = CerebrumPaths().note_root_dir(bubble_id)
-    file_path = notes_dir / filename
+    filepath = notes_dir / filename
 
-    if not file_path.exists():
+    if not filepath.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
-    storage_data = json.loads(file_path.read_text(encoding="utf-8"))
+    storage_data = json.loads(filepath.read_text(encoding="utf-8"))
 
     # Ensure the document is valid before returning
     if "content" in storage_data and "document" in storage_data["content"]:
@@ -311,21 +312,27 @@ async def debug_create_note(bubble_id: str, request: Request):
 # Update a note
 @bubble_router.put("/{bubble_id}/notes/update/{filename}", response_model=NoteOut)
 def update_note(
+    request: Request,
     bubble_id: str,
     filename: str,
     note: NoteBase,
     background_tasks: BackgroundTasks,
 ):
+    note_registry = request.app.state.note_registry
     notes_dir = CerebrumPaths().note_root_dir(bubble_id)
-    file_path = notes_dir / filename
+    filepath = notes_dir / filename
 
-    if not file_path.exists():
+    if not filepath.exists():
         raise HTTPException(status_code=404, detail="Note not found")
 
+    if not note_registry.check_inator(note_id=note.note_id):
+        note_registry.register_inator(
+            note_id=note.note_id, bubble_id=note.bubble_id, filepath=filepath
+        )
     # ------------------------------------------------------------------
     # Load existing note
     # ------------------------------------------------------------------
-    stored_data = json.loads(file_path.read_text(encoding="utf-8"))
+    stored_data = json.loads(filepath.read_text(encoding="utf-8"))
     stored_note = NoteStorage(**stored_data)
 
     # Ensure document validity
@@ -379,7 +386,7 @@ def update_note(
     # ------------------------------------------------------------------
     # SAVE NOTE
     # ------------------------------------------------------------------
-    file_path.write_text(
+    filepath.write_text(
         stored_note.model_dump_json(indent=2),
         encoding="utf-8",
     )
@@ -453,7 +460,8 @@ def rename_note(bubble_id: str, filename: str, payload: RenamePayload):
 
 # Delete a note
 @bubble_router.delete("/{bubble_id}/notes/delete/{filename}")
-def delete_note(bubble_id: str, filename: str):
+def delete_note(request: Request, bubble_id: str, filename: str):
+    note_registry = request.app.state.note_registry
     notes_dir = CerebrumPaths().note_root_dir(bubble_id)
     filepath = notes_dir / filename
 
@@ -466,6 +474,7 @@ def delete_note(bubble_id: str, filename: str):
         note=NoteStorage(**data), archives_path=str(filepath)
     ).archive_cleaner_inator()
 
+    note_registry.remove_inator(note_id=filename.strip(".json"), filepath=filepath)
     filepath.unlink()
     return {"detail": "Note deleted successfully"}
 
@@ -480,7 +489,9 @@ class Query(BaseModel):
 # TODO: index notes directly linked to the current bubbleid
 @bubble_router.post("/{bubble_id}/chat")
 async def chat_in_bubble(
-    bubble_id: str, query: Query, config: UserConfig = Depends(get_user_config)
+    # bubble_id: str,
+    query: Query,
+    config: UserConfig = Depends(get_user_config),
 ):
     """
     Chat inside a specific study bubble.

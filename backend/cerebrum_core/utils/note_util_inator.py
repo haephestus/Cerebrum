@@ -1,6 +1,23 @@
+import logging
+
+from langchain_core.documents.base import Document
+
 from cerebrum_core.model_inator import NoteContent, NoteStorage
 from cerebrum_core.utils.file_util_inator import CerebrumPaths
 from cerebrum_core.utils.markdown_handler_inator import MarkdownChunker
+from cerebrum_core.utils.registry.note_chunk_registry_inator import (
+    NoteChunkRegisterInator,
+)
+
+
+# convert the notes to markdown
+# chunk notes and register chunks
+def note_processor_inator(bubble_id: str, note_id: str, note_content: NoteContent):
+    flattened_note = NoteToMarkdownInator().flatten(note_content)
+    NoteChunkerInator().chunk(
+        bubble_id=bubble_id, note_id=note_id, flattened_note=flattened_note
+    )
+    logging.info(f"Note: {note_id} processed successfully")
 
 
 def diff_collapser_inator(note: NoteStorage) -> NoteStorage:
@@ -62,7 +79,7 @@ class NoteToMarkdownInator:
         text = self._extract_text(block)
         return text.strip() if text else None
 
-    def _handle_divider(self, block):
+    def _handle_divider(self):
         return "---"
 
     def _handle_table(self, block):
@@ -118,19 +135,28 @@ class NoteToMarkdownInator:
         return "\n".join(md)
 
 
-class NoteChunkerInator:
+class NoteChunkerInator(MarkdownChunker):
     """
     Chunks notes converted to markdown and registers chunks for analysis
     """
 
-    def __init__(self, bubble_id: str, note_id: str) -> None:
-        # path to write to
-        self.cache_path = CerebrumPaths().note_cache_path(bubble_id)
-        self.note_id = note_id
+    def __init__(self, generate_artifacts: bool = True):
+        super().__init__()
+        self.note_chunk_registry = NoteChunkRegisterInator()
+        self.generate_artifacts = generate_artifacts
 
-    def _chunk_fingerprint(self) -> str:
-        return ""
+    def chunk(
+        self, flattened_note: str, note_id: str, bubble_id: str
+    ) -> tuple[str, list[Document]]:
+        annotated_md, registry_rows, documents = self.chunk_markdown(
+            flattened_note, note_id=note_id
+        )
 
-    def preprocess(self):
-        MarkdownChunker().chunk(markdown_path=self.cache_path, note_id=self.note_id)
-        pass
+        if self.generate_artifacts:
+            chunked_path = CerebrumPaths().note_cache_path(bubble_id=bubble_id)
+            chunked_path.write_text(annotated_md, encoding="utf-8")
+            logging.info(f"Note: {note_id} chunked successfully")
+
+        self.note_chunk_registry.register_chunks(registry_rows)
+        logging.info(f"Note: {note_id} registerd successfully")
+        return annotated_md, documents

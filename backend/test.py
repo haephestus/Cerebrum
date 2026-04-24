@@ -1,87 +1,107 @@
-import pathlib
-
-import pymupdf
-import pymupdf4llm
-import tiktoken
-from langchain_chroma import Chroma
-from langchain_ollama import OllamaEmbeddings
-from pymupdf.mupdf import pdfmetadatadata
-
-from cerebrum_core.ingest_inator import IngestInator
-from cerebrum_core.retriever_inator import RetrieverInator
-
-doc = pathlib.Path(
-    "../data/storage/markdown/chemistry/biochemistry/lehninger-principles-of-biochemistry.md"
-)
-pdf_path = pathlib.Path(
-    "../data/knowledgebase/biology/physiology/Johnny Hall - Guyton Hall TextBook of medical Physiology 14th edition John E Hall (2021) - libgen.li.pdf"
-)
-
-
-# %%
+# test_chroma_viewer.py
 from pathlib import Path
 
-from cerebrum_core.utils.file_util_inator import knowledgebase_index_inator
-
-test, testfile = knowledgebase_index_inator(Path("../data/storage/archives"))
-for test in test:
-    print(test["domain"])
-    print(test["subject"])
-    print(testfile)
-
-
-with pymupdf.open(pdf_path) as file:
-    metadata = file.metadata
-to_md = IngestInator(filepath=pdf_path)
-clean_md = to_md.sanitize_inator(
-    filename=pdf_path.name, metadata=file.metadata, chat_model="granite4:micro"
-)
-print(file.metadata)
-print(clean_md)
-chunks = to_md.chunk_inator(markdown_filepath=doc)
-for chunk in chunks:
-    print(chunk.metadata)
-
-# %%
-
-# %%
-query = "Describe DNA"
-retrieve = RetrieverInator(
-    archives_root="../data/storage/archives",
-    embedding_model="qwen3-embedding:4b-q4_K_M",
-    chat_model="granite4:micro",
-)
-
-translated_query = retrieve.translator_inator(user_query=query)
-for sq in translated_query.subqueries:
-    print(sq.subject)
-
-constructor = retrieve.constructor_inator(
-    translated_query=translated_query,
-)
-print(constructor)
-for route in constructor["routes"]:
-    print(route["subquery"].subject)
-
-retrieve.retrieve_inator()
-response = retrieve.generate_inator(user_query=query)
-print(response)
-
-# %%
-
-# %%
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
 
-query = "Describe DNA."
-test_db = Chroma(
-    embedding_function=OllamaEmbeddings(model="qwen3-embedding:4b-q4_K_M"),
-    collection_name="david-s-latchman-gene-control",
-    persist_directory="../data/storage/archives/biology/genetics",
-)
-retrieve = test_db.as_retriever(search_kwargs={"k": 3})
-result = retrieve.invoke(query)
+ARCHIVES_ROOT = Path.home() / ".local/share/cerebrum/knowledgebase/archives"
+EMBEDDING_MODEL = "qwen3-embedding:4b-q4_K_M"
 
-for doc in result:
-    print(doc.page_content)
-# %%
+
+def get_all_collections(archives_root: Path) -> list[dict]:
+    """Walk archives and find all chroma collections (domain/subject folders)."""
+    collections = []
+    for subject_dir in archives_root.glob("*/*"):
+        if subject_dir.is_dir():
+            domain = subject_dir.parent.name
+            subject = subject_dir.name
+            collections.append(
+                {
+                    "domain": domain,
+                    "subject": subject,
+                    "path": subject_dir,
+                }
+            )
+    return collections
+
+
+def peek_collection(
+    domain: str, subject: str, persist_dir: Path, embedding_model: str, k: int = 3
+):
+    """Load a Chroma collection and print its documents."""
+    print(f"\n{'='*60}")
+    print(f"  DOMAIN  : {domain}")
+    print(f"  SUBJECT : {subject}")
+    print(f"  PATH    : {persist_dir}")
+    print(f"{'='*60}")
+
+    try:
+        # List all collection names in this directory
+        import chromadb
+
+        client = chromadb.PersistentClient(path=str(persist_dir))
+        collection_names = [c.name for c in client.list_collections()]
+        print(f"  Collections found: {collection_names}\n")
+
+        for col_name in collection_names:
+            print(f"  --- Collection: '{col_name}' ---")
+            db = Chroma(
+                embedding_function=OllamaEmbeddings(model=embedding_model),
+                collection_name=col_name,
+                persist_directory=str(persist_dir),
+            )
+            # Get total count
+            total = db._collection.count()
+            print(f"  Total documents: {total}")
+
+            if total == 0:
+                print("  (empty collection)")
+                continue
+
+            # Peek at first k documents without a query
+            raw = db._collection.get(limit=k, include=["documents", "metadatas"])
+
+            docs = raw["documents"] or []
+            metas = raw["metadatas"] or []
+
+            for i, (doc, meta) in enumerate(zip(docs, metas)):
+                print(f"\n  [{i+1}] Metadata : {meta}")
+                print(f"       Content  : {doc[:300]}{'...' if len(doc) > 300 else ''}")
+
+    except Exception as e:
+        print(f"  ERROR loading collection: {e}")
+
+
+def main():
+    print(f"\nScanning archives at: {ARCHIVES_ROOT}\n")
+
+    if not ARCHIVES_ROOT.exists():
+        print(f"ERROR: Archives root not found at {ARCHIVES_ROOT}")
+        return
+
+    collections = get_all_collections(ARCHIVES_ROOT)
+
+    if not collections:
+        print("No domain/subject folders found.")
+        return
+
+    print(f"Found {len(collections)} collection(s):\n")
+    for c in collections:
+        print(f"  {c['domain']}/{c['subject']}")
+
+    # Peek into each one
+    for c in collections:
+        peek_collection(
+            domain=c["domain"],
+            subject=c["subject"],
+            persist_dir=c["path"],
+            embedding_model=EMBEDDING_MODEL,
+            k=3,  # number of docs to preview per collection
+        )
+
+    print(f"\n{'='*60}")
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()
