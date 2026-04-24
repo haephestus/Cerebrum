@@ -35,6 +35,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   uuid: ^4.5.2
   flutter_drawing_board: ^0.9.8
+  gpt_markdown: ^1.1.6
   appflowy_editor: ^6.0.0
   table_calendar: ^3.0.9
   cupertino_icons: ^1.0.8
