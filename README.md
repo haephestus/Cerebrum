@@ -86,44 +86,19 @@ Everything runs locally. No cloud dependency. No API costs. No data leaving your
 
 ---
 
-## 6. How to Run
+## **How to Run**
 
-**Requirements**
-- Ollama (latest)
-- Python 3.12
-- Flutter 3.32
+*Requirements*
+- Flutter 3.32+
 
-**Setup**
+*Setup*
 
 ```bash
 git clone https://github.com/haephestus/Cerebrum.git
-python -m venv venv
-source venv/bin/activate
-cd backend
-pip install -r requirements.txt
-python3 cerebrum_inator.py
+cd cerebrum_desktop
+flutter pub get
+flutter run
 ```
-
-```bash
-cd frontend/cerebrum_desktop
-flutter run -d linux
-```
-
----
-
-## 7. Design Decisions
-
-**Why local-only?**
-Privacy and accessibility. Running on consumer hardware means no subscription, no data exposure, and no dependency on external services. The tradeoff is performance — but that's a solvable problem over time.
-
-**Why RAG instead of pure prompting?**
-Hallucination is the enemy of a learning tool. If the system fabricates feedback, it actively harms the learner. RAG grounds every output in material the user has deliberately chosen as authoritative.
-
-**Why SQLite for registries?**
-Simplicity. The chunk registry doesn't need a full database — it needs to be fast, local, and queryable. SQLite is the right tool.
-
-**Why separate concerns so explicitly?**
-Earlier versions tightly coupled responsibilities and became impossible to reason about. The current architecture is more verbose but far easier to debug and extend. I lost count of how many refactors it took to get here.
 
 ---
 
