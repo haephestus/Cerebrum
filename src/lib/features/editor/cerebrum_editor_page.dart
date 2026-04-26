@@ -5,6 +5,7 @@ import 'package:cerebrum_app/api/learning_center_api.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_drawing_board/flutter_drawing_board.dart';
 import 'package:flutter_drawing_board/paint_contents.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 import 'helpers/editor_commands.dart';
 
 class CerebrumEditorPage extends StatefulWidget {
@@ -385,7 +386,7 @@ class _CerebrumEditorPageState extends State<CerebrumEditorPage> {
                         const Divider(),
                         Flexible(
                           child: SingleChildScrollView(
-                            child: Text(_cachedAnalysis!),
+                            child: GptMarkdown(_cachedAnalysis!),
                           ),
                         ),
                       ],
