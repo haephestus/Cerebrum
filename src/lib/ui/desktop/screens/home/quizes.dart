@@ -14,7 +14,10 @@ class _QuizesState extends State<Quizes> {
       height: 32,
       width: 64,
       decoration: BoxDecoration(color: Colors.grey),
-      child: Text("hello"),
+      child: Text(
+        "Upcoming Quizes",
+        style: TextStyle(fontSize: 32, color: Colors.black),
+      ),
     );
     ;
   }

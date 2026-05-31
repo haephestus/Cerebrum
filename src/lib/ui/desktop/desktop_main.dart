@@ -59,50 +59,55 @@ class _DesktopUIState extends State<DesktopUI> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.white,
         body: Padding(
           padding: const EdgeInsets.only(left: 2),
           child: Row(
             children: [
               // Left side: buttons
-              Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        barrierDismissible: true,
-                        barrierColor: Colors.black54,
-                        builder: (_) => const SettingPage(),
-                      );
-                    },
-                    icon: Icon(
-                      Icons.settings,
-                      color: selectedPage == 3 ? Colors.blue : Colors.white,
-                      size: 45,
+              Container(
+                padding: EdgeInsetsGeometry.only(top: 24, bottom: 24),
+                height: 900,
+                color: Colors.black,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: true,
+                          barrierColor: Colors.black54,
+                          builder: (_) => const SettingPage(),
+                        );
+                      },
+                      icon: Icon(
+                        Icons.settings,
+                        color: selectedPage == 3 ? Colors.blue : Colors.white,
+                        size: 45,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 350),
-                  SidebarButton(
-                    icon: Icons.home,
-                    label: 'Home',
-                    selected: selectedPage == 0,
-                    onPressed: () => changePage(0),
-                  ),
-                  SidebarButton(
-                    icon: Icons.bubble_chart,
-                    label: 'Study Bubble',
-                    selected: selectedPage == 1,
-                    onPressed: () => changePage(1),
-                  ),
-                  SidebarButton(
-                    icon: Icons.folder,
-                    label: 'Learning Center',
-                    selected: selectedPage == 2,
-                    onPressed: () => changePage(2),
-                  ),
-                ],
+                    SizedBox(height: 300),
+                    SidebarButton(
+                      icon: Icons.home,
+                      label: 'Home',
+                      selected: selectedPage == 0,
+                      onPressed: () => changePage(0),
+                    ),
+                    SidebarButton(
+                      icon: Icons.bubble_chart,
+                      label: 'Study Bubble',
+                      selected: selectedPage == 1,
+                      onPressed: () => changePage(1),
+                    ),
+                    SidebarButton(
+                      icon: Icons.folder,
+                      label: 'Learning Center',
+                      selected: selectedPage == 2,
+                      onPressed: () => changePage(2),
+                    ),
+                  ],
+                ),
               ),
               SizedBox(width: 12), // spacing between buttons and window
               // Right side: main window

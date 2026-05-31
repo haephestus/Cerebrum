@@ -153,11 +153,13 @@ class _CerebrumEditorPageState extends State<CerebrumEditorPage> {
   Future<void> _loadAnalysis() async {
     final bubbleId = widget.note['bubble_id'] as String?;
     final noteId = _noteIdFromFilename(widget.note['filename'] as String?);
-    final version = widget.note['version'] as int? ?? 0;
+    final version = widget.note["version"];
 
     if (bubbleId == null || noteId == null) return;
 
     setState(() => _isLoadingAnalysis = true);
+    debugPrint("v$version");
+    debugPrint("${widget.note.keys}");
 
     try {
       final analysis = await LearningCenterApi.getNoteAnalysis(
@@ -309,11 +311,6 @@ class _CerebrumEditorPageState extends State<CerebrumEditorPage> {
                       }
                     },
           ),
-          IconButton(
-            icon: const Icon(Icons.auto_awesome),
-            tooltip: 'Generate New Analysis',
-            onPressed: _isGeneratingAnalysis ? null : _generateAnalysis,
-          ),
         ],
       ),
       body: SafeArea(
@@ -351,14 +348,13 @@ class _CerebrumEditorPageState extends State<CerebrumEditorPage> {
             // Analysis Panel
             if (_showAnalysisPanel && _cachedAnalysis != null)
               Positioned(
-                top: 80,
-                left: 16,
                 right: 16,
                 child: Material(
                   elevation: 8,
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    constraints: const BoxConstraints(maxHeight: 400),
+                    height: 900,
+                    width: 800,
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -366,20 +362,56 @@ class _CerebrumEditorPageState extends State<CerebrumEditorPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              'Note Analysis',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            Row(
+                              children: const [
+                                Icon(Icons.insights_rounded, size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Note Analysis',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () {
-                                setState(() {
-                                  _showAnalysisPanel = false;
-                                });
-                              },
+
+                            Row(
+                              children: [
+                                FilledButton.icon(
+                                  onPressed:
+                                      _isGeneratingAnalysis
+                                          ? null
+                                          : _generateAnalysis,
+                                  icon:
+                                      _isGeneratingAnalysis
+                                          ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                          : const Icon(Icons.auto_awesome),
+                                  label: Text(
+                                    _isGeneratingAnalysis
+                                        ? 'Generating...'
+                                        : 'Regenerate',
+                                  ),
+                                ),
+
+                                const SizedBox(width: 8),
+
+                                IconButton(
+                                  icon: const Icon(Icons.close),
+                                  tooltip: 'Close',
+                                  onPressed: () {
+                                    setState(() {
+                                      _showAnalysisPanel = false;
+                                    });
+                                  },
+                                ),
+                              ],
                             ),
                           ],
                         ),

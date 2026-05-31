@@ -14,7 +14,10 @@ class _NotesState extends State<Notes> {
       height: 32,
       width: 64,
       decoration: BoxDecoration(color: Colors.black),
-      child: Text("hello"),
+      child: Text(
+        "Recently added notes",
+        style: TextStyle(fontSize: 32, color: Colors.white),
+      ),
     );
   }
 }

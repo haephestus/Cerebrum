@@ -1,10 +1,8 @@
 import 'package:cerebrum_app/ui/desktop/screens/home/file_library.dart';
 import 'package:cerebrum_app/ui/desktop/screens/home/notes.dart';
-import 'package:cerebrum_app/ui/desktop/screens/home/quizes.dart';
 import 'package:cerebrum_app/ui/desktop/screens/home/suggested_reading.dart';
 import 'package:cerebrum_app/ui/desktop/screens/home/tasks.dart';
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/knowledgebase_api.dart';
 
 class DHomescreen extends StatefulWidget {
   const DHomescreen({super.key});
@@ -14,92 +12,35 @@ class DHomescreen extends StatefulWidget {
 }
 
 class _DHomescreenState extends State<DHomescreen> {
-  bool _uploading = false;
-  bool _loadingRegistry = false;
-  String? _status;
-
-  List<Map<String, dynamic>> _registry = [];
-
-  @override
-  void initState() {
-    super.initState();
-    loadRegistry();
-  }
-
-  Future<void> loadRegistry() async {
-    setState(() => _loadingRegistry = true);
-
-    try {
-      final data = await KnowledgebaseApi.showFiles();
-
-      if (!mounted) return;
-      setState(() {
-        _registry = List<Map<String, dynamic>>.from(data);
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _status = "Failed to load registry: $e";
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _loadingRegistry = false);
-      }
-    }
-  }
-
-  Future<void> _handleUpload() async {
-    try {
-      final file = await KnowledgebaseApi.pickFile();
-      if (file == null) return;
-
-      if (!mounted) return;
-      setState(() {
-        _uploading = true;
-        _status = "Uploading ${file.name}...";
-      });
-
-      final result = await KnowledgebaseApi.uploadFile(file);
-
-      if (!mounted) return;
-      setState(() {
-        _status = "Uploaded: ${result['filename'] ?? file.name}";
-      });
-
-      await loadRegistry();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _status = "Upload failed: $e";
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _uploading = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Dashboard")),
+      appBar: AppBar(title: const Text("Welcome Back User")),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 100, width: double.infinity, child: Tasks()),
-            Row(
-              children: [
-                Expanded(flex: 2, child: SizedBox(height: 400, child: Notes())),
-                Expanded(child: SizedBox(height: 400, child: Quizes())),
-              ],
+            Container(
+              padding: EdgeInsetsGeometry.only(bottom: 12),
+              height: 130,
+              width: double.infinity,
+              child: Tasks(),
             ),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: SizedBox(height: 400, child: FileLibrary())),
-                Expanded(
-                  child: SizedBox(height: 400, child: SuggestedReading()),
+                SizedBox(height: 800, width: 1000, child: Notes()),
+
+                Column(
+                  children: [
+                    SizedBox(height: 400, width: 780, child: FileLibrary()),
+                    SizedBox(
+                      height: 400,
+                      width: 750,
+                      child: SuggestedReading(),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -107,127 +48,5 @@ class _DHomescreenState extends State<DHomescreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildRegistry() {
-    if (_loadingRegistry) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_registry.isEmpty) {
-      return const Center(child: Text("No files uploaded yet"));
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              itemCount: _registry.length,
-              itemBuilder: (context, index) {
-                final file = _registry[index];
-
-                return Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.picture_as_pdf),
-
-                    title: Text(
-                      (file['original_name'] ?? 'Unnamed file').toString(),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-
-                    subtitle: Text(
-                      "Converted: ${file['converted'] == 1 ? 'Yes' : 'No'} • "
-                      "Embedded: ${file['embedded'] == 1 ? 'Yes' : 'No'}",
-                    ),
-
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.memory),
-                          tooltip: "Process File",
-                          onPressed: () {
-                            _processFile(file["file_fingerprint"]);
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          tooltip: "Delete file",
-                          onPressed: () {
-                            _confirmDelete(file);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ───── ACTION HANDLERS ─────
-
-  void _addFile(Map<String, dynamic> file) {
-    // TODO: hook into bubble / workspace logic
-  }
-
-  void _confirmDelete(Map<String, dynamic> file) {
-    showDialog(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text("Delete file"),
-            content: Text(
-              "Are you sure you want to delete "
-              "${file['original_name'] ?? 'this file'}?",
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text("Cancel"),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(true);
-                  _deleteFile(file);
-                },
-                child: const Text("Delete"),
-              ),
-            ],
-          ),
-    );
-  }
-
-  Future<void> _deleteFile(Map<String, dynamic> file) async {
-    try {
-      await KnowledgebaseApi.deleteFiles(
-        file['original_name'],
-        file['filepath'],
-        file['file_fingerprint'],
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
-    }
-    setState(() {
-      _registry.remove(file);
-    });
-  }
-
-  Future<void> _processFile(String fileFingerprint) async {
-    try {
-      await KnowledgebaseApi.processFile(fileFingerprint);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("$e")));
-    }
   }
 }

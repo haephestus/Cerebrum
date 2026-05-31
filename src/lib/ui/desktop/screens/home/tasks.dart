@@ -14,6 +14,12 @@ class _TasksState extends State<Tasks> {
       height: 16,
       width: 64,
       decoration: BoxDecoration(color: Colors.pink),
+      child: Center(
+        child: Text(
+          "upcoming quizes, flash cards, etc",
+          style: TextStyle(fontSize: 32),
+        ),
+      ),
     );
   }
 }

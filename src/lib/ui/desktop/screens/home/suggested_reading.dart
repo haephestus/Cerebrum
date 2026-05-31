@@ -14,7 +14,10 @@ class _SuggestedReadingState extends State<SuggestedReading> {
       height: 32,
       width: 64,
       decoration: BoxDecoration(color: Colors.blue),
-      child: Text("hello"),
+      child: Text(
+        "Suggested reading",
+        style: TextStyle(fontSize: 32, color: Colors.black),
+      ),
     );
     ;
   }
