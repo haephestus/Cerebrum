@@ -13,11 +13,13 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
   String? selectedChatModel;
   String? selectedEmbeddingModel;
+  String? selectedCloudModel;
 
   List<String> installedChatModels = [];
   List<String> installedEmbeddingModels = [];
 
   List<String> onlineChatModels = [];
+  List<String> cloudModels = [];
   List<String> onlineEmbeddingModels = [];
 
   bool chatInstalledExpanded = true;
@@ -63,57 +65,71 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
   Future<void> loadAll() async {
     setState(() => loading = true);
-    try {
-      final config = await ConfigsApi.fetchConfigs();
-      selectedChatModel = config["models"]["chat_model"];
-      selectedEmbeddingModel = config["models"]["embedding_model"];
 
-      final chatResp = await ConfigsApi.fetchInstalledChatModels();
+    // 1. Fire off all API requests in parallel safely
+    final results = await Future.wait([
+      ConfigsApi.fetchConfigs().catchError((e) => <String, dynamic>{}),
+      ConfigsApi.fetchInstalledChatModels().catchError(
+        (e) => <String, dynamic>{},
+      ),
+      ConfigsApi.fetchInstalledEmbeddingModels().catchError(
+        (e) => <String, dynamic>{},
+      ),
+      ConfigsApi.fetchLocalModels().catchError((e) => <String, dynamic>{}),
+      ConfigsApi.fetchCloudModels().catchError((e) => <String, dynamic>{}),
+    ]);
+
+    final config = results[0];
+    final chatResp = results[1];
+    final embResp = results[2];
+    final onlineResp = results[3];
+    final cloudResp = results[4];
+
+    setState(() {
+      // 2. Safely parse active selections
+      if (config.containsKey("models")) {
+        selectedChatModel = config["models"]["chat_model"];
+        selectedEmbeddingModel = config["models"]["embedding_model"];
+        selectedCloudModel = config["models"]["cloud_model"];
+      }
+
+      // 3. Extract your dynamic local installation array states
       installedChatModels = List<String>.from(
         chatResp["installed_chat_models"] ?? [],
       );
 
-      final embResp = await ConfigsApi.fetchInstalledEmbeddingModels();
       installedEmbeddingModels = List<String>.from(
         embResp["installed_embedding_models"] ?? [],
       );
 
-      final onlineResp = await ConfigsApi.fetchOnlineModels();
-
+      // 4. Safely fall back to parsing string arrays or complex dictionary lists from manifest
+      var rawOnlineChat = onlineResp["online_chat_models"] as List? ?? [];
       onlineChatModels =
-          List<String>.from(
-            onlineResp["online_chat_models"] ?? [],
-          ).where((m) => !installedChatModels.contains(m)).toList();
+          rawOnlineChat
+              .map((m) => m is String ? m : m["name"].toString())
+              .where((m) => !installedChatModels.contains(m))
+              .toList();
 
+      var rawOnlineEmbed = onlineResp["online_embedding_models"] as List? ?? [];
       onlineEmbeddingModels =
-          List<String>.from(
-            onlineResp["online_embedding_models"] ?? [],
-          ).where((m) => !installedEmbeddingModels.contains(m)).toList();
+          rawOnlineEmbed
+              .map((m) => m is String ? m : m["name"].toString())
+              .where((m) => !installedEmbeddingModels.contains(m))
+              .toList();
 
-      setState(() => loading = false);
-    } catch (e) {
-      print("Error loading models: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error loading: $e"),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-        setState(() => loading = false);
-      }
-    }
+      // 5. Extract available cloud models
+      cloudModels = List<String>.from(cloudResp["cloud_models"] ?? []);
+
+      loading = false;
+    });
   }
 
   Future<void> onChatModelChanged(String newModel) async {
     final needsDownload = !installedChatModels.contains(newModel);
-
     String modelToSet = newModel;
 
     if (needsDownload) {
-      // Show model details dialog
       final selectedVersion = await _showModelDetailsDialog(context, newModel);
-
       if (selectedVersion == null) return;
 
       try {
@@ -125,16 +141,12 @@ class _OllamaSettingsState extends State<OllamaSettings> {
             ),
           );
         }
-
         await ConfigsApi.downloadModel(selectedVersion);
-
         setState(() {
           installedChatModels.add(selectedVersion);
           onlineChatModels.remove(newModel);
         });
-
         modelToSet = selectedVersion;
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -156,14 +168,45 @@ class _OllamaSettingsState extends State<OllamaSettings> {
       }
     }
 
-    // Always update the config after download or selection
     setState(() => selectedChatModel = modelToSet);
 
     try {
       await ConfigsApi.updateChatModel(modelToSet);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Chat model updated to $modelToSet")),
+          SnackBar(content: Text("Local model updated to $modelToSet")),
+        );
+      }
+    } catch (e) {
+      print("Update error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Update failed: $e"),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> onCloudModelChanged(String newModel) async {
+    final selectedTag = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black54,
+      barrierDismissible: true,
+      builder: (context) => _CloudTagDialog(modelName: newModel),
+    );
+
+    if (selectedTag == null) return;
+
+    setState(() => selectedCloudModel = selectedTag);
+
+    try {
+      await ConfigsApi.updateCloudModel(selectedTag);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Cloud model updated to $selectedTag")),
         );
       }
     } catch (e) {
@@ -181,13 +224,10 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
   Future<void> onEmbeddingModelChanged(String newModel) async {
     final needsDownload = !installedEmbeddingModels.contains(newModel);
-
     String modelToSet = newModel;
 
     if (needsDownload) {
-      // Show model details dialog
       final selectedVersion = await _showModelDetailsDialog(context, newModel);
-
       if (selectedVersion == null) return;
 
       try {
@@ -199,16 +239,12 @@ class _OllamaSettingsState extends State<OllamaSettings> {
             ),
           );
         }
-
         await ConfigsApi.downloadModel(selectedVersion);
-
         setState(() {
           installedEmbeddingModels.add(selectedVersion);
           onlineEmbeddingModels.remove(newModel);
         });
-
         modelToSet = selectedVersion;
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -230,7 +266,6 @@ class _OllamaSettingsState extends State<OllamaSettings> {
       }
     }
 
-    // Always update the config after download or selection
     setState(() => selectedEmbeddingModel = modelToSet);
 
     try {
@@ -260,7 +295,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
     return showDialog<String>(
       context: context,
       barrierColor: Colors.black54,
-      barrierDismissible: true, // Allow clicking outside to dismiss
+      barrierDismissible: true,
       builder: (context) => _ModelDetailsDialog(modelName: modelName),
     );
   }
@@ -268,17 +303,16 @@ class _OllamaSettingsState extends State<OllamaSettings> {
   Widget _buildModelDropdown({
     required String label,
     required String? selectedModel,
-    required List<String> installedModels,
+    required List<String>? installedModels,
     required List<String> onlineModels,
     required Function(String) onChanged,
-    required bool installedExpanded,
-    required bool onlineExpanded,
-    required VoidCallback onInstalledToggle,
-    required VoidCallback onOnlineToggle,
+    required bool? installedExpanded,
+    required bool? onlineExpanded,
+    required VoidCallback? onInstalledToggle,
+    required VoidCallback? onOnlineToggle,
     required String searchQuery,
     required Function(String) onSearchChanged,
   }) {
-    // Filter online models based on search query
     final filteredOnlineModels =
         searchQuery.isEmpty
             ? onlineModels
@@ -297,7 +331,6 @@ class _OllamaSettingsState extends State<OllamaSettings> {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 8),
-
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
@@ -308,13 +341,12 @@ class _OllamaSettingsState extends State<OllamaSettings> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Installed Models Section
               InkWell(
                 onTap: onInstalledToggle,
                 child: Row(
                   children: [
                     Icon(
-                      installedExpanded
+                      installedExpanded!
                           ? Icons.keyboard_arrow_down
                           : Icons.keyboard_arrow_right,
                       size: 20,
@@ -338,7 +370,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                       ),
                     ),
                     Text(
-                      "(${installedModels.length})",
+                      "(${installedModels!.length})",
                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
@@ -410,13 +442,12 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
               const SizedBox(height: 12),
 
-              // Available Models Section
               InkWell(
                 onTap: onOnlineToggle,
                 child: Row(
                   children: [
                     Icon(
-                      onlineExpanded
+                      onlineExpanded!
                           ? Icons.keyboard_arrow_down
                           : Icons.keyboard_arrow_right,
                       size: 20,
@@ -448,10 +479,8 @@ class _OllamaSettingsState extends State<OllamaSettings> {
               ),
               if (onlineExpanded) ...[
                 const SizedBox(height: 8),
-
-                // Search Bar
                 Container(
-                  margin: const EdgeInsets.only(left: 30, right: 0),
+                  margin: const EdgeInsets.only(left: 30),
                   child: TextField(
                     onChanged: onSearchChanged,
                     decoration: InputDecoration(
@@ -487,9 +516,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                     style: const TextStyle(fontSize: 13),
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
                 if (filteredOnlineModels.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(left: 30, top: 8),
@@ -638,8 +665,18 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
           const SizedBox(height: 20),
 
+          // CLOUD MODEL
+          _CloudModelSelector(
+            cloudModels: cloudModels,
+            selectedModel: selectedCloudModel,
+            onChanged: onCloudModelChanged,
+          ),
+
+          const SizedBox(height: 20),
+
+          // CHAT MODEL
           _buildModelDropdown(
-            label: "Chat Model",
+            label: "Local Model",
             selectedModel: selectedChatModel,
             installedModels: installedChatModels,
             onlineModels: onlineChatModels,
@@ -660,6 +697,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
 
           const SizedBox(height: 24),
 
+          // EMBEDDING MODEL
           _buildModelDropdown(
             label: "Embedding Model",
             selectedModel: selectedEmbeddingModel,
@@ -689,9 +727,388 @@ class _OllamaSettingsState extends State<OllamaSettings> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Cloud Model Selector Widget
+// ─────────────────────────────────────────────────────────────
+class _CloudModelSelector extends StatefulWidget {
+  final List<String> cloudModels;
+  final String? selectedModel;
+  final Function(String) onChanged;
+
+  const _CloudModelSelector({
+    required this.cloudModels,
+    required this.selectedModel,
+    required this.onChanged,
+  });
+
+  @override
+  State<_CloudModelSelector> createState() => _CloudModelSelectorState();
+}
+
+class _CloudModelSelectorState extends State<_CloudModelSelector> {
+  bool expanded = false;
+  String searchQuery = "";
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered =
+        searchQuery.isEmpty
+            ? widget.cloudModels
+            : widget.cloudModels
+                .where(
+                  (m) => m.toLowerCase().contains(searchQuery.toLowerCase()),
+                )
+                .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Cloud Model",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            border: Border.all(color: Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Column(
+            children: [
+              InkWell(
+                onTap: () => setState(() => expanded = !expanded),
+                child: Row(
+                  children: [
+                    Icon(
+                      expanded
+                          ? Icons.keyboard_arrow_down
+                          : Icons.keyboard_arrow_right,
+                      size: 20,
+                      color: Colors.black87,
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.cloud, size: 16, color: Colors.cyan),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        "Available Cloud Models",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      "(${widget.cloudModels.length})",
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              if (expanded) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _searchController,
+                  onChanged: (q) => setState(() => searchQuery = q),
+                  decoration: InputDecoration(
+                    hintText: "Search cloud models...",
+                    hintStyle: const TextStyle(fontSize: 13),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon:
+                        searchQuery.isNotEmpty
+                            ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => searchQuery = "");
+                              },
+                            )
+                            : null,
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: const BorderSide(color: Colors.cyan),
+                    ),
+                  ),
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                if (filtered.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      searchQuery.isEmpty
+                          ? "No cloud models available"
+                          : "No models found for '$searchQuery'",
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  )
+                else
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 300),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final model = filtered[index];
+                        final isSelected =
+                            widget.selectedModel == model ||
+                            (widget.selectedModel?.startsWith("$model:") ??
+                                false);
+                        return InkWell(
+                          onTap: () => widget.onChanged(model),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            margin: const EdgeInsets.only(bottom: 4),
+                            decoration: BoxDecoration(
+                              color:
+                                  isSelected
+                                      ? Colors.cyan.shade50
+                                      : Colors.white,
+                              border: Border.all(
+                                color:
+                                    isSelected
+                                        ? Colors.cyan
+                                        : Colors.grey.shade300,
+                                width: isSelected ? 2 : 1,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    model,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight:
+                                          isSelected
+                                              ? FontWeight.w600
+                                              : FontWeight.normal,
+                                      color:
+                                          isSelected
+                                              ? Colors.cyan.shade900
+                                              : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Icon(
+                                    Icons.check_circle,
+                                    size: 16,
+                                    color: Colors.cyan.shade700,
+                                  )
+                                else
+                                  const Icon(
+                                    Icons.cloud,
+                                    size: 14,
+                                    color: Colors.cyan,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        if (widget.selectedModel != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 4, top: 4),
+            child: Text(
+              "Current: ${widget.selectedModel}",
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Cloud Tag Picker Dialog
+// ─────────────────────────────────────────────────────────────
+class _CloudTagDialog extends StatefulWidget {
+  final String modelName;
+  const _CloudTagDialog({required this.modelName});
+
+  @override
+  State<_CloudTagDialog> createState() => _CloudTagDialogState();
+}
+
+class _CloudTagDialogState extends State<_CloudTagDialog> {
+  bool loading = true;
+  List<String> cloudTags = [];
+  String? selectedTag;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final resp = await ConfigsApi.fetchCloudDetails(widget.modelName);
+      setState(() {
+        cloudTags = List<String>.from(resp["cloud_tags"] ?? []);
+        selectedTag = cloudTags.isNotEmpty ? cloudTags.first : null;
+        loading = false;
+      });
+    } catch (e) {
+      print("Error loading cloud tags: $e");
+      setState(() => loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        width: 400,
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  widget.modelName,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              "Select a cloud tag to use",
+              style: TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+            if (loading)
+              const Center(child: CircularProgressIndicator())
+            else if (cloudTags.isEmpty)
+              const Text(
+                "No cloud tags found for this model",
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              )
+            else
+              ...cloudTags.map(
+                (tag) => InkWell(
+                  onTap: () => setState(() => selectedTag = tag),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color:
+                          selectedTag == tag
+                              ? Colors.cyan.shade50
+                              : Colors.white,
+                      border: Border.all(
+                        color:
+                            selectedTag == tag
+                                ? Colors.cyan
+                                : Colors.grey.shade300,
+                        width: selectedTag == tag ? 2 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.cloud, size: 16, color: Colors.cyan),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight:
+                                  selectedTag == tag
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                              color:
+                                  selectedTag == tag
+                                      ? Colors.cyan.shade900
+                                      : Colors.black87,
+                            ),
+                          ),
+                        ),
+                        if (selectedTag == tag)
+                          Icon(
+                            Icons.check_circle,
+                            color: Colors.cyan.shade700,
+                            size: 18,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed:
+                      selectedTag == null
+                          ? null
+                          : () => Navigator.pop(context, selectedTag),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.cyan,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text("Use"),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Model Details Dialog (for chat/embedding download)
+// ─────────────────────────────────────────────────────────────
 class _ModelDetailsDialog extends StatefulWidget {
   final String modelName;
-
   const _ModelDetailsDialog({required this.modelName});
 
   @override
@@ -715,7 +1132,6 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
       setState(() {
         modelInfo = info;
         loading = false;
-        // Select "latest" by default if available
         if (info['tags'] != null && (info['tags'] as List).isNotEmpty) {
           selectedTag = info['tags'][0];
         }
@@ -755,7 +1171,6 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
               ],
             ),
             const SizedBox(height: 16),
-
             if (loading)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else if (modelInfo == null)
@@ -763,7 +1178,6 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                 child: Center(child: Text("Failed to load model details")),
               )
             else ...[
-              // Description
               if (modelInfo!['description'] != null) ...[
                 Text(
                   modelInfo!['description'],
@@ -771,14 +1185,11 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                 ),
                 const SizedBox(height: 20),
               ],
-
-              // Available Versions
               const Text(
                 "Available Versions",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
-
               if (modelInfo!['tags'] == null ||
                   (modelInfo!['tags'] as List).isEmpty)
                 const Text(
@@ -891,10 +1302,7 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                     },
                   ),
                 ),
-
               const SizedBox(height: 16),
-
-              // Action Buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
