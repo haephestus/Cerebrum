@@ -2,6 +2,10 @@
 
 > Answer quizzes offline — queue locally, submit + grade on reconnect.
 
+> Phase: core feature
+> Status: done
+> Created: 2026-08-21
+
 ## Status
 DONE — Phase 1 (shipped pre-phase formalisation)
 

@@ -2,6 +2,10 @@
 
 > Replace scaffolding with actual OS notifications and app-icon badge.
 
+> Phase: features
+> Status: todo
+> Created: 2026-08-21
+
 ## Status
 CANDIDATE — Phase 2
 

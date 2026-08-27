@@ -2,6 +2,10 @@
 
 > Better retrieval for large knowledge bases by organising docs hierarchically.
 
+> Phase: features
+> Status: todo
+> Created: 2026-08-21
+
 ## Status
 CANDIDATE — Phase 2
 

@@ -2,6 +2,10 @@
 
 > Move engram records from JSON to Drift (SQLite) for indexed queries.
 
+> Phase: foundation
+> Status: done
+> Created: 2026-08-11
+
 ## Status
 DONE — Phase 0 (shipped 2026-08-11)
 

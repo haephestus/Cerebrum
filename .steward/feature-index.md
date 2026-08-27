@@ -24,5 +24,6 @@
 | Engram generation | README | Phase 2 | [[features/engram-generation]] |
 | Hierarchical retrieval | README | Phase 2 | [[features/hierarchical-retrieval]] |
 | Real notifications | Changelog | Phase 2 | [[features/real-notifications]] |
+| Homepage dashboard data surface | Design notes | Phase 2 | [[features/homepage-dashboard]] |
 
 See [[roadmap]] for phase details, [[cross-repo/contracts]] for dependency information.

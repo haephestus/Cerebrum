@@ -2,6 +2,10 @@
 
 > ULIDs minted client-side so notes exist before the daemon sees them.
 
+> Phase: core feature
+> Status: done
+> Created: 2026-08-21
+
 ## Status
 DONE — Phase 1 (shipped pre-phase formalisation)
 

@@ -2,6 +2,10 @@
 
 > Local engram storage for cold-start offline quizzing.
 
+> Phase: core feature
+> Status: done
+> Created: 2026-08-11
+
 ## Status
 DONE — Phase 1 (shipped 2026-08-11)
 

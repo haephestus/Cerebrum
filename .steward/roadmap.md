@@ -31,7 +31,6 @@ See [[plan/core-feature]] for detailed spec.
 - [x] SM-2 offline mastery
 - [x] Engram content cache
 - [x] Badge + notification scaffolding
-- [ ] Engram generation (flashcards, quizzes grounded in RAG)
 
 ## Phase 2 — features
 
@@ -45,6 +44,7 @@ See [[plan/features]] for detailed spec.
 - [ ] Broader document format support
 - [ ] Real local notifications
 - [ ] Tool Wheel polish (opacity, custom slots, library)
+- [ ] Homepage dashboard data surface (see [[features/homepage-dashboard]])
 
 ## Phase 3 — hardening
 

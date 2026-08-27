@@ -11,7 +11,9 @@
 - [ ] Opacity control for highlighter
 - [ ] Customisable tool/brush slots
 - [ ] Brush/colour library sheet
+- [ ] Homepage dashboard data surface (see [[features/homepage-dashboard]])
 
 ## Notes
 - Engram generation is highest priority (see README)
 - Tool Wheel phases 4-5 are polish
+- Homepage data surface depends on engram generation + gap analysis; see [[features/homepage-dashboard]]

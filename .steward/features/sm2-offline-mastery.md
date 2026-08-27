@@ -2,6 +2,10 @@
 
 > Anki-style spaced repetition that works with no server.
 
+> Phase: core feature
+> Status: done
+> Created: 2026-08-21
+
 ## Status
 DONE — Phase 1 (shipped pre-phase formalisation)
 

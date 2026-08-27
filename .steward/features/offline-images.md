@@ -2,6 +2,10 @@
 
 > Stable image references that work offline and across base URL changes.
 
+> Phase: core feature
+> Status: done
+> Created: 2026-08-21
+
 ## Status
 DONE — Phase 1 (shipped pre-phase formalisation)
 

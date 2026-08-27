@@ -12,7 +12,6 @@
 - [x] SM-2 offline mastery for flashcards/MCQs
 - [x] Engram content cache for cold-start offline
 - [x] Badge + notification scaffolding
-- [ ] Engram generation grounded in RAG
 
 ## Notes
 - EngramSyncService separate from SyncService (two-phase submit+poll)

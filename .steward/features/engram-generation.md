@@ -2,6 +2,10 @@
 
 > Generate flashcards, quizzes, and mock exams grounded in RAG context.
 
+> Phase: features
+> Status: todo
+> Created: 2026-08-21
+
 ## Status
 CANDIDATE — Phase 2
 
