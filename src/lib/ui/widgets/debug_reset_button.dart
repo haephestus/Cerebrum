@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/services/user_session.dart';
-import 'package:cerebrum_app/ui/app_entry.dart';
+import 'package:cerebrum/services/user_session.dart';
+import 'package:cerebrum/ui/app_entry.dart';
 
 // Drop this anywhere in SettingPage (or any debug menu). Only renders
 /// in debug builds -- kDebugMode is false in a release/profile build,

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/bubbles_api.dart';
-import 'package:cerebrum_app/services/id.dart';
-import 'package:cerebrum_app/services/note_store.dart';
-import 'package:cerebrum_app/services/sync_service.dart';
-import 'package:cerebrum_app/ui/editor/blocks/image/note_image_resolver.dart';
-import 'package:cerebrum_app/ui/editor/editor_scaffold.dart';
-import 'package:cerebrum_app/ui/widgets/editable_title.dart';
+import 'package:cerebrum/api/bubbles_api.dart';
+import 'package:cerebrum/services/id.dart';
+import 'package:cerebrum/services/note_store.dart';
+import 'package:cerebrum/services/sync_service.dart';
+import 'package:cerebrum/ui/editor/blocks/image/note_image_resolver.dart';
+import 'package:cerebrum/ui/editor/editor_scaffold.dart';
+import 'package:cerebrum/ui/widgets/editable_title.dart';
 
 class DStudyBubblePage extends StatefulWidget {
   final bool addMode;

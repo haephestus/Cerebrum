@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/ui/editor/controllers/note_editor_controller.dart';
-import 'package:cerebrum_app/ui/editor/controllers/appflowy_text_driver.dart';
-import 'package:cerebrum_app/ui/editor/screens/drawing_layer.dart';
-import 'package:cerebrum_app/ui/editor/screens/paged_editor.dart'
+import 'package:cerebrum/ui/editor/controllers/note_editor_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/appflowy_text_driver.dart';
+import 'package:cerebrum/ui/editor/screens/drawing_layer.dart';
+import 'package:cerebrum/ui/editor/screens/paged_editor.dart'
     show BlockAnalysisLookup;
 
 /// One page of a note: a fixed-aspect "sheet" (A4 portrait) holding the text

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:scribble/scribble.dart';
-import 'package:cerebrum_app/ui/editor/controllers/appflowy_text_driver.dart';
-import 'package:cerebrum_app/ui/editor/controllers/note_editor_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/appflowy_text_driver.dart';
+import 'package:cerebrum/ui/editor/controllers/note_editor_controller.dart';
 
 /// Vertical continuous scroll (default, document feel) vs horizontal PageView
 /// (slideshow). Both render the same page widget — see PagedEditor.

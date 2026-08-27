@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/knowledgebase_api.dart';
+import 'package:cerebrum/api/knowledgebase_api.dart';
 
 class FileLibrary extends StatefulWidget {
   const FileLibrary({super.key});

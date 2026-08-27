@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:cerebrum_app/api/api_config.dart';
+import 'package:cerebrum/api/api_config.dart';
 
 /// Client half of the note offline-sync protocol (gap 1 / stream C).
 ///

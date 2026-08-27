@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/planner_api.dart';
+import 'package:cerebrum/api/planner_api.dart';
 
 /// Rewrite of StudyPlanDetailPage from learning_center_page.dart.
 /// Replaces the old flat "phases + metrics" list with the week/day/task

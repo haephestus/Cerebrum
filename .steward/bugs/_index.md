@@ -1,13 +1,10 @@
 # Bugs — Cerebrum-Client
-
-> Issue tracker. One entry per bug, newest first.
-
-## Open
-| ID | Description | Severity | File/Component | Date |
-|----|-------------|----------|----------------|------|
-| (none reported) | | | | |
+> Generated from the .md files in this directory — edit the docs, not
+> these tables (ADR-0017). Regenerated on every write/sync.
+## Open bugs
+| Bug | Severity | Status | Issue | Files |
+|-----|-----|-----|-----|-----|
 
 ## Resolved
-| ID | Description | Resolution | Date |
-|----|-------------|------------|------|
-| (none) | | | |
+| Bug | Severity | Status | Issue | Files |
+|-----|-----|-----|-----|-----|

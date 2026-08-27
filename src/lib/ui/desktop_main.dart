@@ -1,11 +1,11 @@
-import 'package:cerebrum_app/ui/screens/home/d_homescreen_page.dart';
-import 'package:cerebrum_app/ui/screens/learning_center/d_learning_center_page.dart';
-import 'package:cerebrum_app/ui/screens/settings/settings.dart';
+import 'package:cerebrum/ui/screens/home/d_homescreen_page.dart';
+import 'package:cerebrum/ui/screens/learning_center/d_learning_center_page.dart';
+import 'package:cerebrum/ui/screens/settings/settings.dart';
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/ui/widgets/sidebar_button.dart';
-import 'package:cerebrum_app/ui/screens/study_bubble/d_study_bubble_page.dart';
-import 'package:cerebrum_app/ui/screens/study_bubble/d_study_bubble_home.dart';
-import 'package:cerebrum_app/services/user_session.dart';
+import 'package:cerebrum/ui/widgets/sidebar_button.dart';
+import 'package:cerebrum/ui/screens/study_bubble/d_study_bubble_page.dart';
+import 'package:cerebrum/ui/screens/study_bubble/d_study_bubble_home.dart';
+import 'package:cerebrum/services/user_session.dart';
 
 class DesktopUI extends StatefulWidget {
   const DesktopUI({super.key});
@@ -58,11 +58,7 @@ class _DesktopUIState extends State<DesktopUI> {
       // shows every active study plan + every engram across the user.
       return DLearningCenterPage(userId: _userId!);
     } else if (selectedPage == 3) {
-      // Embedded directly (no pushed route), so give it an explicit
-      // close action instead of the default Navigator.pop -- there's
-      // nothing to pop here since this page never went through
-      // showDialog/Navigator.push.
-      return SettingPage(onClose: () => changePage(0));
+      return SettingPage();
     } else if (selectedPage == 4) {
       return DStudyBubblePage(
         addMode: false,

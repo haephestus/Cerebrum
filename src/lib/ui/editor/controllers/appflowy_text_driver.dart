@@ -3,15 +3,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:cerebrum_app/ui/editor/helpers/editor_commands.dart';
-import 'package:cerebrum_app/ui/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum_app/ui/editor/controllers/text_editing_driver.dart';
+import 'package:cerebrum/ui/editor/helpers/editor_commands.dart';
+import 'package:cerebrum/ui/editor/controllers/vim_move_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/text_editing_driver.dart';
 // NEW: the proper code block builder (syntax highlighting, language
 // switcher, copy button) — path assumes you saved it at
 // features/editor/blocks/code_block/code_block_component.dart; adjust
 // to wherever you actually put the file.
-import 'package:cerebrum_app/ui/editor/blocks/code_block/code_block_component.dart';
-import 'package:cerebrum_app/ui/editor/blocks/ai_block/ai_block_component.dart';
+import 'package:cerebrum/ui/editor/blocks/code_block/code_block_component.dart';
+import 'package:cerebrum/ui/editor/blocks/ai_block/ai_block_component.dart';
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,

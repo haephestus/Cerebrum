@@ -2,16 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/painting.dart' show Color, HSVColor;
-import 'package:path_provider/path_provider.dart';
+
+import 'package:cerebrum/services/storage_paths.dart';
 
 /// Persistence for editor-local preferences that aren't part of a note's
 /// content — currently the tool wheel's custom colour palette, per-tool stroke
 /// widths, and the minimum wheel size. Mirrors [NoteStore]'s file-IO shape
-/// (static async methods, JSON under `<appDocs>/cerebrum/…`) so the two read the
+/// (static async methods, JSON under `<appSupport>/cerebrum/…`) so the two read the
 /// same way.
 ///
 /// ```
-/// <appDocs>/cerebrum/editor/
+/// <appSupport>/cerebrum/editor/
 ///     palette.json     # {"custom": [ {"hex": "#1E88E5", "name": "My Blue"} ] }
 ///     settings.json    # {"minWheelScale": .., "penWidth": .., "highlighterWidth": ..}
 /// ```
@@ -23,8 +24,8 @@ class EditorSettingsStore {
   // -- paths -------------------------------------------------------------
 
   static Future<Directory> _editorDir() async {
-    final base = await getApplicationDocumentsDirectory();
-    return Directory('${base.path}/cerebrum/editor');
+    final root = await StoragePaths.cerebrumRoot();
+    return Directory('${root.path}/editor');
   }
 
   static Future<File> _paletteFile() async =>

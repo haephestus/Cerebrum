@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:scribble/scribble.dart';
-import 'package:cerebrum_app/ui/editor/controllers/text_editing_driver.dart';
+import 'package:cerebrum/ui/editor/controllers/text_editing_driver.dart';
 
 /// Owns the note's editing state end to end: whichever [TextEditingDriver]
 /// is currently active, the ink/drawing layer (which is driver-agnostic —

@@ -1,7 +1,7 @@
-import 'package:cerebrum_app/ui/screens/home/file_library.dart';
-import 'package:cerebrum_app/ui/screens/home/notes.dart';
-import 'package:cerebrum_app/ui/screens/home/suggested_reading.dart';
-import 'package:cerebrum_app/ui/screens/home/upcoming_engrams.dart';
+import 'package:cerebrum/ui/screens/home/file_library.dart';
+import 'package:cerebrum/ui/screens/home/notes.dart';
+import 'package:cerebrum/ui/screens/home/suggested_reading.dart';
+import 'package:cerebrum/ui/screens/home/upcoming_engrams.dart';
 import 'package:flutter/material.dart';
 
 class DHomescreen extends StatefulWidget {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/bubbles_api.dart';
-import 'package:cerebrum_app/ui/widgets/card_view.dart';
-import 'package:cerebrum_app/ui/screens/study_bubble/d_study_bubble_page.dart';
+import 'package:cerebrum/api/bubbles_api.dart';
+import 'package:cerebrum/ui/widgets/card_view.dart';
+import 'package:cerebrum/ui/screens/study_bubble/d_study_bubble_page.dart';
 
 class DStudyBubbleHome extends StatefulWidget {
   final Function(Map<String, dynamic> bubble) onOpenBubble;

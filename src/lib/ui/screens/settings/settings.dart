@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/ui/screens/settings/connection_settings.dart';
-import 'package:cerebrum_app/ui/screens/settings/ollama_settings.dart';
-import 'package:cerebrum_app/ui/widgets/debug_reset_button.dart';
-import 'package:cerebrum_app/ui/widgets/floating_modal.dart';
+import 'package:cerebrum/ui/screens/settings/connection_settings.dart';
+import 'package:cerebrum/ui/screens/settings/ollama_settings.dart';
+import 'package:cerebrum/ui/widgets/debug_reset_button.dart';
+import 'package:cerebrum/ui/widgets/floating_modal.dart';
 
 class SettingPage extends StatefulWidget {
   /// Pass this when SettingPage is embedded directly (e.g. as a selected

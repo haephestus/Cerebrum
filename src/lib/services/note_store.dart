@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:path_provider/path_provider.dart';
+import 'package:cerebrum/services/storage_paths.dart';
 
 /// The single filesystem toucher for offline-first note persistence
 /// (offline-first plan, phase 1).
@@ -11,7 +11,7 @@ import 'package:path_provider/path_provider.dart';
 /// reason about (and eventually diff):
 ///
 /// ```
-/// <appDocs>/cerebrum/bubbles/<bubbleId>/notes/
+/// <appSupport>/cerebrum/bubbles/<bubbleId>/notes/
 ///     _index.json                          # list for the notes screen
 ///     <noteId>/
 ///         manifest.json                    # note manifest: title/ids/flags + page order
@@ -32,10 +32,7 @@ import 'package:path_provider/path_provider.dart';
 class NoteStore {
   // -- path helpers ------------------------------------------------------
 
-  static Future<Directory> _cerebrumRoot() async {
-    final base = await getApplicationDocumentsDirectory();
-    return Directory('${base.path}/cerebrum');
-  }
+  static Future<Directory> _cerebrumRoot() => StoragePaths.cerebrumRoot();
 
   static Future<Directory> _notesDir(String bubbleId) async {
     final root = await _cerebrumRoot();

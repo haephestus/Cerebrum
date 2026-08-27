@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/services/user_session.dart';
-import 'package:cerebrum_app/ui/desktop_main.dart';
-import 'package:cerebrum_app/ui/screens/onboarding/onboarding_screen.dart';
-import 'package:cerebrum_app/ui/screens/onboarding/login_screen.dart';
+import 'package:cerebrum/services/user_session.dart';
+import 'package:cerebrum/ui/desktop_main.dart';
+import 'package:cerebrum/ui/screens/onboarding/onboarding_screen.dart';
+import 'package:cerebrum/ui/screens/onboarding/login_screen.dart';
 
 enum _StartupRoute { onboarding, login, home }
 
@@ -55,7 +55,31 @@ class _AppEntryPointState extends State<AppEntryPoint> {
           );
         }
 
-        switch (snapshot.data!) {
+        // A future that completes with an ERROR has `data == null` but is
+        // still "done" — the old `switch (snapshot.data!)` crashed exactly
+        // there (e.g. secure storage unavailable on Linux without a Secret
+        // Service throws out of _resolveRoute). Surface it instead of banging.
+        if (snapshot.hasError || snapshot.data == null) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text("Couldn't start the app — session check failed."),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _refresh,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final route = snapshot.data!;
+        switch (route) {
           case _StartupRoute.onboarding:
             return OnboardingScreen(
               onDone: () async {

@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,6 +28,54 @@ class UserSession {
   static const _keyDaemonKey = 'daemon_api_key';
   static const _secure = FlutterSecureStorage();
 
+  /// In-memory mirror of secure-storage values. On Linux the plugin talks to
+  /// the system Secret Service (libsecret); on minimal desktops there often is
+  /// none, and every read/write throws a PlatformException. Credentials are
+  /// NEVER persisted anywhere but secure storage (no plaintext fallback) — the
+  /// cache exists so a session still works for the process lifetime on such
+  /// machines, and a best-effort write keeps working normally elsewhere.
+  static final Map<String, String> _secureCache = {};
+
+  /// Best-effort secure read: the stored value, the in-memory value, or null —
+  /// never throws.
+  static Future<String?> _secureRead(String key) async {
+    final cached = _secureCache[key];
+    if (cached != null) return cached;
+    try {
+      final value = await _secure.read(key: key);
+      if (value != null) _secureCache[key] = value;
+      return value;
+    } on PlatformException {
+      return null; // e.g. Linux without a running Secret Service
+    } on MissingPluginException {
+      return null; // headless tests / platforms without the plugin
+    }
+  }
+
+  /// Best-effort secure write: updates the cache, persists when possible,
+  /// never throws. `value == null` deletes the entry.
+  static Future<void> _secureWrite(String key, String? value) async {
+    if (value == null) {
+      _secureCache.remove(key);
+      try {
+        await _secure.delete(key: key);
+      } on PlatformException {
+        // No Secret Service — nothing to delete, cache already cleared.
+      } on MissingPluginException {
+        // Headless/unsupported — nothing to delete.
+      }
+      return;
+    }
+    _secureCache[key] = value;
+    try {
+      await _secure.write(key: key, value: value);
+    } on PlatformException {
+      // No Secret Service — session works via the in-memory cache only.
+    } on MissingPluginException {
+      // Headless/unsupported — session works via the in-memory cache only.
+    }
+  }
+
   /// Persist the account + token returned by [UserApi.login] (which the
   /// signup flow also calls right after creating the account).
   static Future<void> saveSession({
@@ -41,7 +90,7 @@ class UserSession {
       prefs.setString(_keyUsername, username),
       if (email != null) prefs.setString(_keyEmail, email),
     ]);
-    await _secure.write(key: _keyToken, value: token);
+    await _secureWrite(_keyToken, token);
   }
 
   static Future<String?> getUserId() async {
@@ -61,21 +110,17 @@ class UserSession {
 
   /// The bearer token, or null if not logged in. Read by [ApiConfig.headers].
   static Future<String?> getToken() async {
-    return _secure.read(key: _keyToken);
+    return _secureRead(_keyToken);
   }
 
   /// The local-mode daemon key. Read by [ApiConfig.headers], set in the
   /// Connection settings panel. Empty string clears it.
   static Future<void> saveDaemonKey(String key) async {
-    if (key.isEmpty) {
-      await _secure.delete(key: _keyDaemonKey);
-      return;
-    }
-    await _secure.write(key: _keyDaemonKey, value: key);
+    await _secureWrite(_keyDaemonKey, key.isEmpty ? null : key);
   }
 
   static Future<String?> getDaemonKey() async {
-    return _secure.read(key: _keyDaemonKey);
+    return _secureRead(_keyDaemonKey);
   }
 
   /// Logged in iff we hold a token (the daemon won't accept us without one).
@@ -104,7 +149,7 @@ class UserSession {
       prefs.remove(_keyUsername),
       prefs.remove(_keyEmail),
     ]);
-    await _secure.delete(key: _keyToken);
+    await _secureWrite(_keyToken, null);
   }
 
   /// Clears the account AND the onboarding flag -- full reset for testing,
@@ -117,7 +162,7 @@ class UserSession {
       prefs.remove(_keyEmail),
       prefs.remove(_keyHasSeenOnboarding),
     ]);
-    await _secure.delete(key: _keyToken);
-    await _secure.delete(key: _keyDaemonKey);
+    await _secureWrite(_keyToken, null);
+    await _secureWrite(_keyDaemonKey, null);
   }
 }

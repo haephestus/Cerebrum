@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
 
-import 'package:cerebrum_app/models/engram_models.dart';
-import 'package:cerebrum_app/services/db/app_database.dart';
+import 'package:cerebrum/models/engram_models.dart';
+import 'package:cerebrum/services/db/app_database.dart';
 
 /// Local cache of engram *content* (question + answers) so a quiz can start with
 /// no connection. Populated from `listEngrams` (fetched with answers) and read

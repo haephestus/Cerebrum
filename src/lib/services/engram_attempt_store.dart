@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart' show Value;
 
-import 'package:cerebrum_app/services/db/app_database.dart';
+import 'package:cerebrum/services/db/app_database.dart';
 
 /// One offline-capable engram answer attempt (offline-first, extended to the
 /// learning center).

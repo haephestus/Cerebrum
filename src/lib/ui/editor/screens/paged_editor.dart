@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/ui/editor/controllers/paged_note_controller.dart';
-import 'package:cerebrum_app/ui/editor/screens/page_surface.dart';
+import 'package:cerebrum/ui/editor/controllers/paged_note_controller.dart';
+import 'package:cerebrum/ui/editor/screens/page_surface.dart';
 
 /// Looks up the analysis chunks (if any) covering the block with id [blockId] on
 /// the page with id [pageId]. Null/empty means that block has no analysis.

@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:cerebrum_app/ui/editor/controllers/vim_move_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/vim_move_controller.dart';
 
 /// The one thing every text-editing engine must be able to do: hold a
 /// document, notify on change, and build its own editing widget.

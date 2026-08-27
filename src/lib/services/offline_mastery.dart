@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart' show Value;
 
-import 'package:cerebrum_app/services/db/app_database.dart';
+import 'package:cerebrum/services/db/app_database.dart';
 
 /// Per-engram SRS/mastery state, computed and stored **on-device** so flashcards
 /// and MCQs give immediate feedback and schedule reviews with no server —

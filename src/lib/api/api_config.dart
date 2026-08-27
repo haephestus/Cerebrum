@@ -1,5 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cerebrum_app/services/user_session.dart';
+import 'package:cerebrum/services/user_session.dart';
 
 /// Which daemon we're talking to.
 ///  - local: your own machine / a tunnel. The daemon gates transport with a

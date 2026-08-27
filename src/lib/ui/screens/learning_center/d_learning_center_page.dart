@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/models/engram_models.dart';
-import 'package:cerebrum_app/api/learning_center_api.dart';
-import 'package:cerebrum_app/api/planner_api.dart';
-import 'package:cerebrum_app/ui/screens/learning_center/study_plan_detail_page.dart';
-import 'package:cerebrum_app/ui/screens/learning_center/engrams/completion/mcq.dart';
-import 'package:cerebrum_app/ui/screens/learning_center/engrams/completion/flashcard.dart';
-import 'package:cerebrum_app/ui/screens/learning_center/engrams/completion/short_question.dart';
-import 'package:cerebrum_app/ui/screens/learning_center/engrams/completion/long_questions.dart';
-import 'package:cerebrum_app/ui/widgets/floating_modal.dart';
+import 'package:cerebrum/models/engram_models.dart';
+import 'package:cerebrum/api/learning_center_api.dart';
+import 'package:cerebrum/api/planner_api.dart';
+import 'package:cerebrum/ui/screens/learning_center/study_plan_detail_page.dart';
+import 'package:cerebrum/ui/screens/learning_center/engrams/completion/mcq.dart';
+import 'package:cerebrum/ui/screens/learning_center/engrams/completion/flashcard.dart';
+import 'package:cerebrum/ui/screens/learning_center/engrams/completion/short_question.dart';
+import 'package:cerebrum/ui/screens/learning_center/engrams/completion/long_questions.dart';
+import 'package:cerebrum/ui/widgets/floating_modal.dart';
 
 /// Two modes, one widget:
 ///   - bubbleId/noteId BOTH null  -> global dashboard: every study plan

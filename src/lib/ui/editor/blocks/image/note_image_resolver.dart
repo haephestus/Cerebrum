@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:cerebrum_app/services/note_store.dart';
+import 'package:cerebrum/services/note_store.dart';
 
 /// Resolves the stable image refs we embed in note documents
 /// (`cerebrum-image://<noteId>/<name>`) to something a renderer can load

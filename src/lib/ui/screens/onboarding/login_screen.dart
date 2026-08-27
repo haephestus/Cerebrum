@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/user_api.dart';
+import 'package:cerebrum/api/user_api.dart';
 
 /// Signup + login against the daemon's credential auth:
 ///   - login  -> POST /user/login  (email + password) -> bearer token

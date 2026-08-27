@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/ui/editor/controllers/note_editor_controller.dart';
-import 'package:cerebrum_app/ui/editor/controllers/text_editing_driver.dart';
-import 'package:cerebrum_app/ui/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum_app/ui/editor/screens/drawing_layer.dart';
+import 'package:cerebrum/ui/editor/controllers/note_editor_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/text_editing_driver.dart';
+import 'package:cerebrum/ui/editor/controllers/vim_move_controller.dart';
+import 'package:cerebrum/ui/editor/screens/drawing_layer.dart';
 
 /// The editor surface: whatever [TextEditingDriver.buildEditor] renders,
 /// stacked with the drawing layer. No Scaffold, no AppBar, no save logic,

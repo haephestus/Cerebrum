@@ -1,6 +1,6 @@
 {
-    "name": "cerebrum_app",
-    "short_name": "cerebrum_app",
+    "name": "cerebrum",
+    "short_name": "cerebrum",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

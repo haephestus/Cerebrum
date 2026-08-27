@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/api_config.dart';
-import 'package:cerebrum_app/services/user_session.dart';
+import 'package:cerebrum/api/api_config.dart';
+import 'package:cerebrum/services/user_session.dart';
 
 /// Connection settings: pick which daemon to talk to (local vs cloud), set the
 /// base URL for each, and enter the local-mode daemon key. Persists via

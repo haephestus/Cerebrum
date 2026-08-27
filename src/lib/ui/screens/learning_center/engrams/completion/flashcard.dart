@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/models/engram_models.dart';
-import 'package:cerebrum_app/services/engram_attempt_store.dart';
-import 'package:cerebrum_app/services/engram_sync_service.dart';
-import 'package:cerebrum_app/services/offline_mastery.dart';
+import 'package:cerebrum/models/engram_models.dart';
+import 'package:cerebrum/services/engram_attempt_store.dart';
+import 'package:cerebrum/services/engram_sync_service.dart';
+import 'package:cerebrum/services/offline_mastery.dart';
 
 class FlashcardCompletionPage extends StatefulWidget {
   final Engram engram;

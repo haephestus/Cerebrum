@@ -1,20 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/bubbles_api.dart';
-import 'package:cerebrum_app/api/learning_center_api.dart';
-import 'package:cerebrum_app/services/id.dart';
-import 'package:cerebrum_app/services/note_store.dart';
-import 'package:cerebrum_app/services/sync_service.dart';
-import 'package:cerebrum_app/ui/editor/blocks/image/note_image_resolver.dart';
+import 'package:cerebrum/api/bubbles_api.dart';
+import 'package:cerebrum/api/learning_center_api.dart';
+import 'package:cerebrum/services/id.dart';
+import 'package:cerebrum/services/note_store.dart';
+import 'package:cerebrum/services/sync_service.dart';
+import 'package:cerebrum/ui/editor/blocks/image/note_image_resolver.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
-import 'package:cerebrum_app/ui/editor/controllers/paged_note_controller.dart';
-import 'package:cerebrum_app/ui/editor/controllers/analysis_mode_controller.dart';
-import 'package:cerebrum_app/ui/editor/controllers/text_editing_driver.dart';
-import 'package:cerebrum_app/ui/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum_app/ui/editor/controllers/appflowy_text_driver.dart';
-import 'package:cerebrum_app/ui/editor/screens/paged_editor.dart';
-import 'package:cerebrum_app/ui/editor/screens/radial_tool_dial.dart';
+import 'package:cerebrum/ui/editor/controllers/paged_note_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/analysis_mode_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/text_editing_driver.dart';
+import 'package:cerebrum/ui/editor/controllers/vim_move_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/appflowy_text_driver.dart';
+import 'package:cerebrum/ui/editor/screens/paged_editor.dart';
+import 'package:cerebrum/ui/editor/screens/radial_tool_dial.dart';
 
 enum _TextEngine { appFlowy, superEditor }
 

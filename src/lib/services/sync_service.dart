@@ -3,8 +3,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cerebrum_app/api/bubbles_api.dart';
-import 'package:cerebrum_app/services/note_store.dart';
+import 'package:cerebrum/api/bubbles_api.dart';
+import 'package:cerebrum/services/note_store.dart';
 
 /// Offline-capable note sync — the client push half (offline-first plan,
 /// phases 1-4).

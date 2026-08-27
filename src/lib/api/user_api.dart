@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'api_config.dart';
-import 'package:cerebrum_app/services/user_session.dart';
+import 'package:cerebrum/services/user_session.dart';
 
 /// Thrown when the backend returns 409 for POST /user/account -- an account
 /// already exists with this email (email is UNIQUE in the daemon's users table).

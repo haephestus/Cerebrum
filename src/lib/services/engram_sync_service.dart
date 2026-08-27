@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cerebrum_app/api/learning_center_api.dart';
-import 'package:cerebrum_app/services/engram_attempt_store.dart';
-import 'package:cerebrum_app/services/id.dart';
-import 'package:cerebrum_app/services/notifications.dart';
-import 'package:cerebrum_app/services/offline_mastery.dart';
+import 'package:cerebrum/api/learning_center_api.dart';
+import 'package:cerebrum/services/engram_attempt_store.dart';
+import 'package:cerebrum/services/id.dart';
+import 'package:cerebrum/services/notifications.dart';
+import 'package:cerebrum/services/offline_mastery.dart';
 
 /// Offline-first engram answers — the learning-center analogue of `SyncService`,
 /// kept as its own service because engram answers are a **two-phase** flow that

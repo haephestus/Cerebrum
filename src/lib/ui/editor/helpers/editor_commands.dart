@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:cerebrum_app/ui/editor/controllers/vim_move_controller.dart';
+import 'package:cerebrum/ui/editor/controllers/vim_move_controller.dart';
 
 /// Non-printable / multi-key vim commands: Escape, duplicate line, gg/G.
 ///

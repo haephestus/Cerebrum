@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/configs_api.dart';
+import 'package:cerebrum/api/configs_api.dart';
 
 class OllamaSettings extends StatefulWidget {
   const OllamaSettings({super.key});

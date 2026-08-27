@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:cerebrum_app/api/learning_center_api.dart';
-import 'package:cerebrum_app/models/engram_models.dart';
+import 'package:cerebrum/api/learning_center_api.dart';
+import 'package:cerebrum/models/engram_models.dart';
 
 class EngramItem {
   final String title;

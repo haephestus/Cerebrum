@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:cerebrum_app/models/engram_models.dart';
-import 'package:cerebrum_app/services/engram_store.dart';
+import 'package:cerebrum/models/engram_models.dart';
+import 'package:cerebrum/services/engram_store.dart';
 import 'api_config.dart';
 
 class LearningCenterApi {
