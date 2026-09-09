@@ -210,6 +210,10 @@ class PagedNoteController extends ChangeNotifier {
             index: (p['page_index'] as num?)?.toInt() ?? i,
             document: p['document'] as Map<String, dynamic>?,
             ink: _inkOf(p['ink']),
+            // The FIRST page owns the caret on open — a freshly opened note
+            // must be immediately navigable without a click (nothing in
+            // AppFlowy ever requests focus on its own).
+            autoFocus: i == 0,
           ),
         );
       }
@@ -220,6 +224,7 @@ class PagedNoteController extends ChangeNotifier {
           index: 0,
           document: legacyDocument,
           ink: legacyInk,
+          autoFocus: true,
         ),
       );
     }
@@ -242,7 +247,7 @@ class PagedNoteController extends ChangeNotifier {
     bool autoFocus = false,
     bool seedCaret = true,
   }) {
-    return NotePage(
+    final page = NotePage(
       pageId: pageId,
       pageIndex: index,
       controller: NoteEditorController(
@@ -250,12 +255,20 @@ class PagedNoteController extends ChangeNotifier {
           initialDocumentJson: document,
           initialCaretBlockIndex: caretBlockIndex,
           initialCaretOffset: caretOffset,
-          autoFocus: autoFocus,
           seedCaret: seedCaret,
         ),
         initialInkJson: ink,
       ),
     );
+    // `autoFocus` here means "this page owns the caret": AppFlowy 6.x never
+    // focuses its editor by itself (autoFocus only sets a selection), so the
+    // request must be explicit. Deferred + re-armed by the driver so it lands
+    // even when this page's editor subtree isn't mounted until a later frame.
+    if (autoFocus) {
+      final d = page.controller.driver;
+      if (d is AppFlowyTextDriver) d.requestEditorFocus();
+    }
+    return page;
   }
 
   void setActive(int index) {
@@ -292,6 +305,12 @@ class PagedNoteController extends ChangeNotifier {
         }
       }
       _vimEnabledBeforeDrawing.clear();
+      // Coming back to text: give the keyboard to the ACTIVE page's editor.
+      // Registered AFTER the per-page vim listeners above, so this is the
+      // deciding post-frame request (an active-page editor that was never
+      // part of the vim broadcast still gets focus).
+      final d = _pages[_activeIndex].controller.driver;
+      if (d is AppFlowyTextDriver) d.requestEditorFocus();
     }
 
     notifyListeners();
@@ -505,11 +524,21 @@ class PagedNoteController extends ChangeNotifier {
     // Vim mode is per-page (each driver owns a VimModeController that defaults to
     // normal), so a rebuild would silently drop you back to normal. Carry the
     // mode onto both rebuilt pages so typing keeps going in insert across the
-    // page boundary.
+    // page boundary. (Each `_applyVimState` fires that page's vim-listener,
+    // whose focus re-assert request would RACE — the explicit request below,
+    // registered after both, decides the winner.)
     if (wasInsert != null) {
       _applyVimState(trimmed, insert: wasInsert, enabled: wasVimEnabled);
       _applyVimState(target, insert: wasInsert, enabled: wasVimEnabled);
     }
+
+    // Focus the page that OWNS the caret after the flow: the target when the
+    // caret moved, the trimmed source when it stayed (or was reseated onto the
+    // head table). Registered LAST so it is the deciding post-frame request.
+    final focusDriver = caretMoved
+        ? target.controller.driver
+        : (srcCaretBlock != null ? trimmed.controller.driver : null);
+    if (focusDriver is AppFlowyTextDriver) focusDriver.requestEditorFocus();
 
     if (caretMoved) _activeIndex = pageIndex + 1;
     _flowing = false;

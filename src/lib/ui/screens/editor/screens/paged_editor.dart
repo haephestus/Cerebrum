@@ -79,9 +79,11 @@ class _PagedEditorState extends State<PagedEditor> {
               // Key by controller identity: pages keep the same element across
               // normal rebuilds (preserving editor/scroll state), but a page
               // whose controller was REPLACED — the backspace-merge seam, or the
-              // two pages an overflow flow rebuilds — gets a new key and remounts,
-              // so its `autoFocus` fires and the caret lands where it was seeded.
-              // This remount is the whole mechanism behind cross-page focus/caret
+              // two pages an overflow flow rebuilds — gets a new key and
+              // remounts, so the focus request that page's `autoFocus` made at
+              // construction (see PagedNoteController._makePage) lands on the
+              // fresh editor and the caret shows where it was seeded. This
+              // remount is the whole mechanism behind cross-page focus/caret
               // hand-off; it's also why those paths must seed the caret onto
               // exactly one page (see PagedNoteController.pushOverflow).
               child: PageSurface(

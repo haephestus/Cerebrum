@@ -26,10 +26,8 @@ class AppFlowyTextDriver extends ChangeNotifier
     Map<String, dynamic>? initialDocumentJson,
     int? initialCaretBlockIndex,
     int? initialCaretOffset,
-    bool autoFocus = false,
     bool seedCaret = true,
   }) {
-    _autoFocus = autoFocus;
     _editorState = _buildEditorState(
       initialDocumentJson,
       initialCaretBlockIndex,
@@ -79,7 +77,18 @@ class AppFlowyTextDriver extends ChangeNotifier
   late final EditorScrollController _scrollController;
   late final StreamSubscription<dynamic> _transactionSub;
   late bool _wasInAnalysis = false;
-  bool _autoFocus = false;
+
+  /// Keyboard focus for this page's editor, owned by the DRIVER (not the
+  /// package): AppFlowy 6.x only focuses its keyboard-service node on a tap,
+  /// and its `autoFocus:` flag merely SETS A SELECTION — it never requests
+  /// focus. So the editor can only gain the keyboard through this node +
+  /// [requestEditorFocus]; without it a note opens / a mode flips with no
+  /// caret and the user has to click to navigate. Passed to AppFlowyEditor's
+  /// `focusNode:` so the keyboard service uses THIS node and taps focus it.
+  final FocusNode editorFocusNode =
+      FocusNode(debugLabel: 'cerebrum-page-editor');
+
+  bool _disposed = false;
 
   /// Analysis-review-mode chunk stepping: +1 = next chunk, -1 = previous.
   /// Set by the scaffold (which owns the [AnalysisModeController]); the
@@ -538,6 +547,40 @@ class AppFlowyTextDriver extends ChangeNotifier
       setChunkHighlight(ids, null);
     }
     _wasInAnalysis = inAnalysis;
+
+    // Re-assert keyboard focus across every vim flip that happens ON this
+    // page: Esc (insert→normal, analysis→normal), 'i' (→insert), 'n'
+    // (→analysis), and the toolbar mode switch (which momentarily focuses
+    // the button that toggled it). Keys arrive on THIS driver only when it is
+    // the page the user is interacting with, so requesting self-focus is
+    // correct in every single-page case.
+    //
+    // Deliberately gated on isEnabled: the drawing toggle broadcasts
+    // `setEnabled(false)` to EVERY page on the way in, and those pages must
+    // NOT steal the keyboard (drawing owns it). The drawing toggle's way out
+    // re-requests focus itself, on the ACTIVE page only (see
+    // PagedNoteController.toggleDrawingMode).
+    if (vimMode.isEnabled) {
+      requestEditorFocus();
+    }
+  }
+
+  /// Requests keyboard focus for this page's editor: the caret renders here
+  /// and vim/arrow navigation keys land here. Safe when already focused
+  /// (no-op); safe to call from a key handler (deferred a frame). On a page
+  /// remount the new editor only attaches this focus node on a LATER frame, so
+  /// the request re-arms (bounded) until the node is attached — otherwise a
+  /// request fired right after `_makePage` would land on the old, about-to-be
+  /// disposed node and vanish.
+  void requestEditorFocus({int attempts = 0}) {
+    if (_disposed || attempts > 6) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_disposed || editorFocusNode.hasFocus) return;
+      editorFocusNode.requestFocus();
+      if (!editorFocusNode.hasFocus) {
+        requestEditorFocus(attempts: attempts + 1);
+      }
+    });
   }
 
   /// Depth-first walk collecting nodes whose stable id is in [wanted].
@@ -576,12 +619,16 @@ class AppFlowyTextDriver extends ChangeNotifier
       disableAutoScroll: true,
       disableScrollService: false,
 
-      // Off by default: with one editor per page, all pages auto-focusing at
-      // once fights for the keyboard and surfaced the "Null check operator used
-      // on a null value" on open. Only a page created to receive focus (e.g.
-      // the freshly-merged page after a backspace-merge) sets this true so the
-      // caret lands there.
-      autoFocus: _autoFocus,
+      // Hand the keyboard service OUR focus node (see [editorFocusNode]) —
+      // this is the only handle through which [requestEditorFocus] can work.
+      focusNode: editorFocusNode,
+
+      // Always false. AppFlowy 6.x's autoFocus does NOT focus: it merely
+      // overwrites the selection with `Selection(path[0])` on mount — which
+      // would clobber the caret the driver seeded (end-of-last-line, or the
+      // merge/overflow seam). Real focus is [requestEditorFocus], called by
+      // the controller on exactly the page that owns the caret.
+      autoFocus: false,
       // Carries the standard block builders plus the 'code_block' type
       // added above (registered against CodeBlockComponentBuilder with
       // syntax highlighting). Cached field — see _blockComponentBuilders.
@@ -751,8 +798,10 @@ class AppFlowyTextDriver extends ChangeNotifier
 
   @override
   void dispose() {
+    _disposed = true;
     _transactionSub.cancel();
     vimMode.removeListener(_onVimModeChanged);
+    editorFocusNode.dispose();
     _scrollController.dispose();
     vimMode.dispose();
     super.dispose();

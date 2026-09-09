@@ -836,6 +836,14 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         }
       }
     }
+
+    // Hand the keyboard to the page that now holds the review cursor. Without
+    // this, tapping the chunk bar's ◀ ▶ buttons leaves focus on the BUTTON and
+    // 'n'/'N' continuation (and any other editor key) is dead until the user
+    // clicks the page again. The keyboard 'n'/'N' path lands here too, where
+    // requesting focus is a no-op because the editor already has it.
+    final activeDriver = _editorController.activeController.driver;
+    if (activeDriver is AppFlowyTextDriver) activeDriver.requestEditorFocus();
   }
 
   /// pageId of the currently highlighted chunk (the one the review cursor just
