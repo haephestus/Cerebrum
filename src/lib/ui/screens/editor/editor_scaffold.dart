@@ -1,20 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
+
+import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:cerebrum/api/bubbles_api.dart';
 import 'package:cerebrum/api/learning_center_api.dart';
 import 'package:cerebrum/services/id.dart';
 import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/services/sync_service.dart';
-import 'package:cerebrum/ui/editor/blocks/image/note_image_resolver.dart';
+import 'package:cerebrum/ui/screens/editor/blocks/image/note_image_resolver.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/analysis_mode_controller.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/paged_note_controller.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/text_editing_driver.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
+import 'package:cerebrum/ui/screens/editor/screens/paged_editor.dart';
+import 'package:cerebrum/ui/screens/editor/screens/radial_tool_dial.dart';
+import 'package:flutter/material.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
-import 'package:cerebrum/ui/editor/controllers/paged_note_controller.dart';
-import 'package:cerebrum/ui/editor/controllers/analysis_mode_controller.dart';
-import 'package:cerebrum/ui/editor/controllers/text_editing_driver.dart';
-import 'package:cerebrum/ui/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum/ui/editor/controllers/appflowy_text_driver.dart';
-import 'package:cerebrum/ui/editor/screens/paged_editor.dart';
-import 'package:cerebrum/ui/editor/screens/radial_tool_dial.dart';
 
 enum _TextEngine { appFlowy, superEditor }
 
@@ -143,6 +145,10 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       }
     };
 
+    _analysisMode.onFocusChunk = (ref) {
+      _focusAnalysisChunk(ref);
+    };
+
     final contentData =
         widget.initialTextJson ??
         widget.note['content'] as Map<String, dynamic>?;
@@ -166,9 +172,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     // locally (and the note can persist) before the daemon ever assigns a
     // filename.
     final noteId =
-        (widget.note['note_id'] as String?) ??
-        parsedNoteId ??
-        Ulid.generate();
+        (widget.note['note_id'] as String?) ?? parsedNoteId ?? Ulid.generate();
     widget.note['note_id'] = noteId;
 
     // Prime the image resolver for this note (local cache paths + recorded
@@ -189,7 +193,10 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     final loadedPages =
         rawPages == null
             ? null
-            : NoteImageResolver.mapPagesUrls(rawPages, NoteImageResolver.resolve);
+            : NoteImageResolver.mapPagesUrls(
+              rawPages,
+              NoteImageResolver.resolve,
+            );
 
     _editorController = PagedNoteController.fromNote(
       pages: loadedPages,
@@ -197,6 +204,28 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       legacyInk: inkJson,
     );
     _editorController.addListener(_onEditorChanged);
+
+    // Let the 'n'/'N' keys (handled by the per-page vim driver) step the chunk
+    // cursor. Positive = next, negative = previous. MUST be set after
+    // `_editorController` is created — `_editorController` is a `late final`
+    // that initializes on first access, so touching it earlier would run the
+    // factory before its inputs (docJson/inkJson/loadedPages) exist.
+    _editorController.stepAnalysisChunk = (delta) {
+      if (delta > 0) {
+        _analysisMode.next();
+      } else {
+        _analysisMode.prev();
+      }
+    };
+
+    // 'n' in normal mode (via the per-page vim driver) enters analysis mode —
+    // lazy-load the analysis first (same as the More-menu path) so chunks are
+    // available even before the side panel has ever been opened.
+    _editorController.enterAnalysisMode = _enterAnalysisMode;
+
+    // 'o' in analysis mode (via the per-page vim driver) toggles the full
+    // analysis panel — the overview tab — without switching vim modes.
+    _editorController.toggleAnalysisPanel = _toggleAnalysisPanel;
 
     // Image uploads target this note's folder on the daemon. Reads filename
     // dynamically (not captured) so it also works after a brand-new note gets
@@ -206,7 +235,9 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       if (bubbleId == null || bubbleId.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Save the note before adding images.')),
+            const SnackBar(
+              content: Text('Save the note before adding images.'),
+            ),
           );
         }
         return null;
@@ -404,7 +435,13 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     }
   }
 
-  Future<void> _loadAnalysis() async {
+  /// Loads the note's analysis and (unless [openPanel] is false) pops the
+  /// "Analysis Summary" panel. Entering ANALYSIS REVIEW mode calls with
+  /// [openPanel] false: the block analysis widgets — inline tints + per-block
+  /// findings — are the default surface during n/N navigation, and the summary
+  /// is opt-in. Every path that explicitly asks for the summary (the app-bar /
+  /// More-menu toggles, the bar's "Full analysis", 'o') leaves the default true.
+  Future<void> _loadAnalysis({bool openPanel = true}) async {
     final bubbleId = _bubbleId;
     final noteId = _noteIdFromFilename(widget.note['filename'] as String?);
     final version = widget.note["version"];
@@ -438,7 +475,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
           _blockAnalysis = {};
           _cachedAnalysis = 'No cached analysis found for this note.';
         }
-        _showAnalysisPanel = true;
+        // openPanel false → entering analysis review must not force the summary.
+        _showAnalysisPanel = openPanel;
         _isLoadingAnalysis = false;
       });
     } catch (e) {
@@ -449,7 +487,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         _analysisChunks = [];
         _blockAnalysis = {};
         _cachedAnalysis = 'Error loading analysis:\n$e';
-        _showAnalysisPanel = true;
+        _showAnalysisPanel = openPanel;
         _isLoadingAnalysis = false;
       });
     }
@@ -560,10 +598,11 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         // (AppFlowy node ids, or content-hash ids for id-less blocks) — keep
         // them as-is; they key the per-block popover directly.
         final pageId = outerMap['page_id'] as String?;
-        final blockIds = (outerMap['source_block_ids'] as List<dynamic>? ?? [])
-            .map((e) => e.toString())
-            .where((s) => s.isNotEmpty)
-            .toList();
+        final blockIds =
+            (outerMap['source_block_ids'] as List<dynamic>? ?? [])
+                .map((e) => e.toString())
+                .where((s) => s.isNotEmpty)
+                .toList();
 
         flattened.add({
           'chunkId': chunkId,
@@ -588,8 +627,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   List<Map<String, dynamic>>? _lookupBlockAnalysis(
     String pageId,
     String blockId,
-  ) =>
-      _blockAnalysis[pageId]?[blockId];
+  ) => _blockAnalysis[pageId]?[blockId];
 
   /// Feed the flattened chunks to the analysis-review controller (SCAFFOLD).
   /// Only chunks that actually map to a page/blocks are navigable.
@@ -604,6 +642,10 @@ class _EditorScaffoldState extends State<EditorScaffold> {
             chunk: chunk,
           ),
     ];
+    debugPrint(
+      '[rebuildAnalysisModeChunks] ${refs.length} navigable chunks; '
+      'withBlockIds=${refs.where((r) => r.blockIds.isNotEmpty).length}',
+    );
     _analysisMode.setChunks(refs);
   }
 
@@ -613,8 +655,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     for (final chunk in _analysisChunks) {
       final pageId = chunk['pageId'] as String?;
       if (pageId == null) continue;
-      final blockIds =
-          (chunk['blockIds'] as List?)?.cast<String>() ?? const [];
+      final blockIds = (chunk['blockIds'] as List?)?.cast<String>() ?? const [];
       final perPage = map.putIfAbsent(pageId, () => {});
       for (final blockId in blockIds) {
         perPage.putIfAbsent(blockId, () => []).add(chunk);
@@ -717,13 +758,190 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     // rebuilt from scratch on open each time anyway.
   }
 
+  /// Focuses the editor on the first block of an analysis chunk and highlights
+  /// the chunk's blocks. If the chunk is on a different page, it switches to
+  /// that page first.
+  ///
+  /// The previous chunk's highlight (if any) is cleared first so only the
+  /// current chunk stays marked. Highlighting uses AppFlowy's built-in
+  /// per-block background color attribute (`bgColor`) rather than a hand-rolled
+  /// decoration, so it renders on every block type including nested ones.
+  void _focusAnalysisChunk(AnalysisChunkRef ref) {
+    final pages = _editorController.pages;
+    final targetPageIdx = pages.indexWhere((p) => p.pageId == ref.pageId);
+
+    debugPrint(
+      '[focusAnalysisChunk] chunk=${ref.chunkId} page=${ref.pageId} '
+      'blockIds=${ref.blockIds} targetPageIdx=$targetPageIdx',
+    );
+    if (targetPageIdx == -1) return;
+
+    // 0. Clear the previously-highlighted chunk FIRST, on the page that really
+    //    holds it. The previous chunk may be on a DIFFERENT page than the one we
+    //    switch to below, so we can't clear it through the new active driver —
+    //    that driver's document doesn't contain the old blocks. Resolve the old
+    //    page's controller and clear there.
+    final prevPageId = _analysisModeCurrentChunkPageId;
+    final prevBlockIds = _analysisModeCurrentChunkBlockIds;
+    if (prevBlockIds != null && prevPageId != null) {
+      final prevPageIdx = pages.indexWhere((p) => p.pageId == prevPageId);
+      if (prevPageIdx != -1) {
+        final prevDriver = pages[prevPageIdx].controller.driver;
+        if (prevDriver is AppFlowyTextDriver) {
+          prevDriver.setChunkHighlight(prevBlockIds, null);
+        }
+      }
+    }
+    _analysisModeCurrentChunkPageId = ref.pageId;
+    _analysisModeCurrentChunkBlockIds = ref.blockIds;
+
+    // 1. Switch to the correct page if needed (setActive is synchronous, so the
+    //    activeController below is already the target page's once we move on).
+    if (_editorController.activeIndex != targetPageIdx) {
+      _editorController.setActive(targetPageIdx);
+    }
+
+    final driver = _editorController.activeController.driver;
+    if (driver is! AppFlowyTextDriver) return;
+
+    // 1b. Put the target page in analysis review. Chunk stepping can land on a
+    //     page that never itself entered analysis mode; without this the block
+    //     analysis widgets (gated on the page's vim mode) would stay silent on
+    //     cross-page navigation.
+    if (!driver.vimMode.isAnalysis) {
+      driver.vimMode.enterAnalysisMode();
+    }
+
+    // 2. Highlight the new chunk's blocks on the now-active page.
+    driver.setChunkHighlight(ref.blockIds, _analysisHighlightColor);
+
+    // 3. Select the chunk's first block — a WHOLE-BLOCK highlight, not a typing
+    //    caret — so the review position is obvious and this block's findings
+    //    pop over (PageSurface anchors its inline widgets on the selection).
+    final firstBlockId = ref.blockIds.firstOrNull;
+    if (firstBlockId != null) {
+      final document = driver.editorState.document;
+      final found = _findNodeByStableId(document.root, firstBlockId);
+      if (found != null) {
+        final selectable = found.node.selectable;
+        if (selectable != null) {
+          final start = selectable.start();
+          final end = selectable.end();
+          if (start != end) {
+            driver.editorState.updateSelectionWithReason(
+              Selection(start: start, end: end),
+              reason: SelectionUpdateReason.uiEvent,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /// pageId of the currently highlighted chunk (the one the review cursor just
+  /// left), so it can be cleared on the correct page when stepping to the next.
+  String? _analysisModeCurrentChunkPageId;
+
+  /// Stable ids of the currently highlighted chunk, same lifecycle as
+  /// [_analysisModeCurrentChunkPageId].
+  List<String>? _analysisModeCurrentChunkBlockIds;
+
+  /// Amber is easy to notice against both light and dark note backgrounds; the
+  /// paragraph/list/heading builders render it via their `bgColor` attribute.
+  static const _analysisHighlightColor = 'rgba(255, 214, 102, 0.85)';
+
+  /// Depth-first search for the node whose stable id equals [id], so nested
+  /// blocks (inside a table cell, a column, etc.) are found too — not just
+  /// top-level blocks.
+  ({Node node, int depth})? _findNodeByStableId(Node root, String id) {
+    Node? found;
+    var foundDepth = 0;
+    void walk(Node node, int depth) {
+      if (found != null) return;
+      if (node.id == id) {
+        found = node;
+        foundDepth = depth;
+        return;
+      }
+      for (final child in node.children) {
+        walk(child, depth + 1);
+      }
+    }
+
+    walk(root, 0);
+    return found == null ? null : (node: found!, depth: foundDepth);
+  }
+
   /// Enter analysis-review mode on the active page's driver (SCAFFOLD). Loads
   /// the analysis first if we haven't yet, so there are chunks to step through.
+  /// Entering review mode does NOT open the Analysis Summary — the block
+  /// analysis widgets are the default surface here; the summary stays opt-in.
   void _enterAnalysisMode() {
     final driver = _editorController.activeController.driver;
-    if (driver is! VimModeAware) return;
-    if (!_hasAttemptedLoad) _loadAnalysis();
-    (driver as VimModeAware).vimMode.enterAnalysisMode();
+    if (driver is! AppFlowyTextDriver) return;
+    if (!driver.vimMode.isEnabled) return;
+    if (!_hasAttemptedLoad) _loadAnalysis(openPanel: false);
+    driver.vimMode.enterAnalysisMode();
+    // Re-assert the selection so it doesn't vanish on the mode-change rebuild
+    // (the keyboard 'n' path and stand-alone mode flip both land here).
+    // Analysis mode is highlight-only — a collapsed caret is expanded to the
+    // whole block, never left as an editable cursor.
+    final sel = driver.editorState.selection;
+    if (sel != null && sel.isCollapsed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final node = driver.editorState.getNodeAtPath(sel.start.path);
+        final selectable = node?.selectable;
+        if (selectable != null) {
+          final start = selectable.start();
+          final end = selectable.end();
+          if (start != end) {
+            driver.editorState.updateSelectionWithReason(
+              Selection(start: start, end: end),
+              reason: SelectionUpdateReason.uiEvent,
+            );
+          }
+        }
+      });
+    }
+  }
+
+  /// 'o' in analysis mode: toggle the full analysis panel (the overview tab)
+  /// without changing the vim mode. First open lazily loads the analysis (same
+  /// as [_analysisMode.onOpenFullPanel]); pressing 'o' again closes the panel.
+  void _toggleAnalysisPanel() {
+    if (_showAnalysisPanel) {
+      setState(() => _showAnalysisPanel = false);
+      return;
+    }
+    if (!_hasAttemptedLoad) {
+      _loadAnalysis();
+    } else {
+      setState(() => _showAnalysisPanel = true);
+    }
+  }
+
+  /// The Note/Analysis view switch. Only rendered when vim mode is OFF (or the
+  /// engine has no vim support) — while vim is enabled the analysis UI belongs
+  /// to the vim review flow and this toggle is hidden.
+  Widget _analysisViewToggle() {
+    return SegmentedButton<bool>(
+      segments: const [
+        ButtonSegment(value: false, label: Text('Note')),
+        ButtonSegment(value: true, label: Text('Analysis')),
+      ],
+      selected: {_showAnalysisPanel},
+      onSelectionChanged:
+          _isLoadingAnalysis
+              ? null
+              : (selection) {
+                final wantsAnalysis = selection.first;
+                if (wantsAnalysis && !_hasAttemptedLoad) {
+                  _loadAnalysis();
+                } else {
+                  setState(() => _showAnalysisPanel = wantsAnalysis);
+                }
+              },
+    );
   }
 
   /// SCAFFOLD toolbar shown while any page is in analysis-review mode: step
@@ -733,20 +951,26 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     return AnimatedBuilder(
       animation: _editorController,
       builder: (context, _) {
+        // Vim-mode markers live in the TEXT modality — none of them may render
+        // over the drawing surface (same gate the app-bar badge uses).
+        if (_editorController.drawingEnabled) return const SizedBox.shrink();
         final driver = _editorController.activeController.driver;
         if (driver is! VimModeAware) return const SizedBox.shrink();
         final vimMode = (driver as VimModeAware).vimMode;
         return AnimatedBuilder(
           animation: vimMode,
           builder: (context, __) {
-            if (!vimMode.isAnalysis) return const SizedBox.shrink();
+            if (!vimMode.isEnabled || !vimMode.isAnalysis) {
+              return const SizedBox.shrink();
+            }
             return AnimatedBuilder(
               animation: _analysisMode,
               builder: (context, ___) {
                 final cur = _analysisMode.current;
-                final label = cur == null
-                    ? 'No analysis chunks'
-                    : 'Chunk ${_analysisMode.index + 1} / ${_analysisMode.count}';
+                final label =
+                    cur == null
+                        ? 'No analysis chunks'
+                        : 'Chunk ${_analysisMode.index + 1} / ${_analysisMode.count}';
                 return Material(
                   color: Colors.deepPurple,
                   borderRadius: BorderRadius.circular(24),
@@ -757,25 +981,39 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.chevron_left,
-                              color: Colors.white),
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: Colors.white,
+                          ),
                           onPressed:
-                              _analysisMode.hasChunks ? _analysisMode.prev : null,
+                              _analysisMode.hasChunks
+                                  ? _analysisMode.prev
+                                  : null,
                         ),
-                        Text(label,
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 12)),
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right,
-                              color: Colors.white),
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: Colors.white,
+                          ),
                           onPressed:
-                              _analysisMode.hasChunks ? _analysisMode.next : null,
+                              _analysisMode.hasChunks
+                                  ? _analysisMode.next
+                                  : null,
                         ),
                         const SizedBox(width: 4),
                         TextButton(
                           onPressed: _analysisMode.openFullPanel,
-                          child: const Text('Full analysis',
-                              style: TextStyle(color: Colors.white)),
+                          child: const Text(
+                            'Full analysis',
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
                       ],
                     ),
@@ -913,25 +1151,27 @@ class _EditorScaffoldState extends State<EditorScaffold> {
           // The primary mode switch: which view of this note you're
           // looking at. Replaces the old bare analytics IconButton — same
           // load-on-first-open / toggle-after behavior, just legible.
+          //
+          // While vim mode is ENABLED the analysis UI belongs to the vim
+          // review flow (chunk pill → Full analysis), so this app-bar toggle
+          // is hidden rather than redundant. It only shows when vim is off,
+          // keeping analysis reachable for non-vim editing.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(value: false, label: Text('Note')),
-                ButtonSegment(value: true, label: Text('Analysis')),
-              ],
-              selected: {_showAnalysisPanel},
-              onSelectionChanged:
-                  _isLoadingAnalysis
-                      ? null
-                      : (selection) {
-                        final wantsAnalysis = selection.first;
-                        if (wantsAnalysis && !_hasAttemptedLoad) {
-                          _loadAnalysis();
-                        } else {
-                          setState(() => _showAnalysisPanel = wantsAnalysis);
-                        }
-                      },
+            child: AnimatedBuilder(
+              animation: _editorController,
+              builder: (context, _) {
+                final driver = _editorController.activeController.driver;
+                if (driver is! VimModeAware) return _analysisViewToggle();
+                final vimMode = (driver as VimModeAware).vimMode;
+                return AnimatedBuilder(
+                  animation: vimMode,
+                  builder: (context, __) {
+                    if (vimMode.isEnabled) return const SizedBox.shrink();
+                    return _analysisViewToggle();
+                  },
+                );
+              },
             ),
           ),
 
@@ -971,7 +1211,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
               );
             },
           ),
-
 
           // Secondary, settings-style actions that don't need to be
           // permanently visible: whether analysis runs for this note at
@@ -1055,7 +1294,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   CheckedPopupMenuItem<String>(
                     value: 'toggle_vim_mode',
                     checked: _vimModeEnabled,
-                    enabled: _vimModeAvailable,
+                    enabled: _vimModeAvailable && !_editorController.drawingEnabled,
                     child: Text(
                       _vimModeAvailable
                           ? 'Neovim keybindings'
@@ -1064,7 +1303,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   ),
                   PopupMenuItem<String>(
                     value: 'enter_analysis_mode',
-                    enabled: _vimModeEnabled,
+                    enabled: _vimModeEnabled && !_editorController.drawingEnabled,
                     child: const Text('Analysis review mode (vim)'),
                   ),
                 ],
@@ -1075,15 +1314,36 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         child: Stack(
           children: [
             Positioned.fill(
-              child: PagedEditor(
-                controller: _editorController,
-                partialEraser: _partialEraser,
-                eraserWidth: _eraserWidth,
-                // While the analysis panel is open, tapping a block that has
-                // analysis shows its findings inline (see PageSurface). Null
-                // when closed → no popovers during normal editing.
-                analysisForBlock:
-                    _showAnalysisPanel ? _lookupBlockAnalysis : null,
+              // Block analysis widgets (inline tint + findings popover) show
+              // whenever analysis is loaded AND (the summary panel is open OR
+              // the ACTIVE page is in analysis review mode). The outer builder
+              // re-resolves the active page's driver on page switches; the
+              // inner one reacts to that page's vim-mode flips — so pressing
+              // n/N shows the widgets BY DEFAULT without the summary being open.
+              child: AnimatedBuilder(
+                animation: _editorController,
+                builder: (context, _) {
+                  final driver = _editorController.activeController.driver;
+                  final vimMode = driver is VimModeAware
+                      ? (driver as VimModeAware).vimMode
+                      : null;
+                  Widget pagedEditor() => PagedEditor(
+                    controller: _editorController,
+                    partialEraser: _partialEraser,
+                    eraserWidth: _eraserWidth,
+                    analysisForBlock:
+                        (_showAnalysisPanel ||
+                                (vimMode?.isAnalysis ?? false))
+                            ? _lookupBlockAnalysis
+                            : null,
+                  );
+                  // Non-vim engine: no mode to watch, panel state is enough.
+                  if (vimMode == null) return pagedEditor();
+                  return AnimatedBuilder(
+                    animation: vimMode,
+                    builder: (context, __) => pagedEditor(),
+                  );
+                },
               ),
             ),
 
@@ -1136,7 +1396,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                                 Icon(Icons.insights_rounded, size: 20),
                                 SizedBox(width: 8),
                                 Text(
-                                  'Note Analysis',
+                                  'Analysis Summary',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -1223,9 +1483,12 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                                             )
                                             : const SizedBox.shrink();
                                       }
-                                      return _ChunkExpansionTile(
-                                        chunk: _analysisChunks[index - 1],
-                                      );
+                                      // NOTE: this data is what is supposed to
+                                      // be loaded in to the chunk by chunk
+                                      // analysis viewer
+                                      //  return _ChunkExpansionTile(
+                                      //    chunk: _analysisChunks[index - 1],
+                                      //  );
                                     },
                                   ),
                         ),

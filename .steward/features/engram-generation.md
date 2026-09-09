@@ -1,4 +1,4 @@
-# engram-generation
+# Feature: Engram Generation
 
 > Generate flashcards, quizzes, and mock exams grounded in RAG context.
 
@@ -10,9 +10,9 @@
 CANDIDATE — Phase 2
 
 ## Goals
-- Auto-generate study materials from user's knowledge base
-- All generated content grounded in retrieved source material (no hallucination)
-- Support multiple engram types: flashcards, MCQs, short questions, long questions
+- [ ] Auto-generate study materials from user's knowledge base
+- [ ] All generated content grounded in retrieved source material (no hallucination)
+- [ ] Support multiple engram types: flashcards, MCQs, short questions, long questions
 
 ## Scope
 - **In:** LLM-powered generation pipeline, engram creation from notes + source docs, engram storage in daemon

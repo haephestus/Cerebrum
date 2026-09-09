@@ -1,4 +1,4 @@
-# sm2-offline-mastery
+# Feature: Sm2 Offline Mastery
 
 > Anki-style spaced repetition that works with no server.
 
@@ -10,10 +10,10 @@
 DONE — Phase 1 (shipped pre-phase formalisation)
 
 ## Goals
-- Flashcards and MCQs give immediate offline feedback
-- SM-2 engine grades answer and schedules next review locally
-- State vocabulary matches daemon (new/learning/review/mastered/lapsed/suspended)
-- Server mastery overwrites local estimate on sync
+- [x] Flashcards and MCQs give immediate offline feedback
+- [x] SM-2 engine grades answer and schedules next review locally
+- [x] State vocabulary matches daemon (new/learning/review/mastered/lapsed/suspended)
+- [x] Server mastery overwrites local estimate on sync
 
 ## Scope
 - **In:** OfflineMastery (SM-2 engine), MasteryRecord (ease/interval/reps/dueAt/state), applyFlashcard/applyMcq, adoptServerState

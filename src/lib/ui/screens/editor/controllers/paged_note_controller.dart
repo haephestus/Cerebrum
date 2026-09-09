@@ -1,7 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:scribble/scribble.dart';
-import 'package:cerebrum/ui/editor/controllers/appflowy_text_driver.dart';
-import 'package:cerebrum/ui/editor/controllers/note_editor_controller.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/table_splitter.dart';
 
 /// Vertical continuous scroll (default, document feel) vs horizontal PageView
 /// (slideshow). Both render the same page widget — see PagedEditor.
@@ -37,11 +38,13 @@ class NotePage {
 ///
 ///  * **Content flows FORWARD only, when a page fills.** [PageSurface] measures
 ///    the rendered layout and reports overflow; [pushOverflow] then moves the
-///    overflowing tail WHOLE-BLOCK onto the next page (created if needed) and the
-///    caret follows. Whole blocks only — nothing is split — so a table/paragraph
-///    taller than a whole sheet just overflows (see the table TODO). Backspace at
-///    a page's start does the inverse, discretely: [mergePageIntoPrevious] pulls
-///    that page's text up into the previous one.
+///    overflowing tail onto the next page (created if needed) and the caret
+///    follows. A TABLE that overflows is SPLIT at a row boundary ([_splitTable],
+///    see helpers/table_splitter.dart) — the head stays on this page, the tail
+///    flows — which is what keeps a page from ever becoming internally
+///    scrollable. Any non-table block taller than a whole sheet just overflows.
+///    Backspace at a page's start does the inverse, discretely:
+///    [mergePageIntoPrevious] pulls that page's text up into the previous one.
 ///
 ///  * **Every page is a SEPARATE editor, so per-page state doesn't carry itself.**
 ///    Each page's driver has its own selection AND its own vim mode controller.
@@ -102,6 +105,46 @@ class PagedNoteController extends ChangeNotifier {
     }
   }
 
+  /// Analysis-review-mode chunk stepping, forwarded to every page's driver so
+  /// the 'n'/'N' character shortcuts (which live in AppFlowyTextDriver) can
+  /// step the chunk cursor. Set by the scaffold from its AnalysisModeController.
+  void Function(int delta)? _stepAnalysisChunk;
+
+  set stepAnalysisChunk(void Function(int delta)? step) {
+    _stepAnalysisChunk = step;
+    for (final p in _pages) {
+      final driver = p.controller.driver;
+      if (driver is AppFlowyTextDriver) driver.onStepAnalysisChunk = step;
+    }
+  }
+
+  /// Hook forwarded to every page's driver: called when 'n' is pressed in
+  /// NORMAL mode to enter analysis-review mode. The scaffold wires this to
+  /// lazy-load the analysis before flipping the mode, so pressing 'n' populates
+  /// chunks without having to open the side panel first.
+  VoidCallback? _enterAnalysisMode;
+
+  set enterAnalysisMode(VoidCallback? hook) {
+    _enterAnalysisMode = hook;
+    for (final p in _pages) {
+      final driver = p.controller.driver;
+      if (driver is AppFlowyTextDriver) driver.onEnterAnalysisMode = hook;
+    }
+  }
+
+  /// Hook forwarded to every page's driver: called when 'o' is pressed in
+  /// ANALYSIS mode to toggle the full analysis panel (the overview tab).
+  /// The scaffold wires this to open/close the panel without changing modes.
+  VoidCallback? _toggleAnalysisPanel;
+
+  set toggleAnalysisPanel(VoidCallback? hook) {
+    _toggleAnalysisPanel = hook;
+    for (final p in _pages) {
+      final driver = p.controller.driver;
+      if (driver is AppFlowyTextDriver) driver.onToggleAnalysisPanel = hook;
+    }
+  }
+
   /// Wire everything a freshly created page needs: the backspace-at-start merge
   /// and the live-reflow edit trigger. Reused pages (kept as-is across a reflow)
   /// are NOT passed through here — their wiring already stands, and re-adding
@@ -113,7 +156,12 @@ class PagedNoteController extends ChangeNotifier {
     _activeTool?.call(page.controller.drawingNotifier);
     // New pages get the image uploader too, so "/image" works on any page.
     final driver = page.controller.driver;
-    if (driver is AppFlowyTextDriver) driver.imageUploader = _imageUploader;
+    if (driver is AppFlowyTextDriver) {
+      driver.imageUploader = _imageUploader;
+      driver.onStepAnalysisChunk = _stepAnalysisChunk;
+      driver.onEnterAnalysisMode = _enterAnalysisMode;
+      driver.onToggleAnalysisPanel = _toggleAnalysisPanel;
+    }
   }
 
   /// Wire a page's backspace-at-start to merge it into the previous page. The
@@ -134,6 +182,9 @@ class PagedNoteController extends ChangeNotifier {
   final List<NotePage> _pages;
   int _activeIndex = 0;
   bool _drawingEnabled = false;
+  /// Vim-enabled state per page, captured when drawing turns ON so it can be
+  /// restored when drawing turns OFF (see [toggleDrawingMode]).
+  final Map<String, bool> _vimEnabledBeforeDrawing = {};
   PageLayoutMode _layout = PageLayoutMode.vertical;
 
   List<NotePage> get pages => List.unmodifiable(_pages);
@@ -153,28 +204,33 @@ class PagedNoteController extends ChangeNotifier {
     if (pages != null && pages.isNotEmpty) {
       for (var i = 0; i < pages.length; i++) {
         final p = pages[i];
-        built.add(_makePage(
-          pageId: (p['page_id'] as String?) ?? 'p$i',
-          index: (p['page_index'] as num?)?.toInt() ?? i,
-          document: p['document'] as Map<String, dynamic>?,
-          ink: _inkOf(p['ink']),
-        ));
+        built.add(
+          _makePage(
+            pageId: (p['page_id'] as String?) ?? 'p$i',
+            index: (p['page_index'] as num?)?.toInt() ?? i,
+            document: p['document'] as Map<String, dynamic>?,
+            ink: _inkOf(p['ink']),
+          ),
+        );
       }
     } else {
-      built.add(_makePage(
-        pageId: 'p1', // matches the daemon's synthesised first-page id
-        index: 0,
-        document: legacyDocument,
-        ink: legacyInk,
-      ));
+      built.add(
+        _makePage(
+          pageId: 'p1', // matches the daemon's synthesised first-page id
+          index: 0,
+          document: legacyDocument,
+          ink: legacyInk,
+        ),
+      );
     }
     built.sort((a, b) => a.pageIndex.compareTo(b.pageIndex));
     return PagedNoteController._(built);
   }
 
-  static List<Map<String, dynamic>>? _inkOf(Object? raw) => raw is List
-      ? raw.map((e) => Map<String, dynamic>.from(e as Map)).toList()
-      : null;
+  static List<Map<String, dynamic>>? _inkOf(Object? raw) =>
+      raw is List
+          ? raw.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+          : null;
 
   static NotePage _makePage({
     required String pageId,
@@ -210,7 +266,34 @@ class PagedNoteController extends ChangeNotifier {
 
   /// Global draw/text toggle — applies to whichever page you're on.
   void toggleDrawingMode() {
+    final enteringDrawing = !_drawingEnabled;
     _drawingEnabled = !_drawingEnabled;
+
+    // Vim mode is a TEXT modality and must not be active while drawing —
+    // its markers, shortcuts and analysis state are meaningless over the
+    // ink surface. Disable it across every page on the way in, and restore
+    // each page's own prior enabled-state on the way out (the text-vs-draw
+    // toggle shouldn't silently change the user's vim preference).
+    if (enteringDrawing) {
+      _vimEnabledBeforeDrawing.clear();
+      for (final page in _pages) {
+        final d = page.controller.driver;
+        if (d is AppFlowyTextDriver) {
+          _vimEnabledBeforeDrawing[page.pageId] = d.vimMode.isEnabled;
+          d.vimMode.setEnabled(false);
+        }
+      }
+    } else {
+      for (final page in _pages) {
+        final d = page.controller.driver;
+        if (d is AppFlowyTextDriver &&
+            _vimEnabledBeforeDrawing[page.pageId] == true) {
+          d.vimMode.setEnabled(true);
+        }
+      }
+      _vimEnabledBeforeDrawing.clear();
+    }
+
     notifyListeners();
   }
 
@@ -220,10 +303,10 @@ class PagedNoteController extends ChangeNotifier {
   }
 
   void toggleLayout() => setLayout(
-        _layout == PageLayoutMode.vertical
-            ? PageLayoutMode.horizontal
-            : PageLayoutMode.vertical,
-      );
+    _layout == PageLayoutMode.vertical
+        ? PageLayoutMode.horizontal
+        : PageLayoutMode.vertical,
+  );
 
   /// Next free `p{n}` id: max existing + 1, so a delete-then-add can't collide
   /// with a surviving page's id.
@@ -267,56 +350,100 @@ class PagedNoteController extends ChangeNotifier {
   /// Forward-only overflow flow: the blocks from [fromBlockIndex] onward on page
   /// [pageIndex] no longer fit the sheet, so move them to the FRONT of the next
   /// page (creating one if this is the last page) and carry the caret with them
-  /// so typing continues there. Whole blocks move (never split), so the caret's
-  /// (block, offset) maps directly — the moved block's new index is simply
-  /// `oldIndex - fromBlockIndex`.
+  /// so typing continues there.
+  ///
+  /// When the overflowing block is a TABLE and PageSurface hands us a measured
+  /// height budget ([tableAvailableHeight]), the table is SPLIT at a row
+  /// boundary instead of moved whole: the head stays on this page, the tail +
+  /// following blocks flow. A non-table block moves whole (never splits), so its
+  /// caret's (block, offset) maps directly — the moved block's new index is
+  /// `oldIndex - fromBlockIndex`. A caret that was inside the split table is
+  /// reseated onto this page's head table (cell-level re-seeding isn't
+  /// supported — the driver seeds top-level blocks only; selecting the head is
+  /// strictly better than no caret at all).
   ///
   /// Existing pages are NOT reflowed; content only ever moves DOWN, so this
   /// terminates and never churns page ids upward the way the old continuous
   /// pagination did. Reported by PageSurface, which measures the actual rendered
   /// block positions against the sheet.
-  void pushOverflow(int pageIndex, int fromBlockIndex) {
+  void pushOverflow(
+    int pageIndex,
+    int fromBlockIndex, {
+    double? tableAvailableHeight,
+  }) {
     if (_flowing || pageIndex < 0 || pageIndex >= _pages.length) return;
     final page = _pages[pageIndex];
     final children = List<Map<String, dynamic>>.from(
       (page.controller.documentJson['children'] as List?) ?? const [],
     );
-    // Keep at least one block on this page (fromBlockIndex >= 1); a single block
-    // taller than a whole sheet can't be helped without splitting, so leave it.
-    //
-    // TODO(tables): follow-up — a TABLE taller than a whole sheet therefore
-    // overflows its own page (we only ever move whole blocks; nothing splits).
-    // Options when we want to handle it: (a) reinstate the verified row-splitter
-    // (`_splitTable` in the deleted page_paginator.dart — see git history) as a
-    // targeted case here, splitting only an oversized table across the boundary;
-    // or (b) shrink / internally scroll a too-tall table within its sheet. Until
-    // then, oversized tables are left whole and overflow.
-    if (fromBlockIndex < 1 || fromBlockIndex >= children.length) return;
+    if (fromBlockIndex < 0 || fromBlockIndex >= children.length) return;
+
+    // Table path FIRST: split the overflowing table at a row boundary, keeping
+    // the rendering head on this page (this is what stops a page from becoming
+    // internally scrollable). Falls back to whole-block movement when there is
+    // no measured budget (safety) or the block isn't a table.
+    Map<String, dynamic>? keptHead;
+    Map<String, dynamic>? movedTail;
+    if (children[fromBlockIndex]['type'] == 'table' &&
+        tableAvailableHeight != null) {
+      final split = splitTableAtHeight(
+        children[fromBlockIndex],
+        tableAvailableHeight,
+      );
+      if (split != null) {
+        keptHead = split.$1;
+        movedTail = split.$2;
+      }
+    }
+
+    // Whole-block path: keep at least one block on this page (fromBlockIndex
+    // >= 1); a single non-table block taller than a whole sheet can't be helped
+    // without splitting, so leave it. Always allowed for a split table head.
+    if (keptHead == null && fromBlockIndex < 1) return;
 
     _flowing = true;
 
-    final kept = children.sublist(0, fromBlockIndex);
-    final moved = children.sublist(fromBlockIndex);
+    final kept = keptHead == null
+        ? children.sublist(0, fromBlockIndex)
+        : [
+            ...children.sublist(0, fromBlockIndex),
+            keptHead,
+          ];
+    final moved = keptHead == null
+        ? children.sublist(fromBlockIndex)
+        : [
+            movedTail!,
+            ...children.sublist(fromBlockIndex + 1),
+          ];
 
     // Capture the source page's caret AND vim mode before we tear it down.
     int? srcCaretBlock;
     int? srcCaretOffset;
     bool? wasInsert; // null → source page wasn't the active/vim-aware one
     var wasVimEnabled = true;
+    var reseatedTableCaret = false;
     final driver = page.controller.driver;
     if (_activeIndex == pageIndex && driver is AppFlowyTextDriver) {
       final caret = driver.caret;
       if (caret != null && caret.path.length == 1) {
         srcCaretBlock = caret.path.first;
         srcCaretOffset = caret.offset;
+      } else if (keptHead != null && caret?.path.first == fromBlockIndex) {
+        // Caret inside the split table → reseat onto this page's head table.
+        reseatedTableCaret = true;
+        srcCaretBlock = fromBlockIndex;
+        srcCaretOffset = 0;
       }
       wasInsert = driver.vimMode.isInsert;
       wasVimEnabled = driver.vimMode.isEnabled;
     }
     // Does the caret sit in a block that's moving? Then it travels to the next
-    // page; otherwise it stays on this (trimmed) page. Exactly ONE page gets a
+    // page; otherwise it stays on this (trimmed) page — EXCEPT a caret reseated
+    // onto the head table, which always stays put. Exactly ONE page gets a
     // caret — the other passes seedCaret:false so no second cursor lingers.
-    final caretMoved = srcCaretBlock != null && srcCaretBlock >= fromBlockIndex;
+    final caretMoved = !reseatedTableCaret &&
+        srcCaretBlock != null &&
+        srcCaretBlock >= fromBlockIndex;
     final targetCaretBlock =
         caretMoved ? srcCaretBlock - fromBlockIndex : null; // index in `moved`
 
@@ -347,7 +474,10 @@ class PagedNoteController extends ChangeNotifier {
       target = _makePage(
         pageId: next.pageId,
         index: pageIndex + 1,
-        document: {'type': 'page', 'children': [...moved, ...nextChildren]},
+        document: {
+          'type': 'page',
+          'children': [...moved, ...nextChildren],
+        },
         ink: next.controller.inkJson,
         caretBlockIndex: targetCaretBlock,
         caretOffset: caretMoved ? srcCaretOffset : null,
@@ -476,10 +606,11 @@ class PagedNoteController extends ChangeNotifier {
     if (block['type'] != 'paragraph') return false;
     final delta = (block['data'] as Map?)?['delta'];
     if (delta is! List || delta.isEmpty) return true;
-    final text = delta
-        .whereType<Map>()
-        .map((e) => (e['insert'] ?? '').toString())
-        .join();
+    final text =
+        delta
+            .whereType<Map>()
+            .map((e) => (e['insert'] ?? '').toString())
+            .join();
     return text.isEmpty;
   }
 
@@ -493,29 +624,29 @@ class PagedNoteController extends ChangeNotifier {
   }
 
   static Map<String, dynamic> _emptyDoc() => {
-        'type': 'page',
-        'children': [
-          {
-            'type': 'paragraph',
-            'data': {
-              'delta': [
-                {'insert': ''},
-              ],
-            },
-          },
-        ],
-      };
+    'type': 'page',
+    'children': [
+      {
+        'type': 'paragraph',
+        'data': {
+          'delta': [
+            {'insert': ''},
+          ],
+        },
+      },
+    ],
+  };
 
   /// Serialise to the `NoteStorage.pages` shape for save/sync.
   List<Map<String, dynamic>> toPagesJson() => [
-        for (var i = 0; i < _pages.length; i++)
-          {
-            'page_id': _pages[i].pageId,
-            'page_index': i,
-            'document': _pages[i].controller.documentJson,
-            'ink': _pages[i].controller.inkJson,
-          }
-      ];
+    for (var i = 0; i < _pages.length; i++)
+      {
+        'page_id': _pages[i].pageId,
+        'page_index': i,
+        'document': _pages[i].controller.documentJson,
+        'ink': _pages[i].controller.inkJson,
+      },
+  ];
 
   @override
   void dispose() {

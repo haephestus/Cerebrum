@@ -1,4 +1,4 @@
-# offline-note-persistence
+# Feature: Offline Note Persistence
 
 > Local-first note storage so writes never fail, even offline.
 
@@ -10,9 +10,9 @@
 DONE — Phase 1 (shipped pre-phase formalisation)
 
 ## Goals
-- Notes are always saved locally before any network attempt
-- User never loses an edit due to connectivity
-- Sync happens in background on reconnect
+- [x] Notes are always saved locally before any network attempt
+- [x] User never loses an edit due to connectivity
+- [x] Sync happens in background on reconnect
 
 ## Scope
 - **In:** NoteStore (filesystem persistence), SyncService outbox (dirty tracking, auto-drain), per-note version vectors (dropped in v1)

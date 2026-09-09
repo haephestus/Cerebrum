@@ -1,68 +1,118 @@
-# homepage-dashboard
+# Feature: Homepage Dashboard
 
 > The home screen answers "where am I and what should I do now" at a glance.
+>
+> **Soul of this app, not a convenience:** Cerebrum exists to tell you *what you
+> don't know*. The dashboard is the single place that promise is met head-on.
+> Every region must answer a question with grounded, honest data — never fabricate.
 
 > Phase: features
-> Status: todo
+> Status: in progress
 > Created: 2026-08-27
 
 ## Status
-PLANNED — Phase 2 (shell present in main; data surface stubbed)
+IN PROGRESS — gap/misunderstanding surface is the hero; shell present in main.
+
+## The one line that defines this feature
+> **The dashboard's hero is the "what you don't know" surface** — per study
+> bubble, the concepts you're weak on, the concepts you confuse with each other,
+> the reading that closes those gaps. Engrams/notes/library are supporting
+> regions; they exist to feed and act on the gaps, not to be the story.
 
 ## Goals
-- Home opens to a scannable data surface that answers two questions in ~5 seconds:
-  "Where am I?" (study bubbles, ingested files, where I left off, engram schedule)
-  and "What should I do next?" (engrams due today/upcoming, suggested reading)
-- Every region is silent when there is nothing to show: empty states instead of
-  fake data, and regions shrink away rather than showing junk
-- All dashboard data stays grounded in the user's own knowledge base — suggested
-  reading must come from RAG-identified gaps in the user's material, never generic picks
-- Offline-tolerant: regions fall back to last-known local data instead of failing loudly
 
-## Data surface (per region)
+### Hero: Understanding Gaps (per study bubble)
+- [ ] **Consume the analysis payload's gap data on the home screen.** The daemon
+      already returns `concept_map.weak_areas`, `concept_map.confused_links`,
+      `knowledge_gaps_summary`, and `suggested_sources` in the note analysis
+      (`editor_scaffold._formatOverviewMarkdown` proves it lands on the client).
+      Build the GapCard region on THIS data — no new daemon work to start.
+- [ ] **Group gaps by study bubble.** Roll up each bubble's notes' gap data into a
+      bubble-level view: "Medical Terms: 3 weak areas, 2 confusions, 1 unread
+      source." This is the flat projection the app is built around.
+- [ ] **Each gap points at evidence, not a bare label.** For a weak area, show the
+      notes it appears in; for a confused link, show `concept_a` vs `concept_b`
+      with its `confusion_description`; for a gap, show the note + the last
+      analysis version that found it. A suggestion with no source count is not done.
+- [ ] **Grounded "Suggested reading" becomes the gap's resolution action.** The
+      daemon's `suggested_sources` (title + reason) is already RAG-grounded — use
+      it. Replace the static blue SuggestedReading box with gap-derived reading
+      ranked by gap severity. If no grounded source exists, the region is empty —
+      do NOT fall back to generic picks (the app's core rule).
+- [ ] **Card is silent with no data.** No gaps → the whole region shrinks away (the
+      empty-state pattern UpcomingEngramsSection already models — replicate it).
 
-| Region | Immediate data to display | Renders today | Gap to planned |
-|--------|--------------------------|---------------|----------------|
-| Upcoming engrams | Engrams due today + upcoming, grouped by real day, each with type + title | Fetches API but hardcodes bubble/note/user IDs and invents hours (`9 + i`) | Daemon must return real due/schedule; client needs real identity instead of hardcoded IDs |
-| Where You Left Off (Notes) | Most recent note + its status (drafted / analysed / has gaps), resume action into note or its analysis | Static empty-state card; Create Note button is a TODO | Wire to notes recency + last analysis state |
-| Study bubbles | Top N bubbles by name + source count, hand-off to bubble page / full list | Implemented (`StudyBubblesSummaryCard`) but **not wired into any screen** — orphaned | Mount on DHomescreen; confirm bubble payload key (`name` vs `title`) |
-| File Library | Ingested file registry with converted/embedded status | Real (KnowledgebaseApi.showFiles) | Done — keep |
-| Suggested reading | Gap-derived reading list grounded in user's own sources, ranked by gap severity | Static blue title box | Needs daemon gap/recommendation source; grounded in RAG, no hallucination |
+### Supporting region: Upcoming engrams (feeds mastery → gaps)
+- [ ] **Real identity, not hardcoded IDs.** Remove the three literal
+      bubble/note/user ids in `upcoming_engrams.dart` and source them from the
+      real StudyBubbleContext + client identity. Gates everything else real.
+- [ ] **Real schedule, not synthesized hours.** Delete the `slotHour: 9 + i`
+      placeholder once the daemon returns due/schedule. Until then it stays
+      explicitly marked as a wireframe artifact — never ship it as real.
 
-## Scope
-- **In:** DHomescreen layout + all five regions above, real identity in the app bar,
-  offline fallback behaviour per region
-- **Out:** Mastery graphs, streak/statistics, social/share, study plan dashboard
+### Supporting region: Study bubbles (entry to the gap surface)
+- [ ] **Mount `StudyBubblesSummaryCard` into DHomescreen.** It is implemented and
+      orphaned; wiring it is free and gives the gaps a home to open into.
+- [ ] **Confirm the bubble display-name key** (`name` vs `title`) against the
+      daemon payload before wiring (feature spec already flags this).
+
+### Supporting region: Where You Left Off (recency)
+- [ ] **Wire to NoteStore recency** (last modified note + its last analysis state).
+      Needs no daemon round-trip — read local `_index.json`/note metadata.
+- [ ] **Resume action** opens the note or, if it has gap data, its analysis.
+
+### Supporting region: File Library (ingested knowledge)
+- [ ] **Keep as-is.** Already real (KnowledgebaseApi.showFiles).
+
+### Cross-cutting
+- [ ] **Real identity in the app bar** ("Welcome Back User" is hardcoded).
+- [ ] **Offline fallback per region** — last-known local data, never a loud failure.
+
+## Out of scope (explicitly not dashboard)
+- Mastery graphs / charts (single-number signal at most)
+- Streak / statistics / social / share (engagement mechanics — off mission)
+- Study-plan dashboard (a later, distinct feature)
+
+## Hard requirements (gates, not aspirations)
+1. **No fabricated data.** Every region renders only grounded values. A
+   placeholder that survives past its wireframe purpose is a bug.
+2. **Grounded suggestions.** Suggested/gap reading comes from RAG-identified
+   gaps in the user's own material (`suggested_sources` etc.). A generic pick is
+   a defect even if it fills the screen nicely.
+3. **Silent empty states.** Nothing to show → shrink, never show junk.
 
 ## Dependencies
 - `ui/screens/home/d_homescreen_page.dart` — screen container
+- `ui/screens/home/gap_card.dart` — NEW hero region (gaps rollup)
 - `ui/screens/home/upcoming_engrams.dart` — due/upcoming schedule
 - `ui/screens/home/notes.dart` — Where You Left Off
-- `ui/screens/home/study_bubbles_summary.dart` — orphaned; needs wiring
-- `ui/screens/home/file_library.dart` — finished region
-- `ui/screens/home/suggested_reading.dart` — gap-grounded recommendations
-- `api/learning_center_api.dart` + `models/engram_models.dart` — engram schedule fields (new)
+- `ui/screens/home/study_bubbles_summary.dart` — orphaned; wiring
+- `ui/screens/home/suggested_reading.dart` — repurpose to gap-derived reading
+- `ui/editor/editor_scaffold.dart` + analysis payload (`note_overview`,
+  `concept_map`, `suggested_sources`) — the gap data source (already on client)
+- `api/learning_center_api.dart` + `models/engram_models.dart` — schedule fields (new)
 - `api/bubbles_api.dart` — bubble summary payload
-- [[cross-repo/contracts]] — due-date/schedule + suggested-reading shapes must be agreed daemon-side
-- [[engram-generation]] — real schedule only exists once engrams are generated (Phase 2)
-- Notes recency from local NoteStore (no daemon round-trip needed for recency)
+- `services/note_store.dart` — recency, no daemon needed
+- [[cross-repo/contracts]] — due-date/schedule + suggested-reading shapes agreed daemon-side
+- [[engram-generation]] — full schedule exists once engrams are generated (Phase 2)
 
 ## Schedule
 | Phase | Work |
 |-------|------|
-| Phase 1 | Dashboard shell + File Library + engram section with placeholder scheduling (present in main) |
-| Phase 2 | Real engram due/schedule + identity, wire StudyBubblesSummaryCard, Where You Left Off recency |
-| Phase 2 | Suggested reading from RAG gap analysis + daemon recommendation contract |
+| Phase 1 | Identity + mount StudyBubblesSummaryCard + wire recency + gap card prototype on the EXISTING analysis payload |
+| Phase 2 | Real schedule/due-dates + suggested-reading/gap contract + cross-bubble rollup |
 
-## Notes
-- Current engram call hardcodes `bubble_id`, `note_id`, `user_id` — must move to
-  real StudyBubbleContext + client identity before the schedule is real
-- "Welcome Back User" is hardcoded; pull display name from identity/api when available
-- `Engram` model has no due-date field; `listEngrams` shape needs a schedule addition
-  (cross-repo contract change — check `docs/cross-repo-contracts.md` first)
-- `StudyBubblesSummaryCard` is fully implemented but unreferenced; its display-name
-  key is unconfirmed (falls back name → title), verify against daemon payload before wiring
-- Empty-state behaviour is already a good model here: UpcomingEngramsSection shrinks
-  away when there are no engrams and keeps last data on background-refresh failure —
-  replicate that pattern across the other regions
-- Notes card's "Create Note" button has no onPressed — unfinished, not by design
+## Notes / decisions
+- **The daemon gap data already exists** — `editor_scaffold._formatOverviewMarkdown`
+  renders `weak_areas`, `confused_links`, `knowledge_gaps_summary`, and
+  `suggested_sources` today. The hero region is a *rollup + presentation* problem
+  first, a *new contract* problem second. Build on what's there.
+- **Suggested reading is already grounded daemon-side** (`suggested_sources`
+  returns `{title, reason}`). Don't invent a new source; surface it as the gap's
+  resolution.
+- Current engram call hardcodes `bubble_id`/`note_id`/`user_id` — must move to a
+  real StudyBubbleContext + client identity before the engram region is real.
+- `StudyBubblesSummaryCard` display-name key unconfirmed (`name` vs `title`) —
+  verify before wiring.
+- Replicate `UpcomingEngramsSection`'s shrink-away empty state across all regions.
+- Notes card's "Create Note" button has no onPressed — finish it, not a design choice.

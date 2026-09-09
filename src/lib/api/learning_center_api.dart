@@ -266,7 +266,8 @@ class LearningCenterApi {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final rawEngrams =
-            ((json['engrams'] as List?) ?? const []).cast<Map<String, dynamic>>();
+            ((json['engrams'] as List?) ?? const [])
+                .cast<Map<String, dynamic>>();
         await EngramStore.cacheRaw(
           userId: userId,
           bubbleId: bubbleId,

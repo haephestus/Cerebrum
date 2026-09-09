@@ -1,17 +1,15 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
-import 'package:cerebrum/ui/editor/controllers/paged_note_controller.dart';
-import 'package:cerebrum/ui/editor/screens/page_surface.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/paged_note_controller.dart';
+import 'package:cerebrum/ui/screens/editor/screens/page_surface.dart';
 
 /// Looks up the analysis chunks (if any) covering the block with id [blockId] on
 /// the page with id [pageId]. Null/empty means that block has no analysis.
 /// Supplied by EditorScaffold while the analysis panel is open; drives
 /// PageSurface's inline per-block analysis popover. Keyed by STABLE block id
 /// (not position) so the mapping survives edits/reorders.
-typedef BlockAnalysisLookup = List<Map<String, dynamic>>? Function(
-  String pageId,
-  String blockId,
-);
+typedef BlockAnalysisLookup =
+    List<Map<String, dynamic>>? Function(String pageId, String blockId);
 
 /// Renders a note's pages as either a **vertical** continuous scroll (default,
 /// document feel) or a **horizontal** PageView (slideshow), switchable at
@@ -97,7 +95,14 @@ class _PagedEditorState extends State<PagedEditor> {
                 eraserWidth: widget.eraserWidth,
                 // When this page's content spills past the sheet, move the
                 // overflowing tail (from block `fromIndex`) onto the next page.
-                onOverflow: (fromIndex) => c.pushOverflow(i, fromIndex),
+                // A table reports a measured height budget so the controller
+                // can split it at a row boundary (see PagedNoteController).
+                onOverflow: (fromIndex, {tableAvailableHeight}) =>
+                    c.pushOverflow(
+                  i,
+                  fromIndex,
+                  tableAvailableHeight: tableAvailableHeight,
+                ),
               ),
             ),
           );

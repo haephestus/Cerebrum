@@ -13,6 +13,9 @@ class ResponsiveLayout extends StatelessWidget {
     final width = MediaQuery.of(context).size.width;
 
     if (width < mobileBreakpoint) {
+      // Mobile layout isn't built yet — the scaffold falls back to the desktop
+      // layout so every width compiles and renders something.
+      return desktop;
     } else {
       return desktop;
     }

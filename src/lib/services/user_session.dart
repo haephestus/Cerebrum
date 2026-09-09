@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'local_secure_store.dart';
 
 /// Centralized read/write access to locally-persisted session data.
 ///
@@ -46,9 +47,15 @@ class UserSession {
       if (value != null) _secureCache[key] = value;
       return value;
     } on PlatformException {
-      return null; // e.g. Linux without a running Secret Service
+      // Fallback to local encrypted store on Linux without Secret Service
+      final fallbackValue = await LocalSecureStore.read(key);
+      if (fallbackValue != null) _secureCache[key] = fallbackValue;
+      return fallbackValue;
     } on MissingPluginException {
-      return null; // headless tests / platforms without the plugin
+      // Fallback to local encrypted store for headless/unsupported platforms
+      final fallbackValue = await LocalSecureStore.read(key);
+      if (fallbackValue != null) _secureCache[key] = fallbackValue;
+      return fallbackValue;
     }
   }
 
@@ -60,9 +67,11 @@ class UserSession {
       try {
         await _secure.delete(key: key);
       } on PlatformException {
-        // No Secret Service — nothing to delete, cache already cleared.
+        // No Secret Service — delete from fallback store
+        await LocalSecureStore.write(key, null);
       } on MissingPluginException {
-        // Headless/unsupported — nothing to delete.
+        // Headless/unsupported — delete from fallback store
+        await LocalSecureStore.write(key, null);
       }
       return;
     }
@@ -70,9 +79,11 @@ class UserSession {
     try {
       await _secure.write(key: key, value: value);
     } on PlatformException {
-      // No Secret Service — session works via the in-memory cache only.
+      // No Secret Service — write to fallback store
+      await LocalSecureStore.write(key, value);
     } on MissingPluginException {
-      // Headless/unsupported — session works via the in-memory cache only.
+      // Headless/unsupported — write to fallback store
+      await LocalSecureStore.write(key, value);
     }
   }
 

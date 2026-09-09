@@ -1,4 +1,4 @@
-# local-first-reads
+# Feature: Local First Reads
 
 > Read from local store first, refresh from daemon in background.
 
@@ -10,9 +10,9 @@
 DONE — Phase 1 (shipped pre-phase formalisation)
 
 ## Goals
-- Note list loads instantly from local _index.json
-- Background refresh from daemon when reachable keeps local state current
-- Works for both note list and individual note open
+- [x] Note list loads instantly from local _index.json
+- [x] Background refresh from daemon when reachable keeps local state current
+- [x] Works for both note list and individual note open
 
 ## Scope
 - **In:** `_index.json` local-first reads, background `fetchNoteByFileName` refresh

@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
-import 'package:cerebrum/ui/editor/controllers/note_editor_controller.dart';
-import 'package:cerebrum/ui/editor/controllers/appflowy_text_driver.dart';
-import 'package:cerebrum/ui/editor/screens/drawing_layer.dart';
-import 'package:cerebrum/ui/editor/screens/paged_editor.dart'
+import 'package:cerebrum/ui/screens/editor/blocks/table/table_page_bounds.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
+import 'package:cerebrum/ui/screens/editor/screens/drawing_layer.dart';
+import 'package:cerebrum/ui/screens/editor/screens/paged_editor.dart'
     show BlockAnalysisLookup;
 
 /// One page of a note: a fixed-aspect "sheet" (A4 portrait) holding the text
@@ -68,7 +69,16 @@ class PageSurface extends StatefulWidget {
   /// Called with the index of the first top-level block that spills past the
   /// bottom of the sheet, so the controller can move that block (and everything
   /// after it) onto the next page. Null disables overflow flow.
-  final void Function(int fromBlockIndex)? onOverflow;
+  ///
+  /// For a TABLE block, [tableAvailableHeight] carries the measured vertical
+  /// space the table head may occupy (`pageBottom - tableTop`) so the
+  /// controller can SPLIT the table at a row boundary instead of moving the
+  /// whole block — the piece that keeps a page from becoming scrollable.
+  final void Function(
+    int fromBlockIndex, {
+    double? tableAvailableHeight,
+  })?
+  onOverflow;
 
   final double aspectRatio;
 
@@ -144,17 +154,22 @@ class _PageSurfaceState extends State<PageSurface> {
 
     final blocks =
         (widget.controller.documentJson['children'] as List?) ?? const [];
-    // Start at 1: always keep at least the first block on the page. A lone block
-    // taller than the whole sheet can't be moved off without splitting (which
-    // this model doesn't do), so it's left to overflow rather than loop forever.
-    // TODO(tables): an oversized TABLE hits exactly this case and overflows its
-    // own sheet — see PagedNoteController.pushOverflow for the follow-up options.
+    // A rasterized table taller than the sheet is now split at the row level
+    // (via the tableAvailableHeight budget → the controller's splitter), so a
+    // TABLE at index 0 is handled too. A NON-table block at index 0 that's
+    // taller than the whole sheet can't be divided by this model, so it's left
+    // to overflow rather than loop forever.
     const tolerance = 0.5;
-    for (var i = 1; i < blocks.length; i++) {
+    for (var i = 0; i < blocks.length; i++) {
       final rect = driver.rectOfBlock(i);
       if (rect == null) continue;
       if (rect.bottom > pageBottom + tolerance) {
-        onOverflow(i);
+        final isTable = (blocks[i] as Map?)?['type'] == 'table';
+        if (i == 0 && !isTable) continue;
+        onOverflow(
+          i,
+          tableAvailableHeight: isTable ? pageBottom - rect.top : null,
+        );
         return;
       }
     }
@@ -223,9 +238,15 @@ class _PageSurfaceState extends State<PageSurface> {
                   children: [
                     // Text layer — absorbs pointers while drawing so strokes
                     // don't also move the caret (same pattern as EditorSurface).
-                    AbsorbPointer(
-                      absorbing: widget.drawingEnabled,
-                      child: widget.controller.driver.buildEditor(context),
+                    // The PagedTableBounds exposes this page's sheet geometry to
+                    // deep block widgets (the forked table) so they can cap
+                    // their own growth against the page.
+                    PagedTableBounds(
+                      sheetKey: _stackKey,
+                      child: AbsorbPointer(
+                        absorbing: widget.drawingEnabled,
+                        child: widget.controller.driver.buildEditor(context),
+                      ),
                     ),
                     // Ink layer — only receptive to pointers while drawing.
                     IgnorePointer(
@@ -282,12 +303,19 @@ class _PageSurfaceState extends State<PageSurface> {
     // Prefer below the block; flip above if it would overflow the sheet bottom.
     final estPopoverHeight = 220.0;
     final belowSpace = pageSize.height - blockRect.bottom;
-    final placeBelow = belowSpace >= estPopoverHeight || belowSpace >= blockRect.top;
-    final left =
-        blockRect.left.clamp(0.0, (pageSize.width - popoverWidth).clamp(0.0, double.infinity));
-    final top = placeBelow
-        ? (blockRect.bottom + gap)
-        : (blockRect.top - gap - estPopoverHeight).clamp(0.0, double.infinity);
+    final placeBelow =
+        belowSpace >= estPopoverHeight || belowSpace >= blockRect.top;
+    final left = blockRect.left.clamp(
+      0.0,
+      (pageSize.width - popoverWidth).clamp(0.0, double.infinity),
+    );
+    final top =
+        placeBelow
+            ? (blockRect.bottom + gap)
+            : (blockRect.top - gap - estPopoverHeight).clamp(
+              0.0,
+              double.infinity,
+            );
 
     return [
       // Block tint.
@@ -412,8 +440,7 @@ class _AnalysisPopover extends StatelessWidget {
 
   Widget _finding(Map<String, dynamic> finding) {
     final severity = (finding['severity'] ?? 'unknown').toString();
-    final type =
-        (finding['type'] ?? 'finding').toString().replaceAll('_', ' ');
+    final type = (finding['type'] ?? 'finding').toString().replaceAll('_', ' ');
     final gap = finding['gap_explanation'] as String?;
     final claim = finding['student_claim'] as String?;
     final detail = gap ?? claim;
@@ -436,10 +463,7 @@ class _AnalysisPopover extends StatelessWidget {
             ),
             Text(
               severity.toUpperCase(),
-              style: TextStyle(
-                fontSize: 10,
-                color: _severityColor(severity),
-              ),
+              style: TextStyle(fontSize: 10, color: _severityColor(severity)),
             ),
           ],
         ),

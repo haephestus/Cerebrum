@@ -37,4 +37,11 @@
 - **Decision**: Separate service with its own queue, drain, and grade-poll logic.
 - **Consequences**: Two sync services driven independently on app start/resume.
 
+## ADR-0006 — Local Secure Storage Fallback for Linux
+- **Status**: accepted
+- **Date**: 2026-09-08
+- **Context**: `flutter_secure_storage` relies on `libsecret` (GNOME Keyring/KWallet). On minimal Linux environments (e.g., Hyprland/Wayland), these services are often missing, causing `PlatformException` and restricting session persistence to in-memory cache only. This resulted in logouts on every hot restart.
+- **Decision**: Implement `LocalSecureStore` as a fallback. When the system Secret Service is unavailable, tokens are encrypted via a machine-derived key (hostname + salt) and stored in `shared_preferences`.
+- **Consequences**: Session persists across app restarts on minimal Linux setups. Security is slightly reduced compared to system keyrings but significantly improved over plaintext.
+
 See [[todo]] for what's open.

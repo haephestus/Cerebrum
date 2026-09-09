@@ -1,4 +1,4 @@
-# hierarchical-retrieval
+# Feature: Hierarchical Retrieval
 
 > Better retrieval for large knowledge bases by organising docs hierarchically.
 
@@ -10,9 +10,9 @@
 CANDIDATE — Phase 2
 
 ## Goals
-- Retrieve relevant chunks more accurately as knowledge base grows
-- Organise documents by domain/topic hierarchy
-- Reduce noise in RAG context injection
+- [ ] Retrieve relevant chunks more accurately as knowledge base grows
+- [ ] Organise documents by domain/topic hierarchy
+- [ ] Reduce noise in RAG context injection
 
 ## Scope
 - **In:** Domain-specific vector stores (already exists), hierarchical indexing, multi-level retrieval

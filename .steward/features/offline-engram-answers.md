@@ -1,4 +1,4 @@
-# offline-engram-answers
+# Feature: Offline Engram Answers
 
 > Answer quizzes offline — queue locally, submit + grade on reconnect.
 
@@ -10,10 +10,10 @@
 DONE — Phase 1 (shipped pre-phase formalisation)
 
 ## Goals
-- Engram answers saved on-device first (never lost)
-- Walked through `queued → submitted → graded` pipeline
-- Badge + notification when grade lands
-- Works for MCQ, flashcard, short, and long questions
+- [x] Engram answers saved on-device first (never lost)
+- [x] Walked through `queued → submitted → graded` pipeline
+- [x] Badge + notification when grade lands
+- [x] Works for MCQ, flashcard, short, and long questions
 
 ## Scope
 - **In:** EngramAttemptStore (filesystem queue + durable record), answer queuing, submit to daemon, grade poll via job_id, badge + notifications scaffolding

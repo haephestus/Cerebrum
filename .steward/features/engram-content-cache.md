@@ -1,4 +1,4 @@
-# engram-content-cache
+# Feature: Engram Content Cache
 
 > Local engram storage for cold-start offline quizzing.
 
@@ -10,9 +10,9 @@
 DONE — Phase 1 (shipped 2026-08-11)
 
 ## Goals
-- Open app offline → start a fresh quiz (not just resume mid-session)
-- listEngrams is local-first: caches what it fetches, falls back on failure
-- Engram content (questions + cached answers) stored in Drift
+- [x] Open app offline → start a fresh quiz (not just resume mid-session)
+- [x] listEngrams is local-first: caches what it fetches, falls back on failure
+- [x] Engram content (questions + cached answers) stored in Drift
 
 ## Scope
 - **In:** CachedEngrams Drift table, EngramStore (cacheRaw + cachedResponse), listEngrams cache/fallback

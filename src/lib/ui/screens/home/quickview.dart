@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class Notes extends StatelessWidget {
-  const Notes({super.key});
+class Quickview extends StatelessWidget {
+  const Quickview({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -36,22 +36,8 @@ class Notes extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    "No notes yet",
+                    "Nothing to report yet",
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    "Create your first note to start organizing your knowledge.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, fontSize: 15),
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () {
-                      // TODO: Navigate to note creation
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text("Create Note"),
                   ),
                 ],
               ),

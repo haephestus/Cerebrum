@@ -1,4 +1,4 @@
-# client-owned-identity
+# Feature: Client Owned Identity
 
 > ULIDs minted client-side so notes exist before the daemon sees them.
 
@@ -10,9 +10,9 @@
 DONE — Phase 1 (shipped pre-phase formalisation)
 
 ## Goals
-- Create notes fully offline (no daemon round-trip needed)
-- Client-minted note_id ensures offline-created notes don't duplicate on sync
-- Attempt IDs also client-owned for idempotent replay
+- [x] Create notes fully offline (no daemon round-trip needed)
+- [x] Client-minted note_id ensures offline-created notes don't duplicate on sync
+- [x] Attempt IDs also client-owned for idempotent replay
 
 ## Scope
 - **In:** `id.dart` nanoid() (32-char hex), ULID note_id on createNote, attempt_id on engram submits

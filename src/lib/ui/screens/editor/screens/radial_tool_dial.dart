@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show BoxHitTestResult, RenderProxyBox;
 import 'package:scribble/scribble.dart';
 
-import '../../../services/editor_settings_store.dart';
+import '../../../../services/editor_settings_store.dart';
 
 /// Concentric "tool wheel", inspired by the Concepts app's *Color Wheels*.
 ///
@@ -217,8 +217,10 @@ class _ToolDialHubState extends State<ToolDialHub> {
     final themes = await EditorSettingsStore.loadThemes();
     if (!mounted) return;
     final allThemes = [...WheelTheme.builtIns(), ...themes.custom];
-    final active = allThemes.firstWhere((t) => t.name == themes.active,
-        orElse: () => allThemes.first);
+    final active = allThemes.firstWhere(
+      (t) => t.name == themes.active,
+      orElse: () => allThemes.first,
+    );
     setState(() {
       _themes = allThemes;
       _activeTheme = active;
@@ -239,13 +241,13 @@ class _ToolDialHubState extends State<ToolDialHub> {
   }
 
   EditorSettings get _settingsSnapshot => EditorSettings(
-        minWheelScale: _minHubScale,
-        maxWheelScale: _maxHubScale,
-        penWidth: _toolWidths[_Tool.pen]!,
-        highlighterWidth: _toolWidths[_Tool.highlighter]!,
-        eraserWidth: _toolWidths[_Tool.eraser]!,
-        showHex: _showHex,
-      );
+    minWheelScale: _minHubScale,
+    maxWheelScale: _maxHubScale,
+    penWidth: _toolWidths[_Tool.pen]!,
+    highlighterWidth: _toolWidths[_Tool.highlighter]!,
+    eraserWidth: _toolWidths[_Tool.eraser]!,
+    showHex: _showHex,
+  );
 
   /// Default resting anchor: inset from the bottom-left so the HUB stays fully
   /// on-screen while the big wheel overflows the left/bottom edges.
@@ -441,8 +443,10 @@ class _ToolDialHubState extends State<ToolDialHub> {
   void _onScaleUpdate(ScaleUpdateDetails d, BoxConstraints c) {
     if (d.pointerCount >= 2) {
       setState(() {
-        _hubScale = (_scaleAtGestureStart * d.scale)
-            .clamp(_minHubScale, _maxHubScale);
+        _hubScale = (_scaleAtGestureStart * d.scale).clamp(
+          _minHubScale,
+          _maxHubScale,
+        );
       });
       return;
     }
@@ -453,8 +457,14 @@ class _ToolDialHubState extends State<ToolDialHub> {
           final next = d.localFocalPoint - _grabOffset;
           // Keep the HUB fully on-screen; the wheel may overflow.
           _anchor = Offset(
-            next.dx.clamp(_hubOuterR, math.max(_hubOuterR, c.maxWidth - _hubOuterR)),
-            next.dy.clamp(_hubOuterR, math.max(_hubOuterR, c.maxHeight - _hubOuterR)),
+            next.dx.clamp(
+              _hubOuterR,
+              math.max(_hubOuterR, c.maxWidth - _hubOuterR),
+            ),
+            next.dy.clamp(
+              _hubOuterR,
+              math.max(_hubOuterR, c.maxHeight - _hubOuterR),
+            ),
           );
         });
         break;
@@ -493,8 +503,10 @@ class _ToolDialHubState extends State<ToolDialHub> {
   void _onPointerSignal(PointerSignalEvent e) {
     if (e is! PointerScrollEvent) return;
     setState(() {
-      _hubScale =
-          (_hubScale - e.scrollDelta.dy * 0.0012).clamp(_minHubScale, _maxHubScale);
+      _hubScale = (_hubScale - e.scrollDelta.dy * 0.0012).clamp(
+        _minHubScale,
+        _maxHubScale,
+      );
     });
   }
 
@@ -523,106 +535,125 @@ class _ToolDialHubState extends State<ToolDialHub> {
   Future<void> _openWheelSettings() async {
     await showModalBottomSheet<void>(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setSheet) {
-          Widget slider(String label, double value, double lo, double hi,
-              ValueChanged<double> onChanged) {
-            return Row(
-              children: [
-                SizedBox(width: 84, child: Text(label)),
-                Expanded(
-                  child: Slider(
-                    min: lo,
-                    max: hi,
-                    value: value.clamp(lo, hi),
-                    label: '${(value * 100).round()}%',
-                    onChanged: (v) {
-                      setSheet(() {});
-                      onChanged(v);
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: 48,
-                  child: Text('${(value * 100).round()}%',
-                      textAlign: TextAlign.right),
-                ),
-              ],
-            );
-          }
-
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Tool-hub size limits',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                slider('Minimum', _minHubScale, 0.5, 1.4, (v) {
-                  setState(() {
-                    _minHubScale = v;
-                    if (_maxHubScale < _minHubScale) _maxHubScale = _minHubScale;
-                    _hubScale = _hubScale.clamp(_minHubScale, _maxHubScale);
-                  });
-                }),
-                slider('Maximum', _maxHubScale, 0.6, 1.5, (v) {
-                  setState(() {
-                    _maxHubScale = v;
-                    if (_maxHubScale < _minHubScale) _minHubScale = _maxHubScale;
-                    _hubScale = _hubScale.clamp(_minHubScale, _maxHubScale);
-                  });
-                }),
-                const SizedBox(height: 16),
-                const Text('Colour theme',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                for (final t in _themes)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    leading: Icon(
-                      t.name == _activeTheme.name
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_unchecked,
-                      color: t.name == _activeTheme.name
-                          ? const Color(0xFF2E7BF6)
-                          : Colors.black45,
+      builder:
+          (_) => StatefulBuilder(
+            builder: (context, setSheet) {
+              Widget slider(
+                String label,
+                double value,
+                double lo,
+                double hi,
+                ValueChanged<double> onChanged,
+              ) {
+                return Row(
+                  children: [
+                    SizedBox(width: 84, child: Text(label)),
+                    Expanded(
+                      child: Slider(
+                        min: lo,
+                        max: hi,
+                        value: value.clamp(lo, hi),
+                        label: '${(value * 100).round()}%',
+                        onChanged: (v) {
+                          setSheet(() {});
+                          onChanged(v);
+                        },
+                      ),
                     ),
-                    title: Text(t.name),
-                    subtitle: _themeStrip(t),
-                    trailing: t.builtIn
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 20),
-                            tooltip: 'Delete theme',
-                            onPressed: () async {
-                              await _deleteTheme(t);
-                              setSheet(() {});
-                            },
-                          ),
-                    onTap: () {
-                      _selectTheme(t);
-                      setSheet(() {});
-                    },
-                  ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    icon: const Icon(Icons.add),
-                    label: const Text('New theme'),
-                    onPressed: () async {
-                      await _promptNewTheme();
-                      setSheet(() {});
-                    },
-                  ),
+                    SizedBox(
+                      width: 48,
+                      child: Text(
+                        '${(value * 100).round()}%',
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tool-hub size limits',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    slider('Minimum', _minHubScale, 0.5, 1.4, (v) {
+                      setState(() {
+                        _minHubScale = v;
+                        if (_maxHubScale < _minHubScale)
+                          _maxHubScale = _minHubScale;
+                        _hubScale = _hubScale.clamp(_minHubScale, _maxHubScale);
+                      });
+                    }),
+                    slider('Maximum', _maxHubScale, 0.6, 1.5, (v) {
+                      setState(() {
+                        _maxHubScale = v;
+                        if (_maxHubScale < _minHubScale)
+                          _minHubScale = _maxHubScale;
+                        _hubScale = _hubScale.clamp(_minHubScale, _maxHubScale);
+                      });
+                    }),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Colour theme',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    for (final t in _themes)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        leading: Icon(
+                          t.name == _activeTheme.name
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          color:
+                              t.name == _activeTheme.name
+                                  ? const Color(0xFF2E7BF6)
+                                  : Colors.black45,
+                        ),
+                        title: Text(t.name),
+                        subtitle: _themeStrip(t),
+                        trailing:
+                            t.builtIn
+                                ? null
+                                : IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 20,
+                                  ),
+                                  tooltip: 'Delete theme',
+                                  onPressed: () async {
+                                    await _deleteTheme(t);
+                                    setSheet(() {});
+                                  },
+                                ),
+                        onTap: () {
+                          _selectTheme(t);
+                          setSheet(() {});
+                        },
+                      ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.add),
+                        label: const Text('New theme'),
+                        onPressed: () async {
+                          await _promptNewTheme();
+                          setSheet(() {});
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
     );
     await EditorSettingsStore.saveSettings(_settingsSnapshot);
   }
@@ -646,9 +677,9 @@ class _ToolDialHubState extends State<ToolDialHub> {
   }
 
   Future<void> _persistThemes() => EditorSettingsStore.saveThemes(
-        _themes.where((t) => !t.builtIn).toList(),
-        _activeTheme.name,
-      );
+    _themes.where((t) => !t.builtIn).toList(),
+    _activeTheme.name,
+  );
 
   void _selectTheme(WheelTheme t) {
     setState(() => _activeTheme = t);
@@ -702,24 +733,24 @@ class _ToolDialHubState extends State<ToolDialHub> {
                       child: CustomPaint(
                         size: Size.infinite,
                         painter: _WheelPainter(
-                        anchor: _resolvedAnchor,
-                        centerR: _centerR,
-                        ringR: _ringR,
-                        chipR: _chipR,
-                        sizeRingR: _sizeRingR,
-                        sizeRingStroke: _sizeRingStroke,
-                        labelR: _labelR,
-                        expanded: _expanded,
-                        tool: _tool,
-                        penColor: _penColor,
-                        penColorName: _penColorName,
-                        eraserPartial: widget.partialEraser?.value ?? true,
-                        rotation: _paletteRotation,
-                        customColors: _customColors,
-                        activeWidth: _toolWidths[_tool],
-                        widthFraction: _widthFraction,
-                        showHex: _showHex,
-                        sectors: _palette,
+                          anchor: _resolvedAnchor,
+                          centerR: _centerR,
+                          ringR: _ringR,
+                          chipR: _chipR,
+                          sizeRingR: _sizeRingR,
+                          sizeRingStroke: _sizeRingStroke,
+                          labelR: _labelR,
+                          expanded: _expanded,
+                          tool: _tool,
+                          penColor: _penColor,
+                          penColorName: _penColorName,
+                          eraserPartial: widget.partialEraser?.value ?? true,
+                          rotation: _paletteRotation,
+                          customColors: _customColors,
+                          activeWidth: _toolWidths[_tool],
+                          widthFraction: _widthFraction,
+                          showHex: _showHex,
+                          sectors: _palette,
                         ),
                       ),
                     ),
@@ -749,8 +780,10 @@ class _ToolDialHubState extends State<ToolDialHub> {
   double? get _widthFraction {
     final range = _widthRange[_tool];
     if (range == null) return null;
-    return ((_toolWidths[_tool]! - range.min) / (range.max - range.min))
-        .clamp(0.0, 1.0);
+    return ((_toolWidths[_tool]! - range.min) / (range.max - range.min)).clamp(
+      0.0,
+      1.0,
+    );
   }
 }
 
@@ -779,11 +812,16 @@ class _HexToggle extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(value ? Icons.tag : Icons.tag_outlined,
-                  size: 16, color: value ? accent : Colors.black54),
+              Icon(
+                value ? Icons.tag : Icons.tag_outlined,
+                size: 16,
+                color: value ? accent : Colors.black54,
+              ),
               const SizedBox(width: 6),
-              Text(value ? 'Hex on' : 'Hex off',
-                  style: const TextStyle(fontSize: 12)),
+              Text(
+                value ? 'Hex on' : 'Hex off',
+                style: const TextStyle(fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -845,7 +883,8 @@ final Map<String, TextPainter> _glyphCache = {};
 TextPainter _cachedGlyph(String key, TextSpan span) {
   final hit = _glyphCache[key];
   if (hit != null) return hit;
-  final tp = TextPainter(text: span, textDirection: TextDirection.ltr)..layout();
+  final tp = TextPainter(text: span, textDirection: TextDirection.ltr)
+    ..layout();
   _glyphCache[key] = tp;
   return tp;
 }
@@ -893,12 +932,12 @@ class _WheelPainter extends CustomPainter {
 
   static const Color _accent = Color(0xFF2E7BF6);
 
-  IconData _iconForTool(_Tool t) => t == _Tool.eraser
-      ? (eraserPartial ? Icons.cleaning_services : Icons.layers_clear)
-      : _ctlIcons[_ctlFor(t)]!;
+  IconData _iconForTool(_Tool t) =>
+      t == _Tool.eraser
+          ? (eraserPartial ? Icons.cleaning_services : Icons.layers_clear)
+          : _ctlIcons[_ctlFor(t)]!;
 
-  _Ctl _ctlFor(_Tool t) =>
-      _ctlTool.entries.firstWhere((e) => e.value == t).key;
+  _Ctl _ctlFor(_Tool t) => _ctlTool.entries.firstWhere((e) => e.value == t).key;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -919,26 +958,45 @@ class _WheelPainter extends CustomPainter {
       final base = -math.pi / 2 + rotation;
       for (var i = 0; i < slots; i++) {
         final start = base + i * sweep + gap / 2;
-        final path =
-            _annularSector(c, _kWheelInnerR, _kCustomOuterR, start, sweep - gap);
+        final path = _annularSector(
+          c,
+          _kWheelInnerR,
+          _kCustomOuterR,
+          start,
+          sweep - gap,
+        );
         final s = customColors[i];
         canvas.drawPath(
-            path, Paint()..color = s.color.withValues(alpha: _kSwatchAlpha));
+          path,
+          Paint()..color = s.color.withValues(alpha: _kSwatchAlpha),
+        );
         if (s.color.toARGB32() == penColor.toARGB32()) {
           _outline(canvas, path);
         }
         if (showHex) {
           final mid = start + (sweep - gap) / 2;
-          final at = c + Offset(math.cos(mid), math.sin(mid)) *
-              ((_kWheelInnerR + _kCustomOuterR) / 2);
-          _drawText(canvas, at, _shortHex(s.color),
-              size: 9, color: _readableOn(s.color));
+          final at =
+              c +
+              Offset(math.cos(mid), math.sin(mid)) *
+                  ((_kWheelInnerR + _kCustomOuterR) / 2);
+          _drawText(
+            canvas,
+            at,
+            _shortHex(s.color),
+            size: 9,
+            color: _readableOn(s.color),
+          );
         }
       }
     } else {
       // No custom colours yet — just the hint (no opaque fill, stays transparent).
-      _drawText(canvas, c + const Offset(0, -(_kWheelInnerR + _kCustomOuterR) / 2),
-          'tap  +  to save colours', size: 9, color: Colors.black45);
+      _drawText(
+        canvas,
+        c + const Offset(0, -(_kWheelInnerR + _kCustomOuterR) / 2),
+        'tap  +  to save colours',
+        size: 9,
+        color: Colors.black45,
+      );
     }
 
     // Hue families (sectors) × value bands. Each band is a FIXED radial height,
@@ -957,14 +1015,21 @@ class _WheelPainter extends CustomPainter {
         final path = _annularSector(c, inner, outer, start, sweep - gap);
         final color = Color(0xFF000000 | col[band]);
         canvas.drawPath(
-            path, Paint()..color = color.withValues(alpha: _kSwatchAlpha));
+          path,
+          Paint()..color = color.withValues(alpha: _kSwatchAlpha),
+        );
         if (color.toARGB32() == penColor.toARGB32()) _outline(canvas, path);
         if (showHex) {
           final mid = start + (sweep - gap) / 2;
           final at =
               c + Offset(math.cos(mid), math.sin(mid)) * ((inner + outer) / 2);
-          _drawText(canvas, at, _shortHex(color),
-              size: 8, color: _readableOn(color));
+          _drawText(
+            canvas,
+            at,
+            _shortHex(color),
+            size: 8,
+            color: _readableOn(color),
+          );
         }
       }
     }
@@ -998,14 +1063,20 @@ class _WheelPainter extends CustomPainter {
         at,
         chipR,
         Paint()
-          ..color = selected ? _accent.withValues(alpha: 0.18) : Colors.grey.shade100,
+          ..color =
+              selected ? _accent.withValues(alpha: 0.18) : Colors.grey.shade100,
       );
-      final icon = _ctlTool[ctl] == _Tool.eraser
-          ? _iconForTool(_Tool.eraser)
-          : _ctlIcons[ctl]!;
-      _drawIcon(canvas, at, icon,
-          size: chipR * 1.1,
-          color: selected ? _accent : Colors.black54);
+      final icon =
+          _ctlTool[ctl] == _Tool.eraser
+              ? _iconForTool(_Tool.eraser)
+              : _ctlIcons[ctl]!;
+      _drawIcon(
+        canvas,
+        at,
+        icon,
+        size: chipR * 1.1,
+        color: selected ? _accent : Colors.black54,
+      );
     }
 
     // Size dial: a concentric ring around the hub. Only the FILLED arc + a knob
@@ -1048,8 +1119,14 @@ class _WheelPainter extends CustomPainter {
     // Colour readout pill (bottom, inside the ring).
     final colourAt = c + Offset(0, labelR);
     final colourText = penColorName ?? _shortHex(penColor, withHash: true);
-    _drawPill(canvas, colourAt, colourText,
-        fontSize: 10, bg: penColor, fg: _readableOn(penColor));
+    _drawPill(
+      canvas,
+      colourAt,
+      colourText,
+      fontSize: 10,
+      bg: penColor,
+      fg: _readableOn(penColor),
+    );
 
     // Center disc: current colour + tool.
     final centreColor = tool == _Tool.eraser ? Colors.grey.shade300 : penColor;
@@ -1062,36 +1139,53 @@ class _WheelPainter extends CustomPainter {
         ..strokeWidth = 1.5
         ..color = Colors.black26,
     );
-    _drawIcon(canvas, c, _iconForTool(tool),
-        size: centerR * 0.9, color: _readableOn(centreColor));
+    _drawIcon(
+      canvas,
+      c,
+      _iconForTool(tool),
+      size: centerR * 0.9,
+      color: _readableOn(centreColor),
+    );
   }
 
   double get _hubBackingR => sizeRingR + sizeRingStroke / 2 + 4;
 
   void _outline(Canvas canvas, Path path) => canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5
-          ..color = Colors.white,
-      );
+    path,
+    Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..color = Colors.white,
+  );
 
   Path _annularSector(
-      Offset c, double inner, double outer, double start, double sweep) {
+    Offset c,
+    double inner,
+    double outer,
+    double start,
+    double sweep,
+  ) {
     final outerRect = Rect.fromCircle(center: c, radius: outer);
     final innerRect = Rect.fromCircle(center: c, radius: inner);
     return Path()
       ..moveTo(c.dx + inner * math.cos(start), c.dy + inner * math.sin(start))
       ..lineTo(c.dx + outer * math.cos(start), c.dy + outer * math.sin(start))
       ..arcTo(outerRect, start, sweep, false)
-      ..lineTo(c.dx + inner * math.cos(start + sweep),
-          c.dy + inner * math.sin(start + sweep))
+      ..lineTo(
+        c.dx + inner * math.cos(start + sweep),
+        c.dy + inner * math.sin(start + sweep),
+      )
       ..arcTo(innerRect, start + sweep, -sweep, false)
       ..close();
   }
 
-  void _drawIcon(Canvas canvas, Offset at, IconData icon,
-      {required double size, required Color color}) {
+  void _drawIcon(
+    Canvas canvas,
+    Offset at,
+    IconData icon, {
+    required double size,
+    required Color color,
+  }) {
     final tp = _cachedGlyph(
       'I|${icon.codePoint}|$size|${color.toARGB32()}|${icon.fontFamily}',
       TextSpan(
@@ -1107,8 +1201,13 @@ class _WheelPainter extends CustomPainter {
     tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
   }
 
-  void _drawText(Canvas canvas, Offset at, String text,
-      {required double size, required Color color}) {
+  void _drawText(
+    Canvas canvas,
+    Offset at,
+    String text, {
+    required double size,
+    required Color color,
+  }) {
     final tp = _cachedGlyph(
       'T|$text|$size|${color.toARGB32()}',
       TextSpan(text: text, style: TextStyle(fontSize: size, color: color)),
@@ -1116,8 +1215,14 @@ class _WheelPainter extends CustomPainter {
     tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
   }
 
-  void _drawPill(Canvas canvas, Offset at, String text,
-      {required double fontSize, Color? bg, Color? fg}) {
+  void _drawPill(
+    Canvas canvas,
+    Offset at,
+    String text, {
+    required double fontSize,
+    Color? bg,
+    Color? fg,
+  }) {
     final tp = _cachedGlyph(
       'P|$text|$fontSize|${(fg ?? Colors.black87).toARGB32()}',
       TextSpan(
@@ -1134,7 +1239,10 @@ class _WheelPainter extends CustomPainter {
       width: tp.width + fontSize * 1.4,
       height: tp.height + fontSize * 0.7,
     );
-    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(rect.height / 2));
+    final rrect = RRect.fromRectAndRadius(
+      rect,
+      Radius.circular(rect.height / 2),
+    );
     canvas.drawRRect(rrect, Paint()..color = bg ?? Colors.white);
     canvas.drawRRect(
       rrect,
@@ -1220,23 +1328,40 @@ class _CustomColorDialogState extends State<_CustomColorDialog> {
                 border: Border.all(color: Colors.black26),
               ),
               alignment: Alignment.center,
-              child: Text(hex,
-                  style: TextStyle(
-                      color: _color.computeLuminance() > 0.5
+              child: Text(
+                hex,
+                style: TextStyle(
+                  color:
+                      _color.computeLuminance() > 0.5
                           ? Colors.black87
                           : Colors.white,
-                      fontWeight: FontWeight.w600)),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            _labelled('Hue',
-                Slider(min: 0, max: 360, value: _h, onChanged: (v) => setState(() => _h = v))),
-            _labelled('Saturation',
-                Slider(value: _s, onChanged: (v) => setState(() => _s = v))),
-            _labelled('Value',
-                Slider(value: _v, onChanged: (v) => setState(() => _v = v))),
+            _labelled(
+              'Hue',
+              Slider(
+                min: 0,
+                max: 360,
+                value: _h,
+                onChanged: (v) => setState(() => _h = v),
+              ),
+            ),
+            _labelled(
+              'Saturation',
+              Slider(value: _s, onChanged: (v) => setState(() => _s = v)),
+            ),
+            _labelled(
+              'Value',
+              Slider(value: _v, onChanged: (v) => setState(() => _v = v)),
+            ),
             TextField(
               controller: _name,
               decoration: const InputDecoration(
-                  labelText: 'Name (optional)', isDense: true),
+                labelText: 'Name (optional)',
+                isDense: true,
+              ),
             ),
           ],
         ),
@@ -1249,8 +1374,9 @@ class _CustomColorDialogState extends State<_CustomColorDialog> {
         FilledButton(
           onPressed: () {
             final name = _name.text.trim();
-            Navigator.of(context)
-                .pop(CustomSwatch(_color, name.isEmpty ? hex : name));
+            Navigator.of(
+              context,
+            ).pop(CustomSwatch(_color, name.isEmpty ? hex : name));
           },
           child: const Text('Add'),
         ),
@@ -1259,11 +1385,11 @@ class _CustomColorDialogState extends State<_CustomColorDialog> {
   }
 
   Widget _labelled(String label, Widget slider) => Row(
-        children: [
-          SizedBox(width: 80, child: Text(label)),
-          Expanded(child: slider),
-        ],
-      );
+    children: [
+      SizedBox(width: 80, child: Text(label)),
+      Expanded(child: slider),
+    ],
+  );
 }
 
 /// Curate a custom colour theme: add colours by hex or via the picker, name it,
@@ -1359,8 +1485,10 @@ class _ThemeEditorDialogState extends State<_ThemeEditorDialog> {
             ),
             const SizedBox(height: 12),
             if (_colors.isEmpty)
-              const Text('Add at least two colours.',
-                  style: TextStyle(color: Colors.black45, fontSize: 12))
+              const Text(
+                'Add at least two colours.',
+                style: TextStyle(color: Colors.black45, fontSize: 12),
+              )
             else
               Wrap(
                 spacing: 6,
@@ -1377,8 +1505,11 @@ class _ThemeEditorDialogState extends State<_ThemeEditorDialog> {
                           borderRadius: BorderRadius.circular(5),
                           border: Border.all(color: Colors.black26),
                         ),
-                        child: const Icon(Icons.close,
-                            size: 12, color: Colors.white70),
+                        child: const Icon(
+                          Icons.close,
+                          size: 12,
+                          color: Colors.white70,
+                        ),
                       ),
                     ),
                 ],
@@ -1392,10 +1523,12 @@ class _ThemeEditorDialogState extends State<_ThemeEditorDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: canCreate
-              ? () => Navigator.of(context)
-                  .pop(WheelTheme.fromColors(name, List<int>.from(_colors)))
-              : null,
+          onPressed:
+              canCreate
+                  ? () => Navigator.of(
+                    context,
+                  ).pop(WheelTheme.fromColors(name, List<int>.from(_colors)))
+                  : null,
           child: const Text('Create'),
         ),
       ],

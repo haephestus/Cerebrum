@@ -44,7 +44,7 @@ See [[plan/features]] for detailed spec.
 - [ ] Broader document format support
 - [ ] Real local notifications
 - [ ] Tool Wheel polish (opacity, custom slots, library)
-- [ ] Homepage dashboard data surface (see [[features/homepage-dashboard]])
+- [ ] Homepage dashboard — gap-surface hero (see [[features/homepage-dashboard]])
 
 ## Phase 3 — hardening
 

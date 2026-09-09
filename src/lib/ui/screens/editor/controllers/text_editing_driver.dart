@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:cerebrum/ui/editor/controllers/vim_move_controller.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
 
 /// The one thing every text-editing engine must be able to do: hold a
 /// document, notify on change, and build its own editing widget.
@@ -15,7 +15,16 @@ abstract class TextEditingDriver extends ChangeNotifier {
   /// document model into that shape — see the caveat in
   /// [SuperEditorTextDriver] about this not being a solved problem for
   /// every engine yet.
+  /// Document content in the shape the backend expects under
+  /// `content.document`. Each driver owns translating its own internal
+  /// document model into that shape — see the caveat in
+  /// [SuperEditorTextDriver] about this not being a solved problem for
+  /// every engine yet.
   Map<String, dynamic> get documentJson;
+
+  /// Moves the cursor/selection to the block with the given stable ID.
+  /// If the ID isn't found or the engine doesn't support this, it's a no-op.
+  void focusBlockById(String blockId);
 
   /// Builds the actual editing widget for this engine (AppFlowyEditor,
   /// SuperEditor, whatever). [EditorSurface] just calls this.

@@ -3,8 +3,8 @@ import 'package:cerebrum/api/bubbles_api.dart';
 import 'package:cerebrum/services/id.dart';
 import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/services/sync_service.dart';
-import 'package:cerebrum/ui/editor/blocks/image/note_image_resolver.dart';
-import 'package:cerebrum/ui/editor/editor_scaffold.dart';
+import 'package:cerebrum/ui/screens/editor/blocks/image/note_image_resolver.dart';
+import 'package:cerebrum/ui/screens/editor/editor_scaffold.dart';
 import 'package:cerebrum/ui/widgets/editable_title.dart';
 
 class DStudyBubblePage extends StatefulWidget {
@@ -60,9 +60,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
     final local = await NoteStore.listNotes(bubbleId);
     if (mounted && local.isNotEmpty) {
       setState(
-        () =>
-            notes =
-                local.map((n) => {...n, 'bubble_id': bubbleId}).toList(),
+        () => notes = local.map((n) => {...n, 'bubble_id': bubbleId}).toList(),
       );
     }
 
@@ -88,8 +86,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
           data.map((n) => n['filename']).whereType<String>().toSet();
       final localOnly = local.where(
         (l) =>
-            l['filename'] == null ||
-            !serverFilenames.contains(l['filename']),
+            l['filename'] == null || !serverFilenames.contains(l['filename']),
       );
 
       if (mounted) {

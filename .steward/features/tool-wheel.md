@@ -1,4 +1,4 @@
-# tool-wheel
+# Feature: Tool Wheel
 
 > Concepts-inspired concentric tool wheel for drawing controls.
 
@@ -10,9 +10,9 @@
 DONE — Phase 1 (shipped across multiple changelogs)
 
 ## Goals
-- Evolve ToolDialHub from fixed ring to concentric wheel with colour + tool control
-- User can draw in any colour with clear tool/colour readout
-- Movable and resizable
+- [x] Evolve ToolDialHub from fixed ring to concentric wheel with colour + tool control
+- [x] User can draw in any colour with clear tool/colour readout
+- [x] Movable and resizable
 
 ## Scope
 - **In:** Fixed hub (centre disc, tool chips), constant-size colour wheel (rotatable), size ring, Copic-style 12x5 hue wheel, custom colour picker, resize via pinch/scroll, _DiscHitRegion for pointer passthrough

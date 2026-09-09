@@ -1,4 +1,4 @@
-# drift-migration
+# Feature: Drift Migration
 
 > Move engram records from JSON to Drift (SQLite) for indexed queries.
 
@@ -10,9 +10,9 @@
 DONE — Phase 0 (shipped 2026-08-11)
 
 ## Goals
-- Engram attempts and mastery in SQLite (indexed, queryable)
-- Original public APIs unchanged (drop-in replacement)
-- Regenable codegen via --force-jit
+- [x] Engram attempts and mastery in SQLite (indexed, queryable)
+- [x] Original public APIs unchanged (drop-in replacement)
+- [x] Regenable codegen via --force-jit
 
 ## Scope
 - **In:** EngramAttempts table, EngramMasteryRows table, CachedEngrams table, AppDatabase, --force-jit codegen fix

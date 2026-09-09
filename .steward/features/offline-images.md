@@ -1,4 +1,4 @@
-# offline-images
+# Feature: Offline Images
 
 > Stable image references that work offline and across base URL changes.
 
@@ -10,9 +10,9 @@
 DONE — Phase 1 (shipped pre-phase formalisation)
 
 ## Goals
-- Images render offline when cached locally
-- Image refs don't break when daemon base URL changes
-- Upload queue for images inserted while offline
+- [x] Images render offline when cached locally
+- [x] Image refs don't break when daemon base URL changes
+- [x] Upload queue for images inserted while offline
 
 ## Scope
 - **In:** `cerebrum-image://<note_id>/<name>` ref scheme, NoteStore.writeImage, image resolver widget

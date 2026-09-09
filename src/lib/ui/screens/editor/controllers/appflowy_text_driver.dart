@@ -3,15 +3,19 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:cerebrum/ui/editor/helpers/editor_commands.dart';
-import 'package:cerebrum/ui/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum/ui/editor/controllers/text_editing_driver.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/editor_commands.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
+import 'package:cerebrum/ui/screens/editor/controllers/text_editing_driver.dart';
 // NEW: the proper code block builder (syntax highlighting, language
 // switcher, copy button) — path assumes you saved it at
 // features/editor/blocks/code_block/code_block_component.dart; adjust
 // to wherever you actually put the file.
-import 'package:cerebrum/ui/editor/blocks/code_block/code_block_component.dart';
-import 'package:cerebrum/ui/editor/blocks/ai_block/ai_block_component.dart';
+import 'package:cerebrum/ui/screens/editor/blocks/code_block/code_block_component.dart';
+import 'package:cerebrum/ui/screens/editor/blocks/ai_block/ai_block_component.dart';
+// The table fork: registered against the stock 'table' type to REPLACE the
+// package builder. It caps table growth against the sheet and reports enough
+// geometry for the row-level overflow split (see blocks/table/README.md).
+import 'package:cerebrum/ui/screens/editor/blocks/table/table_block_component.dart';
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,
@@ -47,6 +51,13 @@ class AppFlowyTextDriver extends ChangeNotifier
     _transactionSub = _editorState.transactionStream.listen(
       (_) => notifyListeners(),
     );
+    // Narrow highlight-clear listener: when this page's vim mode LEAVES
+    // analysis-review mode, drop the chunk highlight so it can't linger on
+    // the document after you Esc back to normal/insert. This is deliberately
+    // NOT `vimMode.addListener(notifyListeners)` (see the comment below) — it
+    // only fires the clear when the mode actually leaves analysis, and the
+    // clear itself is a real transaction AppFlowy already rebuilds for.
+    vimMode.addListener(_onVimModeChanged);
     // NOTE: deliberately NOT `vimMode.addListener(notifyListeners)` here.
     // EditorSurface's mode badge already listens to `vimMode` directly
     // (its own narrowly-scoped AnimatedBuilder), so forwarding vimMode
@@ -67,7 +78,27 @@ class AppFlowyTextDriver extends ChangeNotifier
   late final EditorState _editorState;
   late final EditorScrollController _scrollController;
   late final StreamSubscription<dynamic> _transactionSub;
+  late bool _wasInAnalysis = false;
   bool _autoFocus = false;
+
+  /// Analysis-review-mode chunk stepping: +1 = next chunk, -1 = previous.
+  /// Set by the scaffold (which owns the [AnalysisModeController]); the
+  /// 'n'/'N' character shortcuts in analysis mode call it. Null until wired
+  /// (analysis not loaded yet), in which case the keys are swallowed.
+  void Function(int delta)? onStepAnalysisChunk;
+
+  /// Called when the user enters analysis-review mode from NORMAL mode via the
+  /// 'n' key. The scaffold wires this to lazy-load the analysis (and enter the
+  /// mode), so pressing 'n' populates chunks even before the side panel has
+  /// been opened. Null until wired, in which case entering analysis mode just
+  /// flips the vim mode with no analysis to navigate.
+  VoidCallback? onEnterAnalysisMode;
+
+  /// Called when the user presses 'o' in ANALYSIS mode to toggle the full
+  /// analysis panel (the overview tab) without switching vim modes. The
+  /// scaffold wires this to open/close the panel (lazy-loading the analysis
+  /// on first open). Null until wired — the key is a no-op then.
+  VoidCallback? onToggleAnalysisPanel;
 
   /// Called when Backspace is pressed with the caret at the VERY START of this
   /// page's first block. Set by [PagedNoteController] to merge the page up into
@@ -121,6 +152,18 @@ class AppFlowyTextDriver extends ChangeNotifier
     // normal backspace (and the vim/standard handlers below) run untouched.
     _mergeToPreviousPageOnBackspace(),
     ...EditorShortcuts.getCustomShortcuts(vimMode),
+    // Raw-key vim shortcuts: j/k/l/h/n/N/o/arrows as COMMAND events so they
+    // keep working when the text-input service isn't attached (whole-table
+    // selections have no delta node, so character shortcuts silently die).
+    // Command shortcuts run before the standard list (which contains the
+    // tableCommands), so analysis-mode block navigation preempts the table's
+    // edge-swallowing arrow handlers.
+    ...VimCharacterShortcuts.getRawKeyVimShortcuts(
+      vimMode,
+      onStepAnalysisChunk: onStepAnalysisChunk,
+      onEnterAnalysisMode: onEnterAnalysisMode,
+      onToggleAnalysisPanel: onToggleAnalysisPanel,
+    ),
     ...standardCommandShortcutEvents,
   ];
 
@@ -183,6 +226,11 @@ class AppFlowyTextDriver extends ChangeNotifier
     kCodeBlockType: CodeBlockComponentBuilder(),
     // SCAFFOLD: inline AI-feedback block (read-only, generation is a TODO).
     kAiBlockType: AiBlockComponentBuilder(),
+    // Table fork — overrides the stock 'table' entry from the spread above.
+    // Guards in the fork cap table growth against the sheet, which the stock
+    // builder can't do (it creates the same default-width cell regardless of
+    // page size).
+    'table': CerebrumTableBlockComponentBuilder(),
   };
 
   late final List<SelectionMenuItem> _slashMenuItems = [
@@ -202,11 +250,12 @@ class AppFlowyTextDriver extends ChangeNotifier
   SelectionMenuItem _imageMenuItem() {
     return SelectionMenuItem(
       getName: () => 'Image',
-      icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-        icon: Icons.image,
-        isSelected: isSelected,
-        style: style,
-      ),
+      icon:
+          (editorState, isSelected, style) => SelectionMenuIconWidget(
+            icon: Icons.image,
+            isSelected: isSelected,
+            style: style,
+          ),
       keywords: ['image', 'img', 'picture', 'photo'],
       handler: (editorState, menuService, context) {
         // Fire-and-forget: the picker + upload are async, but the slash menu
@@ -251,7 +300,12 @@ class AppFlowyTextDriver extends ChangeNotifier
   }
 
   late final List<CharacterShortcutEvent> _characterShortcutEvents = [
-    ...VimCharacterShortcuts.getCharacterShortcuts(vimMode),
+    ...VimCharacterShortcuts.getCharacterShortcuts(
+      vimMode,
+      onStepAnalysisChunk: onStepAnalysisChunk,
+      onEnterAnalysisMode: onEnterAnalysisMode,
+      onToggleAnalysisPanel: onToggleAnalysisPanel,
+    ),
     customSlashCommand(_slashMenuItems),
     ...standardCharacterShortcutEvents
       ..removeWhere((element) => element == slashCommand),
@@ -296,11 +350,12 @@ class AppFlowyTextDriver extends ChangeNotifier
   static SelectionMenuItem _aiBlockMenuItem() {
     return SelectionMenuItem(
       getName: () => 'AI feedback',
-      icon: (editorState, isSelected, style) => SelectionMenuIconWidget(
-        icon: Icons.auto_awesome,
-        isSelected: isSelected,
-        style: style,
-      ),
+      icon:
+          (editorState, isSelected, style) => SelectionMenuIconWidget(
+            icon: Icons.auto_awesome,
+            isSelected: isSelected,
+            style: style,
+          ),
       keywords: ['ai', 'feedback', 'assistant', 'gpt'],
       handler: (editorState, menuService, context) {
         final selection = editorState.selection;
@@ -369,24 +424,27 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// AppFlowy selection notifier, so listeners fire on every caret move.
   Listenable get selectionChanges => _editorState.selectionNotifier;
 
-  /// The index of the TOP-LEVEL block the collapsed caret sits in, or null when
-  /// there's no caret / it's a range / it's nested (e.g. inside a table cell).
-  /// Used only for on-screen positioning (rectOfBlock); analysis is keyed by the
-  /// stable [selectedBlockId], not this position.
+  /// The index of the TOP-LEVEL block the selection anchors on (its start side),
+  /// or null when there's no selection / it's nested (e.g. inside a table
+  /// cell). Works for BOTH the collapsed caret (normal editing) and the
+  /// whole-block highlight selections analysis review uses — non-collapsed is
+  /// not a reason to decline here, the popover keys on the block, not the
+  /// caret. Used only for on-screen positioning (rectOfBlock); analysis is
+  /// keyed by the stable [selectedBlockId], not this position.
   int? get selectedBlockIndex {
     final sel = _editorState.selection;
-    if (sel == null || !sel.isCollapsed) return null;
+    if (sel == null) return null;
     final path = sel.start.path;
     return path.length == 1 ? path.first : null;
   }
 
-  /// The STABLE id of the top-level block the collapsed caret sits in, or null
+  /// The STABLE id of the top-level block the selection anchors on, or null
   /// (same guards as [selectedBlockIndex]). This is the durable identity the
   /// daemon keys analysis to — it round-trips via documentJson, so tapping a
   /// block maps to its findings even after blocks above it are added/reordered.
   String? get selectedBlockId {
     final sel = _editorState.selection;
-    if (sel == null || !sel.isCollapsed) return null;
+    if (sel == null) return null;
     final path = sel.start.path;
     if (path.length != 1) return null;
     return _editorState.getNodeAtPath([path.first])?.id;
@@ -401,14 +459,104 @@ class AppFlowyTextDriver extends ChangeNotifier
   }
 
   @override
+  void focusBlockById(String blockId) {
+    final document = _editorState.document;
+    int? targetPathIndex;
+
+    // Simple search through the root children for the matching ID.
+    for (int i = 0; i < document.root.children.length; i++) {
+      final node = document.root.children[i];
+      if (node.id == blockId) {
+        targetPathIndex = i;
+        break;
+      }
+    }
+
+    if (targetPathIndex != null) {
+      _editorState.updateSelectionWithReason(
+        Selection.collapsed(Position(path: [targetPathIndex], offset: 0)),
+        reason: SelectionUpdateReason.uiEvent,
+      );
+    }
+  }
+
+  // Stable ids of the blocks this page currently highlights (the active
+  // analysis chunk). Cleared when the page leaves analysis mode (see
+  // [_onVimModeChanged]).
+  Set<String> _highlightedBlockIds = <String>{};
+
+  /// Highlight (or clear) the blocks whose stable id is in [blockIds] by
+  /// setting the built-in `bgColor` node attribute (see
+  /// [blockComponentBackgroundColor]). Passing null for [colorString] clears
+  /// the highlight on those blocks. Used by analysis-review mode to visually
+  /// mark the current chunk. Searches ALL levels (not just top-level blocks)
+  /// so nested blocks (e.g. inside a table cell) are found too.
+  ///
+  /// Tracks the highlighted ids so [_onVimModeChanged] can clear them when the
+  /// page leaves analysis-review mode.
+  void setChunkHighlight(List<String> blockIds, String? colorString) {
+    if (blockIds.isEmpty) {
+      debugPrint('[setChunkHighlight] no blockIds provided — nothing to do');
+      return;
+    }
+    final wanted = blockIds.toSet();
+    _highlightedBlockIds = colorString == null
+        ? _highlightedBlockIds.difference(wanted)
+        : _highlightedBlockIds.union(wanted);
+
+    final nodes = <Node>[];
+    for (final child in _editorState.document.root.children) {
+      _collectById(child, wanted, nodes);
+    }
+    debugPrint(
+      '[setChunkHighlight] ids=$blockIds matched=${nodes.length} '
+      'color=${colorString ?? 'null'}',
+    );
+    if (nodes.isEmpty) return;
+
+    final transaction = _editorState.transaction;
+    for (final node in nodes) {
+      if (colorString == null) {
+        transaction.updateNode(node, {blockComponentBackgroundColor: null});
+      } else {
+        transaction.updateNode(node, {
+          blockComponentBackgroundColor: colorString,
+        });
+      }
+    }
+    _editorState.apply(transaction);
+  }
+
+  /// Fired by [vimMode] changes. When the page leaves analysis-review mode,
+  /// drop the active chunk highlight so it can't linger on the document after
+  /// Esc / editing resumes. Narrowly scoped — does NOT call notifyListeners.
+  void _onVimModeChanged() {
+    final inAnalysis = vimMode.isAnalysis;
+    if (_wasInAnalysis && !inAnalysis && _highlightedBlockIds.isNotEmpty) {
+      final ids = _highlightedBlockIds.toList();
+      _highlightedBlockIds = <String>{};
+      setChunkHighlight(ids, null);
+    }
+    _wasInAnalysis = inAnalysis;
+  }
+
+  /// Depth-first walk collecting nodes whose stable id is in [wanted].
+  void _collectById(Node node, Set<String> wanted, List<Node> out) {
+    if (wanted.contains(node.id)) out.add(node);
+    for (final child in node.children) {
+      _collectById(child, wanted, out);
+    }
+  }
+
+  @override
   Map<String, dynamic> get documentJson =>
-      // AppFlowy's Node.toJson() drops the node id (and Node.fromJson ignores
-      // it), so a plain toJson() gives blocks NO stable identity — the daemon
-      // then falls back to fragile positional ids for tap-a-block analysis.
-      // Emit each node's id here and restore it on load (see _restoreNodeIds)
-      // so a block keeps ONE identity across edits/reloads/sync — the same
-      // contract ink strokes already have via their stroke id.
-      _nodeToJsonWithId(_editorState.document.root);
+  // AppFlowy's Node.toJson() drops the node id (and Node.fromJson ignores
+  // it), so a plain toJson() gives blocks NO stable identity — the daemon
+  // then falls back to fragile positional ids for tap-a-block analysis.
+  // Emit each node's id here and restore it on load (see _restoreNodeIds)
+  // so a block keeps ONE identity across edits/reloads/sync — the same
+  // contract ink strokes already have via their stroke id.
+  _nodeToJsonWithId(_editorState.document.root);
 
   @override
   Widget buildEditor(BuildContext context) {
@@ -455,6 +603,30 @@ class AppFlowyTextDriver extends ChangeNotifier
       // _characterShortcutEvents above. There is no separate
       // `selectionMenuItems` constructor param.
       characterShortcutEvents: _characterShortcutEvents,
+      // ANALYSIS MODE: wraps every rendered block in a tap-interceptor that
+      // selects the WHOLE block (cursor-less highlight) instead of letting the
+      // editor drop an editable caret. Passes through untouched in normal and
+      // insert modes — see [_buildBlockWrapper].
+      blockWrapper: _buildBlockWrapper,
+    );
+  }
+
+  /// Wraps every rendered block in [_AnalysisTapCapture] so that, in analysis
+  /// review mode, clicking a block highlights the block instead of placing a
+  /// typing caret. The wrapper sits INSIDE the editor's selection gesture
+  /// detector, so its deeper tap recognizer wins the gesture arena and the
+  /// editor's own tap-to-caret path never runs. In every other mode the block
+  /// is returned untouched (zero behavior change for normal/insert editing).
+  Widget _buildBlockWrapper(
+    BuildContext context, {
+    required Node node,
+    required Widget child,
+  }) {
+    return _AnalysisTapCapture(
+      vimMode: vimMode,
+      editorState: _editorState,
+      node: node,
+      child: child,
     );
   }
 
@@ -526,8 +698,9 @@ class AppFlowyTextDriver extends ChangeNotifier
   // each branch avoids that restriction entirely.
   static EditorState _constructEditorState(Map<String, dynamic> docJson) {
     try {
-      final state =
-          EditorState(document: Document.fromJson({'document': docJson}));
+      final state = EditorState(
+        document: Document.fromJson({'document': docJson}),
+      );
       // Document.fromJson mints fresh nanoids and discards any persisted `id`,
       // so restore the stored ids onto the freshly-built node tree. Without
       // this, the id would change on every load and tap-a-block mapping would
@@ -560,9 +733,8 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// two trees are structurally identical because the nodes were just built
   /// from this same JSON, so positional pairing is exact.
   static void _restoreNodeIds(List<dynamic> jsonNodes, List<Node> nodes) {
-    final count = jsonNodes.length < nodes.length
-        ? jsonNodes.length
-        : nodes.length;
+    final count =
+        jsonNodes.length < nodes.length ? jsonNodes.length : nodes.length;
     for (var i = 0; i < count; i++) {
       final j = jsonNodes[i];
       if (j is! Map) continue;
@@ -580,6 +752,7 @@ class AppFlowyTextDriver extends ChangeNotifier
   @override
   void dispose() {
     _transactionSub.cancel();
+    vimMode.removeListener(_onVimModeChanged);
     _scrollController.dispose();
     vimMode.dispose();
     super.dispose();
@@ -628,6 +801,56 @@ class _HeadingIcon extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Analysis-review tap interceptor, one per rendered block.
+///
+/// When its page's vim mode is ANALYSIS, wraps the block in an opaque
+/// GestureDetector whose tap selects the WHOLE block as a non-collapsed range —
+/// the same no-caret highlight shape the table builder already produces. Because
+/// the wrapper renders inside the editor's selection gesture detector, this
+/// deeper recognizer wins the gesture arena: the editor's own tap handler never
+/// fires, so it never drops an editable collapsed caret in review mode.
+///
+/// Empty blocks (start == end) still collapse to a caret — there is no range to
+/// highlight on a block with no content, and this matches what the editor does
+/// natively for zero-length selection.
+class _AnalysisTapCapture extends StatelessWidget {
+  const _AnalysisTapCapture({
+    required this.vimMode,
+    required this.editorState,
+    required this.node,
+    required this.child,
+  });
+
+  final VimModeController vimMode;
+  final EditorState editorState;
+  final Node node;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<VimMode>(
+      valueListenable: vimMode,
+      builder: (context, mode, _) {
+        if (mode != VimMode.analysis) return child;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (_) => _selectWholeBlock(),
+          child: child,
+        );
+      },
+    );
+  }
+
+  void _selectWholeBlock() {
+    final selectable = node.selectable;
+    if (selectable == null) return;
+    editorState.updateSelectionWithReason(
+      Selection(start: selectable.start(), end: selectable.end()),
+      reason: SelectionUpdateReason.uiEvent,
     );
   }
 }
