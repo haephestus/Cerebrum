@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:cerebrum/ui/screens/editor/blocks/table/table_keys.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
 
 /// Non-printable / multi-key vim commands: Escape, duplicate line, gg/G.
@@ -494,10 +495,8 @@ class VimCharacterShortcuts {
         }
         if (mode.isAnalysis) {
           _moveBlockInAnalysis(editorState, delta: delta);
-        } else if (horizontal) {
-          _moveCharacter(editorState, delta: delta);
         } else {
-          _moveToSiblingLine(editorState, delta: delta);
+          _navInNormalMode(editorState, horizontal: horizontal, delta: delta);
         }
         return KeyEventResult.handled;
       },
@@ -701,7 +700,7 @@ class VimCharacterShortcuts {
     if (mode.isAnalysis) {
       await _moveBlockInAnalysis(editorState, delta: delta);
     } else {
-      await _moveCharacter(editorState, delta: delta);
+      await _navInNormalMode(editorState, horizontal: true, delta: delta);
     }
   }
 
@@ -715,8 +714,154 @@ class VimCharacterShortcuts {
     if (mode.isAnalysis) {
       await _moveBlockInAnalysis(editorState, delta: delta);
     } else {
+      await _navInNormalMode(editorState, horizontal: false, delta: delta);
+    }
+  }
+
+  /// Normal-mode j/k/h/l routing shared by the mapped (IME-attached) and
+  /// raw-key (no IME) shortcut paths, so both behave identically.
+  ///
+  /// Inside a table cell the sibling-path math below is a dead end: the
+  /// caret lives on the cell's nested paragraph, `path.last` only ever has
+  /// that one sibling, and every key gets swallowed. Vim movement must
+  /// become the same cell-to-cell movement the arrow keys produce — that
+  /// is this app's stated intent for tables ("normal/insert fall through
+  /// untouched so table editing keeps AppFlowy's native cell
+  /// navigation"). The package's own arrow handlers can't be invoked
+  /// here: they go through `selectionService`, which only exists while an
+  /// editor widget is mounted, so [_moveInTableCell] reimplements their
+  /// documented semantics on `updateSelectionWithReason` — the same API
+  /// every other vim motion in this file uses — which keeps both the
+  /// raw-key path and headless tests working.
+  static Future<void> _navInNormalMode(
+    EditorState editorState, {
+    required bool horizontal,
+    required int delta,
+  }) async {
+    if (_selectionIsInTableCell(editorState) &&
+        _moveInTableCell(
+          editorState,
+          horizontal: horizontal,
+          delta: delta,
+        )) {
+      return;
+    }
+    if (horizontal) {
+      await _moveCharacter(editorState, delta: delta);
+    } else {
       await _moveToSiblingLine(editorState, delta: delta);
     }
+  }
+
+  /// Native cell-to-cell movement inside a table, semantically identical
+  /// to the package's table arrow commands (`tableCommands` in
+  /// `table_commands.dart`) so j/k/h/l behave exactly like arrows here:
+  ///
+  ///   j/k -> move to the adjacent row's cell in the SAME column at the
+  ///          same offset (clamped to the target cell's length);
+  ///          swallowed at the first/last row, like vim's at-edge no-op.
+  ///   h/l -> at a cell's start/end, move to the adjacent column's cell
+  ///          in the SAME row, landing at its end/start; ANY other offset
+  ///          returns false so the caller's character motion handles it.
+  ///
+  /// Table edges swallow the key (returns true) — the same "a collapsed
+  /// caret in a table cell can never leave the table" guarantee the raw
+  /// arrow shortcuts document for analysis mode. A non-collapsed or
+  /// malformed selection defers to the caller.
+  static bool _moveInTableCell(
+    EditorState editorState, {
+    required bool horizontal,
+    required int delta,
+  }) {
+    final selection = editorState.selection;
+    if (selection == null || !selection.isCollapsed) return false;
+
+    // Locate the owning cell. The caret normally sits on the paragraph
+    // nested inside the cell; the cell node carries the row/col position.
+    final node = editorState.getNodeAtPath(selection.end.path);
+    if (node == null) return false;
+    final cell = node.type == CerebrumTableCellKeys.type
+        ? node
+        : (node.parent?.type == CerebrumTableCellKeys.type
+              ? node.parent
+              : null);
+    if (cell == null) return false;
+
+    final table = cell.parent;
+    if (table == null) return false;
+
+    final col = cell.attributes[CerebrumTableCellKeys.colPosition] as int?;
+    final row = cell.attributes[CerebrumTableCellKeys.rowPosition] as int?;
+    if (col == null || row == null) return false;
+
+    // h/l only cross a cell boundary AT it — offset 0 for 'h', the cell's
+    // end for 'l'. Mid-cell they defer to the caller's character motion,
+    // exactly like the package's left/right-in-table-cell handlers.
+    final sourceLength = node.delta?.length ?? 0;
+    if (horizontal) {
+      if (delta < 0 && selection.start.offset != 0) return false;
+      if (delta > 0 && selection.start.offset != sourceLength) return false;
+    }
+
+    // Positions are 0-based, so the cell count is the last position + 1
+    // (the package derives the same numbers from `table.children.last`).
+    final numCols =
+        (table.children.last.attributes[CerebrumTableCellKeys.colPosition]
+                as int? ??
+            0) +
+        1;
+    final numRows =
+        (table.children.last.attributes[CerebrumTableCellKeys.rowPosition]
+                as int? ??
+            0) +
+        1;
+
+    final nextCol = horizontal ? col + delta : col;
+    final nextRow = horizontal ? row : row + delta;
+    if (nextCol < 0 ||
+        nextCol >= numCols ||
+        nextRow < 0 ||
+        nextRow >= numRows) {
+      return true; // table edge — swallow, exactly like the stock commands
+    }
+
+    // Same attribute lookup the fork's getCellNode uses.
+    Node? target;
+    for (final n in table.children) {
+      if (n.attributes[CerebrumTableCellKeys.colPosition] == nextCol &&
+          n.attributes[CerebrumTableCellKeys.rowPosition] == nextRow) {
+        target = n;
+        break;
+      }
+    }
+    final targetChild = target?.children.firstOrNull;
+    final targetDelta = targetChild?.delta;
+    if (targetChild == null || targetDelta == null) return true;
+
+    final offset = horizontal
+        ? (delta < 0 ? targetDelta.length : 0)
+        : (targetDelta.length > selection.start.offset
+              ? selection.start.offset
+              : targetDelta.length);
+
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: targetChild.path, offset: offset)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+    return true;
+  }
+
+  /// True when the collapsed caret is inside a table cell. Mirrors the
+  /// guard the package's `_hasSelectionAndTableCell` applies: a leaf text
+  /// node whose parent is a 'table/cell' block (the fork's keys are kept
+  /// byte-identical to the package's for document interchange).
+  static bool _selectionIsInTableCell(EditorState editorState) {
+    final selection = editorState.selection;
+    if (selection == null) return false;
+    final node = editorState.getNodeAtPath(selection.end.path);
+    if (node == null) return false;
+    return node.type == CerebrumTableCellKeys.type ||
+        node.parent?.type == CerebrumTableCellKeys.type;
   }
 
   static Future<bool> _handleLineStart(
