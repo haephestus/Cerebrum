@@ -11,6 +11,13 @@
 //    submitted `question_index` against (ai_grading.questions_by_index =
 //    {q.question_number: q}). Submit MUST send question_index == questionNumber
 //    or the answer is dropped/scored 0. See learning_center_api.submitShortQuestion.
+//  • Schedule is daemon-owned: `scheduled_at` (ISO-8601 UTC due time) and
+//    `state` (daemon vocabulary) are OPTIONAL on every engram. The dashboard
+//    renders due dates/times ONLY from `scheduled_at`; absent → the item is
+//    listed with no due time, never a synthesized one (homepage-dashboard
+//    Phase 2 honesty rule). NOTE: EngramStore.cacheRaw stores the engram row
+//    WITHOUT these fields (Drift column subset), so offline listings rebuild
+//    with a null schedule — by design, until a Drift migration adds the column.
 // ════════════════════════════════════════════════════════════════════════════
 enum EngramType { mcq, flashcard, shortQuestion, longQuestion, unknown }
 
@@ -227,6 +234,14 @@ class Engram {
   final List<String> tags;
   final EngramContent content;
 
+  /// Daemon-owned due time (ISO-8601 UTC). Null when the daemon has not
+  /// scheduled the engram yet — render no time in that case, never a fake one.
+  final DateTime? scheduledAt;
+
+  /// Daemon state vocabulary (e.g. `scheduled` / `due` / `completed`) — for
+  /// client display only; the daemon is authoritative on re-scheduling.
+  final String? state;
+
   Engram({
     required this.id,
     required this.noteId,
@@ -234,6 +249,8 @@ class Engram {
     required this.targetCognitiveLevel,
     required this.tags,
     required this.content,
+    this.scheduledAt,
+    this.state,
   });
 
   factory Engram.fromJson(Map<String, dynamic> json) {
@@ -258,6 +275,7 @@ class Engram {
         throw FormatException('Unknown engram type: ${json['type']}');
     }
 
+    final scheduledRaw = json['scheduled_at'] ?? json['due_at'];
     return Engram(
       id: json['id'] as String,
       noteId: json['note_id'] as String,
@@ -265,6 +283,10 @@ class Engram {
       targetCognitiveLevel: json['target_cognitive_level'] as int,
       tags: List<String>.from(json['tags'] as List),
       content: content,
+      scheduledAt: scheduledRaw is String
+          ? DateTime.tryParse(scheduledRaw)?.toLocal()
+          : null,
+      state: json['state'] as String?,
     );
   }
 }

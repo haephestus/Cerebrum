@@ -7,11 +7,17 @@
 > Every region must answer a question with grounded, honest data — never fabricate.
 
 > Phase: features
-> Status: in progress
+> Status: todo
 > Created: 2026-08-27
 
 ## Status
-IN PROGRESS — gap/misunderstanding surface is the hero; shell present in main.
+IN PROGRESS — Phase 1 done (real identity, bubbles card, recency/resume, file
+library, gap card on the existing analysis payload) and Phase 2 client done:
+real schedule contract (user-level `list_engrams`, `scheduled_at` parsing, no
+synthesized hours) and cross-bubble rollup (attention-ordered bubbles, severity
+chips, grounded Priority lead). Remaining: daemon side of
+[[engram-generation]] (generate engrams + populate `scheduled_at` + "N due"
+mastery deltas).
 
 ## The one line that defines this feature
 > **The dashboard's hero is the "what you don't know" surface** — per study
@@ -46,9 +52,16 @@ IN PROGRESS — gap/misunderstanding surface is the hero; shell present in main.
 - [ ] **Real identity, not hardcoded IDs.** Remove the three literal
       bubble/note/user ids in `upcoming_engrams.dart` and source them from the
       real StudyBubbleContext + client identity. Gates everything else real.
+      DONE via real `UserSession` identity + daemon user-level scope (the
+      dashboard is the global view; `list_engrams` supports "none → all").
 - [ ] **Real schedule, not synthesized hours.** Delete the `slotHour: 9 + i`
-      placeholder once the daemon returns due/schedule. Until then it stays
-      explicitly marked as a wireframe artifact — never ship it as real.
+      placeholder and show the daemon's real `scheduled_at`/`state`, grouped by
+      day, sorted by due. DONE client-side: `buildDaysFromEngrams` groups by
+      real due date, renders `local` time chips, "Overdue" after the due
+      instant, and an honest "Upcoming / no due time yet" bucket for engrams
+      the daemon has not scheduled — never a synthesized hour. Remaining
+      dependency: daemon must generate engrams and populate `scheduled_at`
+      ([[engram-generation]]); the contract allows absent schedule by design.
 
 ### Supporting region: Study bubbles (entry to the gap surface)
 - [ ] **Mount `StudyBubblesSummaryCard` into DHomescreen.** It is implemented and
@@ -66,7 +79,10 @@ IN PROGRESS — gap/misunderstanding surface is the hero; shell present in main.
 
 ### Cross-cutting
 - [ ] **Real identity in the app bar** ("Welcome Back User" is hardcoded).
+      DONE via `UserSession.getUsername()` — greets the real name.
 - [ ] **Offline fallback per region** — last-known local data, never a loud failure.
+      Partial: GapCard + UpcomingEngramsSection keep last-known data across a
+      failed background refresh. Not persisted across sessions yet.
 
 ## Out of scope (explicitly not dashboard)
 - Mastery graphs / charts (single-number signal at most)
@@ -110,8 +126,17 @@ IN PROGRESS — gap/misunderstanding surface is the hero; shell present in main.
 - **Suggested reading is already grounded daemon-side** (`suggested_sources`
   returns `{title, reason}`). Don't invent a new source; surface it as the gap's
   resolution.
-- Current engram call hardcodes `bubble_id`/`note_id`/`user_id` — must move to a
-  real StudyBubbleContext + client identity before the engram region is real.
+- **Phase 2 schedule contract (2026-09-09, verified):** `Engram` parses
+  `scheduled_at` (ISO-8601 UTC → local) and `state` (daemon vocabulary, display
+  only). `list_engrams` is called at USER level (no hardcoded bubble/note ids).
+  The dashboard groups days from real due dates; absent schedule → "Upcoming /
+  no due time yet", never a fake hour. FALLBACK: `EngramStore.cacheRaw` row
+  subset (Drift) drops schedule fields by design — offline listings show the
+  honest unscheduled bucket until a migration adds the columns.
+- **Cross-bubble rollup (Phase 2):** bubbles are attention-ordered (most severe
+  gaps lead); a single grounded "Priority" lead renders only when a gap carries
+  a REAL daemon severity (`high`/`medium`/`low` vocabulary); unrecognized
+  severity vocabulary sorts low and never invents a rank.
 - `StudyBubblesSummaryCard` display-name key unconfirmed (`name` vs `title`) —
   verify before wiring.
 - Replicate `UpcomingEngramsSection`'s shrink-away empty state across all regions.

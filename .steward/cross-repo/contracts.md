@@ -17,3 +17,4 @@
 | Answers stripped by default | learning_center_api.py | _sanitize_for_presentation | Role-gate include_answers |
 | Mastery daemon-authoritative | offline_mastery.dart | mastery_service.py | State vocabulary diverges |
 | Engram content cache round-trip | engram_store.dart | list_engrams payload | Drift schema change |
+| Engram schedule fields | engram_models.dart | list_engrams payload | `scheduled_at`/`state` renamed or dropped — client must keep the no-synthesized-time honesty rule (absent schedule → "Upcoming / no due time yet") |

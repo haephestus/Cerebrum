@@ -43,7 +43,15 @@ class _DesktopUIState extends State<DesktopUI> {
     }
 
     if (selectedPage == 0) {
-      return DHomescreen();
+      return DHomescreen(
+        onOpenBubble: (bubble) {
+          setState(() {
+            selectedPage = 4;
+            payload = bubble;
+          });
+        },
+        onOpenStudyBubbles: () => changePage(1),
+      );
     } else if (selectedPage == 1) {
       return DStudyBubbleHome(
         onOpenBubble: (bubble) {

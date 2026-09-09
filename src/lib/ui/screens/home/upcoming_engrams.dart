@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cerebrum/api/learning_center_api.dart';
 import 'package:cerebrum/models/engram_models.dart';
+import 'package:cerebrum/services/user_session.dart';
 
 class EngramItem {
   final String title;
+
+  /// Real due time (from the daemon's `scheduled_at`) rendered as "9 am",
+  /// or "Overdue" when the due time has passed. Null when the daemon has not
+  /// scheduled this engram — render NO time in that case (homepage Phase 2
+  /// honesty rule: never a synthesized hour).
   final String? time;
   final String engramId;
 
@@ -11,10 +17,84 @@ class EngramItem {
 }
 
 class DaySchedule {
-  final DateTime date;
+  /// The real due date this bucket groups. Null means the daemon has not
+  /// scheduled these engrams (bucket labelled "Upcoming", not a fake date).
+  final DateTime? date;
   final List<EngramItem> items;
 
   const DaySchedule({required this.date, required this.items});
+
+  bool get isScheduled => date != null;
+}
+
+/// Groups engrams by their REAL due date (daemon `scheduled_at`), oldest due
+/// day first. Engrams without a schedule land in a single "Upcoming" bucket
+/// with a null date; their time chips render empty. Pure + unit-tested: the
+/// schedule always comes from daemon data, never synthesized hours.
+List<DaySchedule> buildDaysFromEngrams(List<Engram> engrams, {DateTime? now}) {
+  final scheduled = <DateTime, List<Engram>>{};
+  final unscheduled = <Engram>[];
+  final reference = now ?? DateTime.now();
+
+  for (final e in engrams) {
+    final due = e.scheduledAt;
+    if (due == null) {
+      unscheduled.add(e);
+      continue;
+    }
+    // Bucket key is the LOCAL day of the due instant. An overdue engram still
+    // belongs to its own day — the chip says "Overdue", not a lie.
+    final day = DateTime(due.year, due.month, due.day);
+    scheduled.putIfAbsent(day, () => []).add(e);
+  }
+
+  final orderedDays = scheduled.keys.toList()..sort();
+  return [
+    for (final day in orderedDays)
+      DaySchedule(
+        date: day,
+        items: [
+          for (final e in scheduled[day]!)
+            EngramItem(
+              title: _engramTitle(e.type),
+              engramId: e.id,
+              time: _engramTime(e, now: reference),
+            ),
+        ],
+      ),
+    if (unscheduled.isNotEmpty)
+      DaySchedule(
+        date: null, // "Upcoming" — no real due date to claim
+        items: [
+          for (final e in unscheduled)
+            EngramItem(title: _engramTitle(e.type), engramId: e.id),
+        ],
+      ),
+  ];
+}
+
+String _engramTitle(EngramType type) => switch (type) {
+  EngramType.mcq => "MCQ",
+  EngramType.flashcard => "Flashcard",
+  EngramType.shortQuestion => "Short Q",
+  EngramType.longQuestion => "Long Q",
+  EngramType.unknown => "Engram",
+};
+
+/// Real due time rendered as "9 am" / "1 pm"; "Overdue" once it has passed.
+String? _engramTime(Engram e, {required DateTime now}) {
+  final due = e.scheduledAt;
+  if (due == null) return null;
+  if (due.isBefore(now)) return 'Overdue';
+  return _formatHour(due.hour);
+}
+
+/// 24h hour → "9 am" / "1 pm".
+String _formatHour(int hour24) {
+  final h = hour24 % 24;
+  final period = h < 12 ? 'am' : 'pm';
+  final display = h % 12 == 0 ? 12 : h % 12;
+  return '$display $period';
 }
 
 class UpcomingEngramsSection extends StatefulWidget {
@@ -51,35 +131,35 @@ class _UpcomingEngramsSectionState extends State<UpcomingEngramsSection>
     if (state == AppLifecycleState.resumed) _loadEngrams(background: true);
   }
 
-  /// Fetches the upcoming engrams. A [background] refresh keeps the current
-  /// cards visible (no spinner, no blanking) and, on failure, leaves whatever
-  /// was already shown — so the section quietly appears/updates when engrams
-  /// arrive and disappears (shrinks) when there are none.
+  /// Fetches the user's engrams. Scope is USER-LEVEL (no bubble/note) — the
+  /// dashboard is the global view, and the daemon's list_engrams already
+  /// supports "none → all". A [background] refresh keeps the current cards
+  /// visible (no spinner, no blanking) and, on failure, leaves whatever was
+  /// already shown — so the section quietly appears when engrams arrive and
+  /// disappears (shrinks) when there are none.
   Future<void> _loadEngrams({bool background = false}) async {
     if (_fetching) return;
     _fetching = true;
     try {
-      final response = await LearningCenterApi.listEngrams(
-        bubbleId: "1edae102638a8cd7882e6de1c1e9639e",
-        noteId: "01KTC4MWWA4YNSYNTYDYBEKB52",
-        userId: "d6f3f2f2aff44185b7d97d160ffdec38",
-      );
+      // REAL client identity (the old literal user id did not exist). The
+      // hardcoded bubble/note ids are gone: user-level scope is the honest
+      // global-dashboard semantic.
+      final userId = await UserSession.getUserId();
+      if (userId == null) {
+        if (!background) setState(() => _loading = false);
+        return;
+      }
+
+      final response = await LearningCenterApi.listEngrams(userId: userId);
 
       if (!mounted) return;
 
-      // PLACEHOLDER scheduling: the API doesn't return due times yet, so we
-      // synthesize an ascending hour per engram just so the time column renders
-      // like the design. TODO: group by real due date + show the real hour once
-      // the backend supplies it (then drop the `slotHour` argument below).
-      final items = [
-        for (var i = 0; i < response.engrams.length; i++)
-          _mapEngram(response.engrams[i], slotHour: 9 + i),
-      ];
+      // Real schedule grouping from the daemon's scheduled_at; unscheduled
+      // engrams land in an "Upcoming" bucket with no fake due time.
+      final days = buildDaysFromEngrams(response.engrams);
 
       setState(() {
-        _days = items.isEmpty
-            ? const []
-            : [DaySchedule(date: DateTime.now(), items: items)];
+        _days = days;
         _loading = false;
       });
     } catch (_) {
@@ -90,26 +170,6 @@ class _UpcomingEngramsSectionState extends State<UpcomingEngramsSection>
     } finally {
       _fetching = false;
     }
-  }
-
-  EngramItem _mapEngram(Engram e, {required int slotHour}) {
-    final title = switch (e.type) {
-      EngramType.mcq => "MCQ",
-      EngramType.flashcard => "Flashcard",
-      EngramType.shortQuestion => "Short Q",
-      EngramType.longQuestion => "Long Q",
-      EngramType.unknown => "Engram",
-    };
-
-    return EngramItem(title: title, time: _formatHour(slotHour), engramId: e.id);
-  }
-
-  /// 24h hour → "9 am" / "1 pm" (placeholder until real schedule data lands).
-  static String _formatHour(int hour24) {
-    final h = hour24 % 24;
-    final period = h < 12 ? 'am' : 'pm';
-    final display = h % 12 == 0 ? 12 : h % 12;
-    return '$display $period';
   }
 
   @override
@@ -162,44 +222,51 @@ class UpcomingEngramsList extends StatelessWidget {
         padding: EdgeInsets.zero,
         itemCount: days.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, i) => DayEngramsCard(
-          date: days[i].date,
-          items: days[i].items,
-          color: _palette[i % _palette.length],
-          onTapEngram: onTapEngram,
-        ),
+        itemBuilder:
+            (context, i) => DayEngramsCard(
+              schedule: days[i],
+              color: _palette[i % _palette.length],
+              onTapEngram: onTapEngram,
+            ),
       ),
     );
   }
 }
 
 class DayEngramsCard extends StatelessWidget {
-  final DateTime date;
-  final List<EngramItem> items;
+  final DaySchedule schedule;
   final Color color;
   final ValueChanged<EngramItem>? onTapEngram;
 
   const DayEngramsCard({
     super.key,
-    required this.date,
-    required this.items,
+    required this.schedule,
     required this.color,
     this.onTapEngram,
   });
 
   static const _days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
   static const _months = [
-    "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+    "JAN",
+    "FEB",
+    "MAR",
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC",
   ];
-
   static const _ink = Color(0xff2F2940);
 
   @override
   Widget build(BuildContext context) {
     // Chip colour = a darkened shade of the card colour (matches the design).
     final chipColor = Color.lerp(color, Colors.black, 0.5)!;
+    final date = schedule.date;
 
     return Container(
       width: double.infinity,
@@ -216,68 +283,106 @@ class DayEngramsCard extends StatelessWidget {
           children: [
             SizedBox(
               width: 82,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _days[date.weekday - 1],
-                    style: const TextStyle(fontSize: 12, color: _ink),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "${date.day}",
-                    style: const TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.bold,
-                      height: .9,
-                      color: _ink,
-                    ),
-                  ),
-                  Text(
-                    _months[date.month - 1],
-                    style: const TextStyle(fontSize: 15, color: _ink),
-                  ),
-                ],
-              ),
+              child:
+                  date == null
+                      ? const _UnscheduledLabel()
+                      : Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _days[date.weekday - 1],
+                            style: const TextStyle(fontSize: 12, color: _ink),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "${date.day}",
+                            style: const TextStyle(
+                              fontSize: 40,
+                              fontWeight: FontWeight.bold,
+                              height: .9,
+                              color: _ink,
+                            ),
+                          ),
+                          Text(
+                            _months[date.month - 1],
+                            style: const TextStyle(fontSize: 15, color: _ink),
+                          ),
+                        ],
+                      ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: items.isEmpty
-                  ? const _EmptySlots()
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var i = 0; i < items.length; i++)
-                          Expanded(
-                            child: Container(
-                              // No leading line on the first slot (it hugs the
-                              // date); a divider before every other slot.
-                              decoration: i == 0
-                                  ? null
-                                  : BoxDecoration(
-                                      border: Border(
-                                        left: BorderSide(
-                                          color: Colors.black
-                                              .withValues(alpha: 0.28),
-                                          width: 1.5,
+              child:
+                  schedule.items.isEmpty
+                      ? const _EmptySlots()
+                      : Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var i = 0; i < schedule.items.length; i++)
+                            Expanded(
+                              child: Container(
+                                // No leading line on the first slot (it hugs the
+                                // date); a divider before every other slot.
+                                decoration:
+                                    i == 0
+                                        ? null
+                                        : BoxDecoration(
+                                          border: Border(
+                                            left: BorderSide(
+                                              color: Colors.black.withValues(
+                                                alpha: 0.28,
+                                              ),
+                                              width: 1.5,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: EngramColumn(
-                                item: items[i],
-                                chipColor: chipColor,
-                                onTap: () => onTapEngram?.call(items[i]),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                child: EngramColumn(
+                                  item: schedule.items[i],
+                                  chipColor: chipColor,
+                                  onTap:
+                                      () =>
+                                          onTapEngram?.call(schedule.items[i]),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
+                        ],
+                      ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Date column for an unscheduled queue: honest label instead of a fake date.
+class _UnscheduledLabel extends StatelessWidget {
+  const _UnscheduledLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Upcoming",
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xff2F2940),
+          ),
+        ),
+        SizedBox(height: 2),
+        Text(
+          "no due time yet",
+          style: TextStyle(fontSize: 10, color: Color(0xff2F2940)),
+        ),
+      ],
     );
   }
 }
@@ -293,10 +398,7 @@ class _EmptySlots extends StatelessWidget {
       child: Center(
         child: Text(
           'No engrams scheduled',
-          style: TextStyle(
-            fontSize: 12,
-            color: Color(0xff2F2940),
-          ),
+          style: TextStyle(fontSize: 12, color: Color(0xff2F2940)),
         ),
       ),
     );
@@ -323,10 +425,15 @@ class EngramColumn extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Hour symbol for when this engram is scheduled.
+        // Real due time when the daemon supplies it; empty otherwise (no fake
+        // hours). Overdue is shown verbatim as the chip's time state.
         Text(
           time,
-          style: const TextStyle(fontSize: 10, color: _ink),
+          style: TextStyle(
+            fontSize: 10,
+            color: time == 'Overdue' ? const Color(0xff8C2F2F) : _ink,
+            fontWeight: time == 'Overdue' ? FontWeight.w700 : FontWeight.w400,
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
