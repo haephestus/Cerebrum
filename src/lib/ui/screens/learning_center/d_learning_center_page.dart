@@ -10,75 +10,34 @@ import 'package:cerebrum/ui/screens/learning_center/engrams/completion/long_ques
 import 'package:cerebrum/ui/widgets/floating_modal.dart';
 import 'package:cerebrum/ui/widgets/plan_portfolio_gantt.dart';
 
-/// Two modes, one widget:
-///   - bubbleId/noteId BOTH null  -> global dashboard: every study plan
-///     (any status) + every engram across all bubbles/notes. This is what
-///     the sidebar entry point should use.
-///   - bubbleId/noteId provided   -> scoped view for one note, same
-///     behavior as before this change.
+/// Learning Center — ONE page. Portfolio timeline on top (approved-plan
+/// gantt with an upcoming-draft staging pane left), per-bubble engrams
+/// beneath. No tabs — spec [[features/study-plan-annual-view]].
 ///
-/// Matches how the backend's GET /learn/engrams/list already scopes by
-/// presence/absence of bubble_id/note_id -- this widget just mirrors
-/// that at the UI layer instead of forcing a separate "dashboard" screen.
-///
-/// Plans tab: fetches ALL plans regardless of status in one call
-/// (GET /study_plan/user/all) and filters client-side via a status
-/// chip row -- see _statusFilter. Previously this only ever loaded
-/// status == 'active' plans (GET /study_plan/user/active), which is
-/// why draft/completed/archived plans never showed up here.
+/// Backed by GET /study_plan/user/all (every status; drafts feed the
+/// staging pane) and GET /learn/engrams/list.
 class DLearningCenterPage extends StatefulWidget {
-  final String? bubbleId;
-  final String? noteId;
   final String userId;
 
-  const DLearningCenterPage({
-    super.key,
-    this.bubbleId,
-    this.noteId,
-    required this.userId,
-  });
-
-  bool get isGlobal => bubbleId == null && noteId == null;
+  const DLearningCenterPage({super.key, required this.userId});
 
   @override
   State<DLearningCenterPage> createState() => _DLearningCenterPageState();
 }
 
-class _DLearningCenterPageState extends State<DLearningCenterPage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _DLearningCenterPageState extends State<DLearningCenterPage> {
   late Future<EngramListResponse> _engramsFuture;
   late Future<List<Map<String, dynamic>>> _plansFuture;
-
-  /// 'all' or a specific status string ('active', 'draft', 'completed',
-  /// 'archived', ...). Chips are built dynamically from whatever statuses
-  /// are actually present in the fetched plans, so this isn't a fixed enum.
-  String _statusFilter = 'all';
 
   @override
   void initState() {
     super.initState();
-    if (!widget.isGlobal) {
-      _tabController = TabController(length: 2, vsync: this);
-    }
     _loadEngrams();
     _loadPlans();
   }
 
-  @override
-  void dispose() {
-    if (!widget.isGlobal) {
-      _tabController.dispose();
-    }
-    super.dispose();
-  }
-
   void _loadEngrams() {
-    _engramsFuture = LearningCenterApi.listEngrams(
-      userId: widget.userId,
-      bubbleId: widget.bubbleId,
-      noteId: widget.noteId,
-    );
+    _engramsFuture = LearningCenterApi.listEngrams(userId: widget.userId);
   }
 
   void _loadPlans() {
@@ -177,36 +136,13 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
     }
   }
 
-  Color _statusColor(String status, BuildContext context) {
-    switch (status) {
-      case 'active':
-        return Colors.green;
-      case 'draft':
-        return Colors.blueGrey;
-      case 'completed':
-        return Colors.blue;
-      case 'archived':
-        return Colors.grey;
-      default:
-        return Theme.of(context).colorScheme.primary;
-    }
-  }
-
-  String _capitalize(String s) =>
-      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
-
   @override
   Widget build(BuildContext context) {
-    if (widget.isGlobal) {
-      return _buildGlobalOverview();
-    }
-    return _buildScopedTabs();
+    return _buildGlobalOverview();
   }
 
-  /// Global mode: ONE rolling page — portfolio timeline on top (approved-plan
-  /// gantt with an upcoming-draft staging pane), per-bubble engrams beneath.
-  /// Tabs collapsed per [[features/study-plan-annual-view]]. Scoped note
-  /// mode keeps the two-tab layout below.
+  /// ONE rolling page — portfolio timeline on top (approved-plan gantt with
+  /// an upcoming-draft staging pane), per-bubble engrams beneath.
   Widget _buildGlobalOverview() {
     return Scaffold(
       appBar: AppBar(title: const Text('Learning Center')),
@@ -229,38 +165,6 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
     _refreshPlans();
     _refreshEngrams();
     await Future.wait([_plansFuture, _engramsFuture]);
-  }
-
-  /// Scoped (bubbleId/noteId) mode: the original two-tab layout.
-  Widget _buildScopedTabs() {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Note Engrams'),
-          bottom: TabBar(
-            controller: _tabController,
-            tabs: const [Tab(text: 'Study Plans'), Tab(text: 'Engrams')],
-          ),
-        ),
-        body: TabBarView(
-          controller: _tabController,
-          children: [_buildPlansTab(), _buildEngramsTab()],
-        ),
-        // Only meaningful on the Plans tab -- hidden while on Engrams.
-        floatingActionButton: AnimatedBuilder(
-          animation: _tabController,
-          builder: (context, _) {
-            if (_tabController.index != 0) return const SizedBox.shrink();
-            return FloatingActionButton.extended(
-              onPressed: _showCreatePlanDialog,
-              icon: const Icon(Icons.add),
-              label: const Text('New Plan'),
-            );
-          },
-        ),
-      ),
-    );
   }
 
   /// Portfolio timeline section: divider between the upcoming-draft staging
@@ -301,15 +205,6 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(
-            'Portfolio Timeline',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-          ),
-        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
@@ -383,9 +278,9 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: Text(
-                      '${drafts.length} draft plan(s) waiting for approval',
+                      '${drafts.length} draft(s) awaiting approval',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
@@ -399,7 +294,6 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
                             dense: true,
-                            leading: const Icon(Icons.edit_note, size: 20),
                             title: Text(
                               plan['target_role']?.toString() ??
                                   'Untitled plan',
@@ -448,198 +342,22 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
                 child: Text('Error: ${snapshot.error}'),
               )
             else
-              _buildEngramsList(context, snapshot.data!, embedded: true),
+              _buildEngramsList(context, snapshot.data!),
           ],
         );
       },
     );
   }
 
-  Widget _buildPlansTab() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _plansFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-
-        final allPlans = snapshot.data!;
-
-        if (allPlans.isEmpty) {
-          return const Center(child: Text('No study plans yet.'));
-        }
-
-        // Build the chip set from whatever statuses are actually present,
-        // so we never show an empty "Archived" chip for a user who has
-        // never archived anything, and we never miss a status someone
-        // adds on the backend later without a client update.
-        final presentStatuses =
-            <String>{
-                for (final p in allPlans) (p['status'] as String?) ?? 'active',
-              }.toList()
-              ..sort();
-        final chipOptions = ['all', ...presentStatuses];
-
-        // If a previously-selected filter no longer has any matching
-        // plans (e.g. last archived plan got deleted), fall back to 'all'
-        // instead of silently showing an empty list forever.
-        if (_statusFilter != 'all' &&
-            !presentStatuses.contains(_statusFilter)) {
-          _statusFilter = 'all';
-        }
-
-        final visible =
-            _statusFilter == 'all'
-                ? allPlans
-                : allPlans
-                    .where(
-                      (p) =>
-                          ((p['status'] as String?) ?? 'active') ==
-                          _statusFilter,
-                    )
-                    .toList();
-
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children:
-                      chipOptions.map((s) {
-                        final selected = s == _statusFilter;
-                        final count =
-                            s == 'all'
-                                ? allPlans.length
-                                : allPlans
-                                    .where(
-                                      (p) =>
-                                          ((p['status'] as String?) ??
-                                              'active') ==
-                                          s,
-                                    )
-                                    .length;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(
-                              '${s == 'all' ? 'All' : _capitalize(s)} ($count)',
-                            ),
-                            selected: selected,
-                            onSelected:
-                                (_) => setState(() => _statusFilter = s),
-                          ),
-                        );
-                      }).toList(),
-                ),
-              ),
-            ),
-            Expanded(
-              child:
-                  visible.isEmpty
-                      ? Center(
-                        child: Text(
-                          'No ${_statusFilter == 'all' ? '' : '$_statusFilter '}plans.',
-                        ),
-                      )
-                      : RefreshIndicator(
-                        onRefresh: () async => _refreshPlans(),
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: visible.length,
-                          itemBuilder: (context, i) {
-                            final plan = visible[i];
-                            final status =
-                                (plan['status'] as String?) ?? 'active';
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              child: ListTile(
-                                leading: const Icon(Icons.map_outlined),
-                                title: Text(
-                                  plan['target_role']?.toString() ??
-                                      'Untitled plan',
-                                ),
-                                subtitle: Text(
-                                  '${plan['total_duration_months'] ?? '?'} months · v${plan['version'] ?? 1}',
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-color: _statusColor(
-                                        status,
-                                        context,
-                                      ).withValues(alpha: 0.15),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        _capitalize(status),
-                                        style: TextStyle(
-                                          color: _statusColor(status, context),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Icon(Icons.chevron_right),
-                                  ],
-                                ),
-                                onTap: () => _openPlan(plan),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildEngramsTab() {
-    return FutureBuilder<EngramListResponse>(
-      future: _engramsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-        return RefreshIndicator(
-          onRefresh: () async => _refreshEngrams(),
-          child: _buildEngramsList(context, snapshot.data!),
-        );
-      },
-    );
-  }
-
-  /// Grouped-by-type engrams list shared by the scoped Engrams tab (scrolls
-  /// itself) and the global overview section (embedded into the page list).
-  Widget _buildEngramsList(
-    BuildContext context,
-    EngramListResponse response, {
-    bool embedded = false,
-  }) {
+  /// Grouped-by-type engrams list. Embedded into the page ListView, so it
+  /// never scrolls itself.
+  Widget _buildEngramsList(BuildContext context, EngramListResponse response) {
     final engrams = response.engrams;
     if (engrams.isEmpty) {
-      return embedded
-          ? const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text('No engrams yet.'),
-          )
-          : const Center(child: Text('No engrams yet.'));
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Text('No engrams yet.'),
+      );
     }
 
     // Grouped by TYPE only, for now. Grouping by upcoming/new/old
@@ -654,8 +372,8 @@ color: _statusColor(
 
     return ListView(
       padding: const EdgeInsets.all(16),
-      shrinkWrap: embedded,
-      physics: embedded ? const NeverScrollableScrollPhysics() : null,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children:
           grouped.entries.map((entry) {
             return Card(
