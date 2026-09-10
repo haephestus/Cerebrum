@@ -21,6 +21,7 @@ class UserSession {
   static const _keyUsername = 'cerebrum_username';
   static const _keyEmail = 'cerebrum_email';
   static const _keyHasSeenOnboarding = 'cerebrum_has_seen_onboarding';
+  static const _keyLastOpenedBubble = 'cerebrum_last_opened_bubble';
 
   // Secure-storage keys. The bearer token is per-account; the daemon key is a
   // per-device local-mode secret (it gates the tunnel, not a user), so it is
@@ -148,6 +149,23 @@ class UserSession {
   static Future<void> markOnboardingSeen() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyHasSeenOnboarding, true);
+  }
+
+  /// The study bubble the user opened most recently. Drives the "Continue
+  /// where you left off" row on the bubbles list page. Cleared when the
+  /// bubble ceases to exist (delete flow).
+  static Future<String?> getLastOpenedBubble() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyLastOpenedBubble);
+  }
+
+  static Future<void> saveLastOpenedBubble(String? bubbleId) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (bubbleId == null || bubbleId.isEmpty) {
+      await prefs.remove(_keyLastOpenedBubble);
+    } else {
+      await prefs.setString(_keyLastOpenedBubble, bubbleId);
+    }
   }
 
   /// Clears the account + token only -- use for "log out" / "switch account".

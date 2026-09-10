@@ -79,6 +79,8 @@ class GapEvidence {
   final num? analysisVersion; // the analysis's cached_version
   final bool isCurrent;
   final String? excerpt; // trimmed chunk excerpt (fallback-sourced gaps only)
+  final List<String> blockIds; // stable block ids this gap's source chunk covers
+  final String? pageId; // page the source chunk lives on
 
   const GapEvidence({
     required this.noteId,
@@ -87,6 +89,8 @@ class GapEvidence {
     this.analysisVersion,
     this.isCurrent = true,
     this.excerpt,
+    this.blockIds = const [],
+    this.pageId,
   });
 }
 class GapItem {
@@ -128,6 +132,8 @@ class GapItem {
             'analysisVersion': e.analysisVersion,
           'isCurrent': e.isCurrent,
           if (e.excerpt != null) 'excerpt': e.excerpt,
+          if (e.blockIds.isNotEmpty) 'blockIds': e.blockIds,
+          if (e.pageId != null) 'pageId': e.pageId,
         },
     ],
   };
@@ -146,6 +152,8 @@ class GapItem {
           analysisVersion: e['analysisVersion'] as num?,
           isCurrent: e['isCurrent'] as bool? ?? true,
           excerpt: e['excerpt'] as String?,
+          blockIds: (e['blockIds'] as List?)?.cast<String>() ?? const [],
+          pageId: e['pageId'] as String?,
         ),
     ],
   );

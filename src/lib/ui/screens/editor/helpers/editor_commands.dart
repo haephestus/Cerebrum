@@ -1021,9 +1021,44 @@ class VimCharacterShortcuts {
     final node = editorState.getNodeAtPath(selection.end.path);
     if (node == null) return true;
 
+    // Capture the index of the block being deleted BEFORE the delete: after
+    // it, `node.path` is stale and AppFlowy's deleteNode leaves the selection
+    // NULL (verified headlessly in tmp_dd_focus_test.dart), so no surviving
+    // reference is trustworthy for re-selecting.
+    final deletedIndex =
+        selection.end.path.isNotEmpty ? selection.end.path.first : 0;
+
     final transaction = editorState.transaction;
     transaction.deleteNode(node);
     editorState.apply(transaction);
+
+    // AppFlowy 6.0 does NOT reposition the caret after deleteNode — the
+    // selection is left null. Every vim motion guards on selection == null,
+    // so with no caret to render the page feels "unfocused" and j/k are dead
+    // until a click. vim semantics: rest the caret on the block that shifts
+    // into the deleted block's place (same index, clamped to the last
+    // survivor), collapsed at its start.
+    final children = editorState.document.root.children;
+    if (children.isEmpty && editorState.selection == null) {
+      // Deleting the very last block empties the document (AppFlowy's
+      // deleteNode does not preserve an empty paragraph). vim `dd` on the
+      // final line leaves an empty line behind — recreate the paragraph
+      // instead of leaving the note with no root children at all.
+      final tx = editorState.transaction;
+      tx.insertNode([0], paragraphNode(text: ''));
+      editorState.apply(tx);
+    }
+    if (editorState.selection == null &&
+        editorState.document.root.children.isNotEmpty) {
+      final i = deletedIndex.clamp(
+        0,
+        editorState.document.root.children.length - 1,
+      );
+      editorState.updateSelectionWithReason(
+        Selection.collapsed(Position(path: [i], offset: 0)),
+        reason: SelectionUpdateReason.uiEvent,
+      );
+    }
     return true;
   }
 

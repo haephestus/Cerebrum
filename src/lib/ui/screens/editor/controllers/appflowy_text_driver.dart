@@ -56,6 +56,16 @@ class AppFlowyTextDriver extends ChangeNotifier
     // only fires the clear when the mode actually leaves analysis, and the
     // clear itself is a real transaction AppFlowy already rebuilds for.
     vimMode.addListener(_onVimModeChanged);
+    // Revive the caret when the editor regains keyboard focus. AppFlowy nulls
+    // `editorState.selection` whenever this page's editor LOSES focus
+    // (KeyboardServiceWidget._onFocusChanged) and never restores it on gain,
+    // so a focused-but-selectionless editor looks exactly like the "page lost
+    // focus" bug: no caret, and every vim motion guards on selection == null.
+    // Registered BEFORE AppFlowy's own focus listener (which mounts later with
+    // the editor widget): on a gain my listener runs first and re-seeds the
+    // caret while the selection is still null; on a loss I do nothing and let
+    // AppFlowy's nulling stand (it only matters for the non-active page).
+    editorFocusNode.addListener(_onFocusNodeChanged);
     // NOTE: deliberately NOT `vimMode.addListener(notifyListeners)` here.
     // EditorSurface's mode badge already listens to `vimMode` directly
     // (its own narrowly-scoped AnimatedBuilder), so forwarding vimMode
@@ -565,6 +575,29 @@ class AppFlowyTextDriver extends ChangeNotifier
     }
   }
 
+  /// Fired when this page's editor focus node gains or loses focus. Revives
+  /// the caret on GAIN if AppFlowy nulled it during the unfocused spell (see
+  /// the registration comment in the constructor for why AppFlowy is the one
+  /// doing the nulling). Deliberately does nothing on LOSS: AppFlowy's own
+  /// listener clears the selection for the page that just went inactive, and
+  /// the page that GAINED focus is always re-armed by the caller (the
+  /// analysis chunk bar, the vim flip, the page tap) or by this revive.
+  void _onFocusNodeChanged() {
+    if (!editorFocusNode.hasFocus) return; // revive only on gain
+    if (!vimMode.isEnabled) return; // drawing mode: no text caret to revive
+    if (_disposed) return;
+    final selection = editorState.selection;
+    if (selection != null) return; // there's already a live caret
+    final children = editorState.document.root.children;
+    if (children.isEmpty) return;
+    final target = children.first;
+    final len = target.delta?.length ?? 0;
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: target.path, offset: len)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+  }
+
   /// Requests keyboard focus for this page's editor: the caret renders here
   /// and vim/arrow navigation keys land here. Safe when already focused
   /// (no-op); safe to call from a key handler (deferred a frame). On a page
@@ -801,6 +834,7 @@ class AppFlowyTextDriver extends ChangeNotifier
     _disposed = true;
     _transactionSub.cancel();
     vimMode.removeListener(_onVimModeChanged);
+    editorFocusNode.removeListener(_onFocusNodeChanged);
     editorFocusNode.dispose();
     _scrollController.dispose();
     vimMode.dispose();

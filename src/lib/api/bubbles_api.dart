@@ -53,6 +53,37 @@ class BubblesApi {
     throw Exception("Bubble not found");
   }
 
+  // Update a bubble (name/description/domains/user_goals). Omitted fields
+  // keep their daemon-side values; id/user_id/created_at are immutable.
+  // CROSS-REPO CONTRACT ⇄ daemon routes_bubble.update_study_bubble.
+  static Future<Map<String, dynamic>> updateBubble({
+    required String bubbleId,
+    String? name,
+    String? description,
+    List<String>? domains,
+    List<String>? userGoals,
+  }) async {
+    final body = {
+      if (name != null) "name": name,
+      if (description != null) "description": description,
+      if (domains != null) "domains": domains,
+      if (userGoals != null) "user_goals": userGoals,
+    };
+
+    final response = await http.put(
+      Uri.parse("$bubblesEndpoint/$bubbleId"),
+      headers: await ApiConfig.headers(),
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception(
+      "Failed to update bubble: ${response.statusCode} - ${response.body}",
+    );
+  }
+
   // Create bubble  (matches CreateStudyBubble model). [bubbleId] is a
   // client-minted id sent as the `bubble_id` query param the daemon expects — it
   // names the bubble folder that note-id folders live under, so the client owns

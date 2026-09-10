@@ -30,31 +30,32 @@ import 'package:flutter/material.dart';
 ///
 /// TODO(agent) #1 -- Engram performance & results report.
 /// Ask: a widget summarizing how the person is doing on engrams over time
-/// (accuracy trends, completion rate, per-type breakdowns). Blocked on:
-/// none of the files I was given expose a performance/history endpoint --
-/// `LearningCenterApi.listEngrams` (used by upcoming_engrams.dart) returns
-/// the upcoming/scheduled queue, not results of completed attempts. Needed
-/// before this can be built: an API (e.g. something like
-/// `LearningCenterApi.getEngramPerformance(userId)`) returning historical
-/// attempt outcomes. Once that exists, this slots in as its own card
-/// between the gap carousel and the file library launcher, following the
-/// same cache-then-refresh + silent-empty-state pattern as GapCard.
+/// (accuracy trends, completion rate, per-type breakdowns). State (verified
+/// 2026-09-10): the DAEMON already persists every raw datum the report needs —
+/// `engram_attempts` plus the per-type response tables (`mcq_responses`,
+/// `flashcard_responses`, short/long responses) with score, `is_correct`,
+/// `attempted_at`, `grader` — but exposes NO results endpoint; the only
+/// engram call on this client is `LearningCenterApi.listEngrams` (the
+/// upcoming/scheduled queue). So this is blocked on a daemon route, not on
+/// data. Tracked: daemon-side `engram-performance-api` spec + client-side
+/// [[.steward/features/engram-performance-report]] (Phase 2). Slot the card
+/// here, between the gap carousel and the file library launcher, once the
+/// endpoint exists.
 ///
 /// TODO(agent) #2 -- Surface unaddressed notes (open gaps + untouched
 /// reading) to the forefront.
 /// Ask: bring notes forward whose gaps are still open AND whose suggested
-/// reading hasn't been opened. Blocked on two missing pieces of state:
-///   (a) a persisted "gap resolved/dismissed" flag -- gap_models.dart's
-///       GapItem has no such field; every gap the daemon returns is
-///       implicitly "still open," so there's currently no way to tell a
-///       gap the person already addressed from one they haven't.
-///   (b) a "reading opened" / last-accessed marker for suggested sources --
-///       nothing in GapEvidence or elsewhere tracks whether a suggested
-///       reading has ever been opened.
-/// Once the daemon/local store can express both, this becomes a filtered
-/// view over GapRepository's summaries (items where resolved == false AND
-/// reading.openedAt == null) -- no new architecture needed, just those two
-/// fields threaded through gap_models.dart and gap_extract.dart.
+/// reading hasn't been opened. State (verified 2026-09-10): `GapItem` still
+/// has no resolved/dismissed flag and `GapEvidence` has no reading-opened
+/// marker (gap_models.dart), and the DAEMON persists neither — gap data
+/// derives from each analysis run, and `suggested_readings` records
+/// candidate/accept/dismiss but no `opened_at`. Those two state pieces are
+/// daemon work (note-analysis + suggested-reading follow-ons), tracked in the
+/// Cerebrum-Daemon vault; the client display is then a filtered rollup over
+/// GapRepository (resolved == false AND reading.openedAt == null) — no new
+/// architecture, just the two fields threaded through gap_models.dart and
+/// gap_extract.dart. Own spec:
+/// [[.steward/features/unaddressed-notes-surface]].
 ///
 /// TODO(agent) #3 -- Syncfusion PDF viewer for suggested reading.
 /// Ask: opening a suggested-reading gap (Quickview's "Continue reading" and
@@ -104,15 +105,27 @@ class _DHomescreenState extends State<DHomescreen> {
   /// Opens the note behind a gap's evidence, same resume flow Quickview
   /// uses. A gap with no note evidence (shouldn't happen -- every gap is
   /// grounded per the homepage spec) is a no-op rather than a crash.
+  ///
+  /// When the gap's evidence names blocks (chunk-sourced fallback gaps:
+  /// [GapEvidence.blockIds]/[GapEvidence.pageId]), the editor opens directly
+  /// in analysis-review mode on that chunk so the user lands on the gap
+  /// itself instead of the note's first line.
   Future<void> _handleReviewGap(GapItem item) async {
     final evidence = item.evidence.isNotEmpty ? item.evidence.first : null;
     final bubbleId = evidence?.bubbleId;
     if (evidence == null || bubbleId == null) return;
     final note = await NoteStore.readNote(bubbleId, evidence.noteId);
     if (note == null || !mounted) return;
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => EditorScaffold(note: note)));
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (_) => EditorScaffold(
+              note: note,
+              startBlockIds: evidence.blockIds,
+              startPageId: evidence.pageId,
+            ),
+      ),
+    );
   }
 
   @override
@@ -157,7 +170,8 @@ class _DHomescreenState extends State<DHomescreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text(
-                              'Study Bubbles',
+                              //better label? idk?
+                              'Your favorite study bubbles',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -184,10 +198,13 @@ class _DHomescreenState extends State<DHomescreen> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        // No Expanded - let the card size naturally
-                        StudyBubblesSummaryCard(
-                          onOpenBubble: widget.onOpenBubble,
-                          onViewAll: widget.onOpenStudyBubbles,
+                        //TODO: (agent)show the most active bubbles here(filter by most
+                        // edited)
+                        Expanded(
+                          child: StudyBubblesSummaryCard(
+                            onOpenBubble: widget.onOpenBubble,
+                            onViewAll: widget.onOpenStudyBubbles,
+                          ),
                         ),
                       ],
                     ),

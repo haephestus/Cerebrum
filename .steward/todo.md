@@ -64,9 +64,17 @@
 - [ ] Real local notifications
 - [ ] Tool Wheel polish (opacity, custom slots, library)
 - [ ] Homepage dashboard — gap-surface hero (see [[features/homepage-dashboard]])
+- [ ] Bubble notes view — Notes displayed as cards (not bare ListTiles) with title, snippet, analysis status, gap count, last edited [[features/bubble-notes-view]]
+- [ ] Bubble notes view — Sort by attention: needs-analysis first, then by gap count, then by recency [[features/bubble-notes-view]]
+- [ ] Bubble notes view — Context sidebar (right pane) showing selected note's analysis summary and quick actions [[features/bubble-notes-view]]
+- [ ] Bubble notes view — Promote "Add New Note" from list item to a FAB or header button [[features/bubble-notes-view]]
+- [ ] Bubble notes view — Offline-first sync indicator in the header [[features/bubble-notes-view]]
 - [ ] Engram Generation — Auto-generate study materials from user's knowledge base [[features/engram-generation]]
 - [ ] Engram Generation — All generated content grounded in retrieved source material (no hallucination) [[features/engram-generation]]
 - [ ] Engram Generation — Support multiple engram types: flashcards, MCQs, short questions, long questions [[features/engram-generation]]
+- [ ] Engram performance & results report — Client API method + model for the daemon performance endpoint [[features/engram-performance-report]]
+- [ ] Engram performance & results report — Dashboard card ("Engram performance") with silent-empty-state: no attempts → shrink away, never a fabricated chart [[features/engram-performance-report]]
+- [ ] Engram performance & results report — Offline fallback per the dashboard rule: last-known data, never a loud failure [[features/engram-performance-report]]
 - [ ] Hierarchical Retrieval — Retrieve relevant chunks more accurately as knowledge base grows [[features/hierarchical-retrieval]]
 - [ ] Hierarchical Retrieval — Organise documents by domain/topic hierarchy [[features/hierarchical-retrieval]]
 - [ ] Hierarchical Retrieval — Reduce noise in RAG context injection [[features/hierarchical-retrieval]]
@@ -87,6 +95,33 @@
 - [ ] Real Notifications — OS-native notifications when a grade lands [[features/real-notifications]]
 - [ ] Real Notifications — App-icon badge shows unseen graded count [[features/real-notifications]]
 - [ ] Real Notifications — Notification tap opens the relevant engram [[features/real-notifications]]
+- [x] Study bubbles grid — Responsive grid layout (LayoutBuilder, 180-240px card minimum, not hardcoded 6 columns) [[features/study-bubbles-grid]]
+- [x] Study bubbles grid — Attention-sensing cards with ring accent colors from gap severity data (port from StudyBubblesSummaryCard._ringColor logic) [[features/study-bubbles-grid]]
+- [x] Study bubbles grid — Surface note count, domains, and last-studied timestamp on each card [[features/study-bubbles-grid]]
+- [x] Study bubbles grid — "Resume last bubble" hero row at top showing the most recently opened bubble with a Resume action [[features/study-bubbles-grid]]
+- [x] Study bubbles grid — Search/filter field above grid to filter bubbles by name or domains [[features/study-bubbles-grid]]
+- [ ] Study plan annual/portfolio view — Collapse the tabs in global mode: one page — portfolio timeline on top, [[features/study-plan-annual-view]]
+- [ ] Study plan annual/portfolio view — Split pane with a divider between the timeline (right) and an upcoming [[features/study-plan-annual-view]]
+- [ ] Study plan annual/portfolio view — NO kanban: the staging pane is a flat draft list — no upcoming/in-progress [[features/study-plan-annual-view]]
+- [ ] Study plan annual/portfolio view — Gantt shows APPROVED plans only (status != 'draft'), each bar from [[features/study-plan-annual-view]]
+- [ ] Study plan annual/portfolio view — Tap bar or draft card → StudyPlanDetailPage (existing navigation) [[features/study-plan-annual-view]]
+- [ ] Study plan annual/portfolio view — KPI per plan exposed on the gantt (see KPI section) [[features/study-plan-annual-view]]
+- [ ] Study plan annual/portfolio view — Silent empty states: no plans / no drafts / no engrams → nothing [[features/study-plan-annual-view]]
+- [ ] Study plan draft review / approval — DAEMON: `POST /study_plan/{plan_id}/status` (body `{"status": "active"}`), [[features/study-plan-draft-review]]
+- [ ] Study plan draft review / approval — CLIENT: Approve action on draft cards in the upcoming pane → route → [[features/study-plan-draft-review]]
+- [ ] Study plan draft review / approval — Contract row in [[cross-repo/contracts]] (Plan status transition) [[features/study-plan-draft-review]]
+- [ ] Study plan draft review / approval — Decide interaction with lazy promotion in fetch_active_plans_inator [[features/study-plan-draft-review]]
+- [ ] Study plan week-level detail — DAEMON: fix weeks read path — weeks.py `day["days"] = day` [[features/study-plan-week-detail]]
+- [ ] Study plan week-level detail — DAEMON: pin weeks payload shape in [[cross-repo/contracts]] (week fields + [[features/study-plan-week-detail]]
+- [ ] Study plan week-level detail — CLIENT: PlannerApi.getPhaseWeeks(planId, phaseId) method [[features/study-plan-week-detail]]
+- [ ] Study plan week-level detail — CLIENT: phase card affordance on the detail gantt → week timeline for [[features/study-plan-week-detail]]
+- [ ] Study plan week-level detail — CLIENT: week cards (week_number, focus_summary, topics) expand to days [[features/study-plan-week-detail]]
+- [ ] Study plan week-level detail — CLIENT: undensified phase → keep "Generate this week" as the empty-state [[features/study-plan-week-detail]]
+- [ ] Study plan week-level detail — Contract: no shape drift between fetch_plan_progress.current_week and [[features/study-plan-week-detail]]
+- [ ] Unaddressed-notes surface — DAEMON: persist gap resolution — `SET resolved/dismissed` lifecycle per gap signature (daemon spec: `note-analysis` follow-on) [[features/unaddressed-notes-surface]]
+- [ ] Unaddressed-notes surface — DAEMON: `opened_at`/last-accessed marker on suggested readings (daemon spec: `suggested-reading` follow-on) [[features/unaddressed-notes-surface]]
+- [ ] Unaddressed-notes surface — CLIENT: filtered rollup over `GapRepository` summaries — items where `resolved == false` AND `reading.openedAt == null` [[features/unaddressed-notes-surface]]
+- [ ] Unaddressed-notes surface — CLIENT: mark-a-gap-resolved action at the dashboard (see → address → resolved → disappears) [[features/unaddressed-notes-surface]]
 
 ## hardening
 
@@ -102,6 +137,7 @@
 - [ ] Daemon installation
 - [ ] Data backup/restore
 - [ ] Release CI/CD
+
 ## Tasks
 - Populate vault with project content
 - Run graphify on repo

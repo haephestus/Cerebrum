@@ -288,14 +288,53 @@ class _PageSurfaceState extends State<PageSurface> {
     if (idx == null || widget.drawingEnabled || _driver == null) {
       return const [];
     }
-    final globalRect = _driver!.rectOfBlock(idx);
+
+    // The highlight group is either (a) the RECORDED chunk blockIds in analysis
+    // mode, or (b) the caret's semantic section in tap mode.
+    //
+    // (a) is the stable case: a chunk's blockIds are fixed by the daemon, so the
+    // highlight is pinned to the whole group and does not resize as j/k moves the
+    // caret within it — it only swaps wholesale when the caret crosses into a
+    // different chunk's group.
+    //
+    // (b) is the tap-into-context case: one block tapped, we expand to its
+    // heading-plus-body section.
+    final inAnalysis = _driver!.vimMode.isAnalysis;
+    final chunks = _activeChunks;
+
+    final coveredIds = <String>{
+      for (final chunk in chunks)
+        for (final id in
+            (chunk['blockIds'] as List?)?.cast<String>() ?? const [])
+          id,
+    };
+
+    Rect? sectionRect;
+    var staleCount = 0;
+    if (inAnalysis) {
+      sectionRect = _chunkGroupRect(chunks);
+      // Stale: the chunk references blocks that no longer exist on this page.
+      staleCount = _countMissingOnPage(coveredIds);
+    } else {
+      final walk = _sectionWalk(idx);
+      sectionRect = walk.$1;
+      final walkedIds = walk.$2;
+      // Stale = recorded blocks that vanished + blocks the tint now covers that
+      // the analysis never recorded (content added since the analysis ran).
+      staleCount = _countMissingOnPage(coveredIds);
+      if (coveredIds.isNotEmpty) {
+        staleCount += walkedIds.where((id) => !coveredIds.contains(id)).length;
+      }
+    }
+    if (sectionRect == null) return const [];
+
     final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
-    if (globalRect == null || stackBox == null) return const [];
+    if (stackBox == null) return const [];
 
     // Global → page-local. The editor lays out 1:1 within the page (no scaling),
     // so the block's size carries over unchanged.
-    final localTopLeft = stackBox.globalToLocal(globalRect.topLeft);
-    final blockRect = localTopLeft & globalRect.size;
+    final localTopLeft = stackBox.globalToLocal(sectionRect.topLeft);
+    final blockRect = localTopLeft & sectionRect.size;
     final pageSize = stackBox.size;
 
     const popoverWidth = 300.0;
@@ -317,17 +356,23 @@ class _PageSurfaceState extends State<PageSurface> {
               double.infinity,
             );
 
+    final stale = staleCount > 0;
     return [
-      // Block tint.
+      // Block tint. Border shifts amber → orange when stale so a highlight that
+      // no longer matches the recorded analysis reads as suspect, not quiet.
       Positioned.fromRect(
         rect: blockRect,
         child: IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.18),
+              color: stale
+                  ? Colors.orange.withValues(alpha: 0.14)
+                  : Colors.amber.withValues(alpha: 0.18),
               border: Border.all(
-                color: Colors.amber.withValues(alpha: 0.7),
-                width: 1.2,
+                color: (stale ? Colors.orange : Colors.amber).withValues(
+                  alpha: 0.75,
+                ),
+                width: stale ? 1.6 : 1.2,
               ),
               borderRadius: BorderRadius.circular(3),
             ),
@@ -340,12 +385,86 @@ class _PageSurfaceState extends State<PageSurface> {
         top: top,
         width: popoverWidth,
         child: _AnalysisPopover(
-          chunks: _activeChunks,
+          chunks: chunks,
           maxHeight: estPopoverHeight,
           onClose: _dismiss,
+          staleCount: staleCount,
         ),
       ),
     ];
+  }
+
+  /// Union rect of every top-level block on this page whose stable id appears
+  /// in the recorded `blockIds` of [chunks]. The recorded ids are the AUTHORITY
+  /// for the group — this is why the highlight holds still while the caret moves
+  /// within a chunk. Returns null when nothing resolves.
+  Rect? _chunkGroupRect(List<Map<String, dynamic>> chunks) {
+    final driver = _driver;
+    if (driver == null) return null;
+
+    final blocks =
+        (widget.controller.documentJson['children'] as List?) ?? const [];
+    final ids = <String>{
+      for (final chunk in chunks)
+        for (final id in
+            (chunk['blockIds'] as List?)?.cast<String>() ?? const [])
+          id,
+    };
+    if (ids.isEmpty) return null;
+
+    Rect? result;
+    for (var i = 0; i < blocks.length; i++) {
+      final id = (blocks[i] as Map?)?['id']?.toString();
+      if (id == null || !ids.contains(id)) continue;
+      final rect = driver.rectOfBlock(i);
+      if (rect == null) continue;
+      result = result == null ? rect : result.expandToInclude(rect);
+    }
+    return result;
+  }
+
+  /// How many of [ids] are NOT top-level blocks on the current page — i.e. the
+  /// analysis references blocks that have been deleted or moved off this page.
+  int _countMissingOnPage(Set<String> ids) {
+    if (ids.isEmpty) return 0;
+    final present = <String>{
+      for (final b
+          in (widget.controller.documentJson['children'] as List?) ??
+              const [])
+        if ((b as Map?)?['id']?.toString() case final String id) id,
+    };
+    return ids.where((id) => !present.contains(id)).length;
+  }
+
+  /// Walks the semantic section under [startIdx] — the block and every
+  /// subsequent top-level block until the next heading — returning the union
+  /// rect (null if nothing laid out) and the walked blocks' stable ids.
+  (Rect?, List<String>) _sectionWalk(int startIdx) {
+    final driver = _driver;
+    if (driver == null) return (null, const []);
+
+    final blocks =
+        (widget.controller.documentJson['children'] as List?) ?? const [];
+    Rect? result;
+    final ids = <String>[];
+
+    for (var i = startIdx; i < blocks.length; i++) {
+      // After the first block, stop *before* accumulating the next heading —
+      // it starts a new section.  Check first, accumulate second.
+      if (i > startIdx) {
+        final type = (blocks[i] as Map?)?['type']?.toString() ?? '';
+        if (type == 'heading') break;
+      }
+
+      final id = (blocks[i] as Map?)?['id']?.toString();
+      if (id != null) ids.add(id);
+
+      final rect = driver.rectOfBlock(i);
+      if (rect == null) continue;
+      result = result == null ? rect : result.expandToInclude(rect);
+    }
+
+    return (result, ids);
   }
 }
 
@@ -355,11 +474,16 @@ class _AnalysisPopover extends StatelessWidget {
     required this.chunks,
     required this.maxHeight,
     required this.onClose,
+    this.staleCount = 0,
   });
 
   final List<Map<String, dynamic>> chunks;
   final double maxHeight;
   final VoidCallback onClose;
+
+  /// Number of blocks this analysis references that no longer match the note
+  /// (recorded blocks deleted / content added since the analysis ran).
+  final int staleCount;
 
   static Color _severityColor(String severity) {
     switch (severity.toLowerCase()) {
@@ -409,14 +533,42 @@ class _AnalysisPopover extends StatelessWidget {
                       color: Colors.grey.shade800,
                     ),
                   ),
-                  const Spacer(),
-                  InkResponse(
-                    onTap: onClose,
-                    child: const Icon(Icons.close, size: 16),
+const Spacer(),
+              InkResponse(
+                onTap: onClose,
+                child: const Icon(Icons.close, size: 16),
+              ),
+            ],
+          ),
+          if (staleCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    size: 14,
+                    color: Colors.orange.shade800,
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      staleCount == 1
+                          ? '1 referenced block no longer matches the note — '
+                                'this analysis may be out of date.'
+                          : '$staleCount referenced blocks no longer match the '
+                                'note — this analysis may be out of date.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange.shade800,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const Divider(height: 12),
+            ),
+          const Divider(height: 12),
               if (findings.isEmpty)
                 const Text(
                   'This block is covered by analysis, but has no specific findings.',

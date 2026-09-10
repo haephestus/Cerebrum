@@ -8,6 +8,7 @@ import 'package:cerebrum/ui/screens/learning_center/engrams/completion/flashcard
 import 'package:cerebrum/ui/screens/learning_center/engrams/completion/short_question.dart';
 import 'package:cerebrum/ui/screens/learning_center/engrams/completion/long_questions.dart';
 import 'package:cerebrum/ui/widgets/floating_modal.dart';
+import 'package:cerebrum/ui/widgets/plan_portfolio_gantt.dart';
 
 /// Two modes, one widget:
 ///   - bubbleId/noteId BOTH null  -> global dashboard: every study plan
@@ -57,14 +58,18 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    if (!widget.isGlobal) {
+      _tabController = TabController(length: 2, vsync: this);
+    }
     _loadEngrams();
     _loadPlans();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    if (!widget.isGlobal) {
+      _tabController.dispose();
+    }
     super.dispose();
   }
 
@@ -192,11 +197,47 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isGlobal) {
+      return _buildGlobalOverview();
+    }
+    return _buildScopedTabs();
+  }
+
+  /// Global mode: ONE rolling page — portfolio timeline on top (approved-plan
+  /// gantt with an upcoming-draft staging pane), per-bubble engrams beneath.
+  /// Tabs collapsed per [[features/study-plan-annual-view]]. Scoped note
+  /// mode keeps the two-tab layout below.
+  Widget _buildGlobalOverview() {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Learning Center')),
+      body: RefreshIndicator(
+        onRefresh: _refreshAll,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 32),
+          children: [_buildPlansSection(), _buildEngramsSection()],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showCreatePlanDialog,
+        icon: const Icon(Icons.add),
+        label: const Text('New Plan'),
+      ),
+    );
+  }
+
+  Future<void> _refreshAll() async {
+    _refreshPlans();
+    _refreshEngrams();
+    await Future.wait([_plansFuture, _engramsFuture]);
+  }
+
+  /// Scoped (bubbleId/noteId) mode: the original two-tab layout.
+  Widget _buildScopedTabs() {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.isGlobal ? 'Learning Center' : 'Note Engrams'),
+          title: const Text('Note Engrams'),
           bottom: TabBar(
             controller: _tabController,
             tabs: const [Tab(text: 'Study Plans'), Tab(text: 'Engrams')],
@@ -219,6 +260,198 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
           },
         ),
       ),
+    );
+  }
+
+  /// Portfolio timeline section: divider between the upcoming-draft staging
+  /// pane (left, flat list — NO kanban columns) and the approved-plan gantt
+  /// (right, calendar bars with predicted start dates).
+  Widget _buildPlansSection() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _plansFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 220,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Error: ${snapshot.error}'),
+          );
+        }
+        final allPlans = snapshot.data ?? const <Map<String, dynamic>>[];
+        return _buildPortfolioPane(allPlans);
+      },
+    );
+  }
+
+  Widget _buildPortfolioPane(List<Map<String, dynamic>> allPlans) {
+    final drafts =
+        allPlans
+            .where((p) => ((p['status'] as String?) ?? 'active') == 'draft')
+            .toList();
+    final approved =
+        allPlans
+            .where((p) => ((p['status'] as String?) ?? 'active') != 'draft')
+            .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Text(
+            'Portfolio Timeline',
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'Approved plans on the calendar, upcoming drafts staged to the left.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 380,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildUpcomingPane(drafts),
+              Container(
+                width: 1,
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+              Expanded(
+                child: PlanPortfolioGantt(
+                  plans: approved,
+                  userId: widget.userId,
+                  onPlanTap: _openPlan,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Left staging space: upcoming drafts as a flat card list. Tapping a card
+  /// opens the plan detail; the official approve/activate path is the separate
+  /// draft-review feature [[features/study-plan-draft-review]].
+  Widget _buildUpcomingPane(List<Map<String, dynamic>> drafts) {
+    return Container(
+      width: 240,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      child:
+          drafts.isEmpty
+              ? Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Upcoming',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No upcoming drafts.\nGenerate a plan to start one.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              )
+              : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                    child: Text(
+                      'Upcoming',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      '${drafts.length} draft plan(s) waiting for approval',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: drafts.length,
+                      itemBuilder: (context, i) {
+                        final plan = drafts[i];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.edit_note, size: 20),
+                            title: Text(
+                              plan['target_role']?.toString() ??
+                                  'Untitled plan',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            subtitle: Text(
+                              'draft · v${plan['version'] ?? 1}',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            onTap: () => _openPlan(plan),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+    );
+  }
+
+  /// Per-bubble engrams section beneath the timeline.
+  Widget _buildEngramsSection() {
+    return FutureBuilder<EngramListResponse>(
+      future: _engramsFuture,
+      builder: (context, snapshot) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 4),
+              child: Text(
+                'Engrams',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            if (snapshot.connectionState == ConnectionState.waiting)
+              const SizedBox(
+                height: 160,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (snapshot.hasError)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Error: ${snapshot.error}'),
+              )
+            else
+              _buildEngramsList(context, snapshot.data!, embedded: true),
+          ],
+        );
+      },
     );
   }
 
@@ -342,10 +575,10 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: _statusColor(
-                                          status,
-                                          context,
-                                        ).withOpacity(0.15),
+color: _statusColor(
+                                        status,
+                                        context,
+                                      ).withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
@@ -384,48 +617,64 @@ class _DLearningCenterPageState extends State<DLearningCenterPage>
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
-
-        final engrams = snapshot.data!.engrams;
-        if (engrams.isEmpty) {
-          return const Center(child: Text('No engrams yet.'));
-        }
-
-        // Grouped by TYPE only, for now. Grouping by upcoming/new/old
-        // (due date) needs engram_mastery.state / next_due_at added to
-        // the /engrams/list response first -- _sanitize_for_presentation
-        // on the backend currently strips down to content/tags/level,
-        // no mastery info at all.
-        final grouped = <EngramType, List<Engram>>{};
-        for (final e in engrams) {
-          grouped.putIfAbsent(e.type, () => []).add(e);
-        }
-
         return RefreshIndicator(
           onRefresh: () async => _refreshEngrams(),
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children:
-                grouped.entries.map((entry) {
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ExpansionTile(
-                      leading: Icon(_typeIcon(entry.key)),
-                      title: Text(_typeLabel(entry.key)),
-                      subtitle: Text('${entry.value.length} item(s)'),
-                      children:
-                          entry.value.map((e) {
-                            return ListTile(
-                              title: Text(_previewText(e)),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => _openEngram(e),
-                            );
-                          }).toList(),
-                    ),
-                  );
-                }).toList(),
-          ),
+          child: _buildEngramsList(context, snapshot.data!),
         );
       },
+    );
+  }
+
+  /// Grouped-by-type engrams list shared by the scoped Engrams tab (scrolls
+  /// itself) and the global overview section (embedded into the page list).
+  Widget _buildEngramsList(
+    BuildContext context,
+    EngramListResponse response, {
+    bool embedded = false,
+  }) {
+    final engrams = response.engrams;
+    if (engrams.isEmpty) {
+      return embedded
+          ? const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text('No engrams yet.'),
+          )
+          : const Center(child: Text('No engrams yet.'));
+    }
+
+    // Grouped by TYPE only, for now. Grouping by upcoming/new/old
+    // (due date) needs engram_mastery.state / next_due_at added to
+    // the /engrams/list response first -- _sanitize_for_presentation
+    // on the backend currently strips down to content/tags/level,
+    // no mastery info at all.
+    final grouped = <EngramType, List<Engram>>{};
+    for (final e in engrams) {
+      grouped.putIfAbsent(e.type, () => []).add(e);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      shrinkWrap: embedded,
+      physics: embedded ? const NeverScrollableScrollPhysics() : null,
+      children:
+          grouped.entries.map((entry) {
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ExpansionTile(
+                leading: Icon(_typeIcon(entry.key)),
+                title: Text(_typeLabel(entry.key)),
+                subtitle: Text('${entry.value.length} item(s)'),
+                children:
+                    entry.value.map((e) {
+                      return ListTile(
+                        title: Text(_previewText(e)),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => _openEngram(e),
+                      );
+                    }).toList(),
+              ),
+            );
+          }).toList(),
     );
   }
 }

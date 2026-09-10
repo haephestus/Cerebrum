@@ -194,6 +194,10 @@ void main() {
         expect(gap.detail, contains('compresses the definition'));
         expect(gap.evidence.single.excerpt, contains('Primitive Data Types'));
         expect(gap.evidence.single.isCurrent, isTrue);
+        // Block linkage from the chunk's outer diagnostics map — what the
+        // priority-card "Review" deep-link needs to jump to this gap's blocks.
+        expect(gap.evidence.single.pageId, 'p0');
+        expect(gap.evidence.single.blockIds, ['IX6ZWS']);
       },
     );
 

@@ -169,10 +169,18 @@ NoteGapData extractNoteGaps({
             String detail,
             int rank,
             String? severity,
+            List<String> blockIds,
+            String? pageId,
           })
         >[];
     for (final outer in (full['chunk_diagnostics'] as List? ?? [])) {
       if (outer is! Map) continue;
+      // Block linkage lives on the OUTER map (verified in real payloads and
+      // mirrored by EditorScaffold._flattenAndSortChunks): which page + which
+      // stable blocks this group of chunk diagnostics covers.
+      final chunkBlockIds =
+          (outer['source_block_ids'] as List?)?.cast<String>() ?? <String>[];
+      final chunkPageId = outer['page_id'] as String?;
       for (final diag in (outer['chunk_diagnostics'] as List? ?? [])) {
         if (diag is! Map) continue;
         final excerpt = diag['chunk_excerpt']?.toString() ?? '';
@@ -194,6 +202,8 @@ NoteGapData extractNoteGaps({
                 const {'low', 'medium', 'high'}.contains(severity)
                     ? severity
                     : null,
+            blockIds: chunkBlockIds,
+            pageId: chunkPageId,
           ));
         }
       }
@@ -208,6 +218,8 @@ NoteGapData extractNoteGaps({
             String excerpt,
             int rank,
             String? severity,
+            List<String> blockIds,
+            String? pageId,
           })
         >[];
     final seen = <String>{};
@@ -220,6 +232,8 @@ NoteGapData extractNoteGaps({
         excerpt: f.excerpt,
         rank: f.rank,
         severity: f.severity,
+        blockIds: f.blockIds,
+        pageId: f.pageId,
       ));
     }
     unique.sort((a, b) => b.rank.compareTo(a.rank));
@@ -238,6 +252,8 @@ NoteGapData extractNoteGaps({
               analysisVersion: evidence.analysisVersion,
               isCurrent: evidence.isCurrent,
               excerpt: _crop(f.excerpt, 240),
+              blockIds: f.blockIds,
+              pageId: f.pageId,
             ),
           ],
         ),

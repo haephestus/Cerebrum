@@ -14,6 +14,25 @@ import 'gap_repository.dart';
 /// Same honesty + refresh rules as GapCard: renders nothing when no gap
 /// carries a real daemon severity, serves the last-known cache instantly,
 /// and a failed background refresh never blanks what's already shown.
+
+/// Returns a short scope label: chunk-specific gaps say which section the
+/// gap lives in (the excerpt lead); note-wide gaps carry no block target.
+String _scopeLabel(GapItem item) {
+  final evidence = item.evidence.isNotEmpty ? item.evidence.first : null;
+  if (evidence != null && evidence.blockIds.isNotEmpty) {
+    final lead = evidence.excerpt;
+    if (lead != null) {
+      final first = lead.split('\n').firstWhere(
+        (l) => l.trim().isNotEmpty,
+        orElse: () => '',
+      );
+      return 'In: $first';
+    }
+    return 'In: this section';
+  }
+  return 'Note-wide gap';
+}
+
 class PriorityGapCard extends StatefulWidget {
   final GapRepository repository;
 
@@ -136,6 +155,19 @@ class _PriorityGapCardState extends State<PriorityGapCard>
               style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
+          const SizedBox(height: 8),
+          // Scope indicator: chunk-specific gaps carry block linkage (the
+          // "Review" button deep-links to the chunk); note-wide gaps (from
+          // the overview) have no block target.
+          Text(
+            _scopeLabel(item),
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF8C2F2F),
+              fontStyle: FontStyle.italic,
+            ),
+          ),
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerRight,

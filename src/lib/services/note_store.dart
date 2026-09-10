@@ -160,6 +160,64 @@ class NoteStore {
     return Map<String, dynamic>.from(manifest)..['pages'] = pages;
   }
 
+  /// Plain-text preview of a note's first page, without reconstructing the
+  /// whole note. Reads only the first page in `page_order` and joins its
+  /// document's delta inserts. Returns '' when nothing readable is on disk —
+  /// the caller decides whether to show a snippet or hide the line.
+  static Future<String> readFirstPageSnippet(
+    String bubbleId,
+    String noteId,
+  ) async {
+    final noteDir = await _noteDir(bubbleId, noteId);
+    final manifest =
+        await _readJson(File('${noteDir.path}/manifest.json'))
+            as Map<String, dynamic>?;
+    if (manifest == null) return '';
+    final order = (manifest['page_order'] as List?)?.cast<String>() ?? const [];
+    if (order.isEmpty) return '';
+    final content = await _readJson(
+      File('${noteDir.path}/pages/${order.first}/content.json'),
+    );
+    if (content is! Map) return '';
+    return documentSnippet(Map<String, dynamic>.from(content));
+  }
+
+  /// True when at least one page folder carries a server-computed analysis.json.
+  /// Analysis files are only ever written when the daemon supplied one
+  /// ([writeNote]), so presence on disk is a real daemon state, never a guess.
+  static Future<bool> hasAnyAnalysis(String bubbleId, String noteId) async {
+    final noteDir = await _noteDir(bubbleId, noteId);
+    final pagesDir = Directory('${noteDir.path}/pages');
+    if (!await pagesDir.exists()) return false;
+    await for (final entry in pagesDir.list()) {
+      if (entry is Directory &&
+          await File('${entry.path}/analysis.json').exists()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Plain-text preview of a blocky AppFlowy document (children → delta
+  /// inserts concatenated, whitespace-collapsed). Shared by the first-page
+  /// snippet reader and the notes-list card builder.
+  static String documentSnippet(Map<String, dynamic> document) {
+    final parts = <String>[];
+    for (final child in (document['children'] as List? ?? [])) {
+      if (child is! Map) continue;
+      final data = child['data'];
+      if (data is! Map) continue;
+      for (final op in (data['delta'] as List? ?? [])) {
+        if (op is Map && op['insert'] is String) {
+          final text = (op['insert'] as String).trim();
+          if (text.isNotEmpty) parts.add(text);
+        }
+      }
+    }
+    // Collapse the multi-line join into a single readable line.
+    return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
   /// The notes-screen list, newest local write first. Skips tombstones.
   static Future<List<Map<String, dynamic>>> listNotes(String bubbleId) async {
     final file = await _indexFile(bubbleId);

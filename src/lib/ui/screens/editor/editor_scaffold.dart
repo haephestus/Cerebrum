@@ -32,11 +32,19 @@ class EditorScaffold extends StatefulWidget {
   final Map<String, dynamic>? initialTextJson;
   final List<Map<String, dynamic>>? initialInkJson;
 
+  /// When set, the editor opens directly into analysis-review mode and jumps
+  /// to the chunk containing these blocks on [startPageId]. Used by the
+  /// priority gap card's "Review" button so the user lands on the gap.
+  final List<String>? startBlockIds;
+  final String? startPageId;
+
   const EditorScaffold({
     super.key,
     required this.note,
     this.initialTextJson,
     this.initialInkJson,
+    this.startBlockIds,
+    this.startPageId,
   });
 
   @override
@@ -110,6 +118,11 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   bool _showAnalysisPanel = false;
   bool _isGeneratingAnalysis = false;
 
+  /// True when the editor was opened with [EditorScaffold.startBlockIds] and
+  /// we haven't yet jumped to the initial chunk. Cleared after the first jump
+  /// (or after analysis loads with no matching chunk).
+  bool _pendingInitialJump = false;
+
   late bool _analysisEnabled;
   bool _isTogglingAnalysis = false;
 
@@ -127,6 +140,10 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     final rawFilename = widget.note['filename'];
     final parsedNoteId = _noteIdFromFilename(rawFilename as String?);
     _bubbleId = widget.note['bubble_id'] as String?;
+    _pendingInitialJump =
+        widget.startBlockIds != null &&
+        widget.startBlockIds!.isNotEmpty &&
+        widget.startPageId != null;
     debugPrint(
       '[EditorScaffold] Opening note. filename="$rawFilename" '
       'noteId="$parsedNoteId"',
@@ -275,6 +292,16 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _updateLastSavedState(),
     );
+
+    // Deep-link (priority gap card "Review"): load the analysis immediately so
+    // the note opens already in analysis-review mode on the gap's chunk. The
+    // load itself populates chunks; the jump to the target chunk happens in
+    // [_loadAnalysis] once they're available.
+    if (_pendingInitialJump) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadAnalysis(openPanel: false);
+      });
+    }
   }
 
   void _onEditorChanged() {
@@ -479,6 +506,17 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         _showAnalysisPanel = openPanel;
         _isLoadingAnalysis = false;
       });
+
+      // Deep-link jump: after the chunk set is populated (the load above also
+      // auto-focused the first chunk), move the review cursor to the chunk the
+      // caller asked us to land on. Post-frame so the initial highlight has
+      // rendered before we re-focus — the re-focus clears it via the
+      // scaffold's existing prev-chunk bookkeeping.
+      if (_pendingInitialJump && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _jumpToInitialChunk(),
+        );
+      }
     } catch (e) {
       setState(() {
         _hasAttemptedLoad = true;
@@ -489,8 +527,48 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         _cachedAnalysis = 'Error loading analysis:\n$e';
         _showAnalysisPanel = openPanel;
         _isLoadingAnalysis = false;
+        // No data, no jump — swallow the pending deep-link so a later manual
+        // load doesn't try to re-focus a chunk that was never available.
+        _pendingInitialJump = false;
       });
     }
+  }
+
+  /// Lands the review cursor on the chunk matching [EditorScaffold.startBlockIds]
+  /// on [EditorScaffold.startPageId] — the gap the priority card's "Review"
+  /// button deep-linked. Called once after the analysis load that produced the
+  /// chunks; no-op when no chunk matches (the flag is swallowed so a later
+  /// manual load doesn't keep trying).
+  void _jumpToInitialChunk() {
+    if (!_pendingInitialJump) return;
+    _pendingInitialJump = false;
+
+    final blockIds = widget.startBlockIds ?? const <String>[];
+    final pageId = widget.startPageId;
+    final chunks = _analysisMode.chunks;
+    if (chunks.isEmpty) return;
+
+    // pageId is authoritative (block ids can be regenerated across analyses);
+    // chunks on a different page never match. Pick the first chunk that shares
+    // any block with the caller's target.
+    int? match;
+    for (var i = 0; i < chunks.length; i++) {
+      final c = chunks[i];
+      if (pageId != null && c.pageId != pageId) continue;
+      if (c.blockIds.any((b) => blockIds.contains(b))) {
+        match = i;
+        break;
+      }
+    }
+    if (match == null) {
+      debugPrint(
+        '[jumpToInitialChunk] no chunk matches page="$pageId" '
+        'blockIds=$blockIds',
+      );
+      return;
+    }
+    debugPrint('[jumpToInitialChunk] jumping to chunk index $match');
+    _analysisMode.jumpTo(match);
   }
 
   // Formats just the note-level overview (topic, mastery, concept map,
@@ -758,14 +836,15 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     // rebuilt from scratch on open each time anyway.
   }
 
-  /// Focuses the editor on the first block of an analysis chunk and highlights
-  /// the chunk's blocks. If the chunk is on a different page, it switches to
-  /// that page first.
+  /// Focuses the editor on the first block of an analysis chunk. If the chunk
+  /// is on a different page, it switches to that page first.
   ///
-  /// The previous chunk's highlight (if any) is cleared first so only the
-  /// current chunk stays marked. Highlighting uses AppFlowy's built-in
-  /// per-block background color attribute (`bgColor`) rather than a hand-rolled
-  /// decoration, so it renders on every block type including nested ones.
+  /// Block highlighting is deliberately NOT applied here: the per-block
+  /// `bgColor` tint previously painted the whole chunk amber without a proper
+  /// bounding rect to accompany it. The review highlight now comes from the
+  /// chunk-anchored tint + border rect that PageSurface renders (keyed to the
+  /// chunk's recorded blockIds), so the editor focus here just needs to move
+  /// the selection into the chunk.
   void _focusAnalysisChunk(AnalysisChunkRef ref) {
     final pages = _editorController.pages;
     final targetPageIdx = pages.indexWhere((p) => p.pageId == ref.pageId);
@@ -775,25 +854,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       'blockIds=${ref.blockIds} targetPageIdx=$targetPageIdx',
     );
     if (targetPageIdx == -1) return;
-
-    // 0. Clear the previously-highlighted chunk FIRST, on the page that really
-    //    holds it. The previous chunk may be on a DIFFERENT page than the one we
-    //    switch to below, so we can't clear it through the new active driver —
-    //    that driver's document doesn't contain the old blocks. Resolve the old
-    //    page's controller and clear there.
-    final prevPageId = _analysisModeCurrentChunkPageId;
-    final prevBlockIds = _analysisModeCurrentChunkBlockIds;
-    if (prevBlockIds != null && prevPageId != null) {
-      final prevPageIdx = pages.indexWhere((p) => p.pageId == prevPageId);
-      if (prevPageIdx != -1) {
-        final prevDriver = pages[prevPageIdx].controller.driver;
-        if (prevDriver is AppFlowyTextDriver) {
-          prevDriver.setChunkHighlight(prevBlockIds, null);
-        }
-      }
-    }
-    _analysisModeCurrentChunkPageId = ref.pageId;
-    _analysisModeCurrentChunkBlockIds = ref.blockIds;
 
     // 1. Switch to the correct page if needed (setActive is synchronous, so the
     //    activeController below is already the target page's once we move on).
@@ -812,29 +872,42 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       driver.vimMode.enterAnalysisMode();
     }
 
-    // 2. Highlight the new chunk's blocks on the now-active page.
-    driver.setChunkHighlight(ref.blockIds, _analysisHighlightColor);
-
-    // 3. Select the chunk's first block — a WHOLE-BLOCK highlight, not a typing
+    // 2. Select the chunk's first block — a WHOLE-BLOCK selection, not a typing
     //    caret — so the review position is obvious and this block's findings
     //    pop over (PageSurface anchors its inline widgets on the selection).
+    //    A selection is set UNCONDITIONALLY: the old `if (start != end)`
+    //    guard skipped the jump for empty blocks and left a stale/null
+    //    selection on the landing page — and a focused editor with a null
+    //    selection behaves exactly like the "page lost focus" bug (no caret,
+    //    every vim motion guards on selection == null).
+    final document = driver.editorState.document;
+    Selection? target;
     final firstBlockId = ref.blockIds.firstOrNull;
     if (firstBlockId != null) {
-      final document = driver.editorState.document;
       final found = _findNodeByStableId(document.root, firstBlockId);
-      if (found != null) {
-        final selectable = found.node.selectable;
-        if (selectable != null) {
-          final start = selectable.start();
-          final end = selectable.end();
-          if (start != end) {
-            driver.editorState.updateSelectionWithReason(
-              Selection(start: start, end: end),
-              reason: SelectionUpdateReason.uiEvent,
-            );
-          }
-        }
+      final selectable = found?.node.selectable;
+      if (selectable != null) {
+        final start = selectable.start();
+        final end = selectable.end();
+        target = start == end
+            ? Selection.collapsed(start)
+            : Selection(start: start, end: end);
       }
+    }
+    if (target == null && document.root.children.isNotEmpty) {
+      // Chunk's recorded block is gone from the page (stale chunk after a
+      // save/undo). Land the review cursor on the page's first block instead
+      // of leaving the page with no selection at all.
+      final selectable = document.root.children.first.selectable;
+      if (selectable != null) {
+        target = Selection(start: selectable.start(), end: selectable.end());
+      }
+    }
+    if (target != null) {
+      driver.editorState.updateSelectionWithReason(
+        target,
+        reason: SelectionUpdateReason.uiEvent,
+      );
     }
 
     // Hand the keyboard to the page that now holds the review cursor. Without
@@ -845,18 +918,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     final activeDriver = _editorController.activeController.driver;
     if (activeDriver is AppFlowyTextDriver) activeDriver.requestEditorFocus();
   }
-
-  /// pageId of the currently highlighted chunk (the one the review cursor just
-  /// left), so it can be cleared on the correct page when stepping to the next.
-  String? _analysisModeCurrentChunkPageId;
-
-  /// Stable ids of the currently highlighted chunk, same lifecycle as
-  /// [_analysisModeCurrentChunkPageId].
-  List<String>? _analysisModeCurrentChunkBlockIds;
-
-  /// Amber is easy to notice against both light and dark note backgrounds; the
-  /// paragraph/list/heading builders render it via their `bgColor` attribute.
-  static const _analysisHighlightColor = 'rgba(255, 214, 102, 0.85)';
 
   /// Depth-first search for the node whose stable id equals [id], so nested
   /// blocks (inside a table cell, a column, etc.) are found too — not just

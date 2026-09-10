@@ -45,6 +45,11 @@ See [[plan/features]] for detailed spec.
 - [ ] Real local notifications
 - [ ] Tool Wheel polish (opacity, custom slots, library)
 - [ ] Homepage dashboard — gap-surface hero (see [[features/homepage-dashboard]])
+- [ ] Engram performance & results report (see [[features/engram-performance-report]])
+- [ ] Unaddressed-notes surface — open gaps + untouched reading (see [[features/unaddressed-notes-surface]])
+- [ ] Study plan annual/portfolio view — timeline + upcoming staging, tabs collapsed (see [[features/study-plan-annual-view]])
+- [ ] Study plan week-level detail — phase → weeks drill-down (see [[features/study-plan-week-detail]])
+- [ ] Study plan draft review/approval — activate drafted plans (see [[features/study-plan-draft-review]])
 
 ## Phase 3 — hardening
 

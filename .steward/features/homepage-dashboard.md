@@ -141,3 +141,7 @@ mastery deltas).
   verify before wiring.
 - Replicate `UpcomingEngramsSection`'s shrink-away empty state across all regions.
 - Notes card's "Create Note" button has no onPressed — finish it, not a design choice.
+- **Related planned dashboard regions (not part of this hero):**
+  [[features/engram-performance-report]] (TODO(agent) #1) and
+  [[features/unaddressed-notes-surface]] (TODO(agent) #2). Both are Phase 2
+  siblings with their own specs; neither is blocked on this feature.

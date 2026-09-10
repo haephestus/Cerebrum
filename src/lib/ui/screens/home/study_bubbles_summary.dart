@@ -157,22 +157,19 @@ class _StudyBubblesSummaryCardState extends State<StudyBubblesSummaryCard> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const SizedBox(
-        height: 40,
-        child: Center(
-          child: SizedBox(
-            height: 20,
-            width: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+      return const Center(
+        child: SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
       );
     }
 
     if (_error != null) {
-      return SizedBox(
-        height: 40,
+      return Center(
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'Couldn\'t load.',
@@ -193,67 +190,66 @@ class _StudyBubblesSummaryCardState extends State<StudyBubblesSummaryCard> {
     }
 
     if (_bubbles.isEmpty) {
-      return SizedBox(
-        height: 40,
-        child: Center(
-          child: IconButton(
-            tooltip: 'Create study bubble',
-            onPressed: _createBubble,
-            icon: const Icon(Icons.add_circle_outline),
-            iconSize: 24,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
+      return Center(
+        child: IconButton(
+          tooltip: 'Create study bubble',
+          onPressed: _createBubble,
+          icon: const Icon(Icons.add_circle_outline),
+          iconSize: 24,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
         ),
       );
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Larger tiles to fill the available height
-        const minTileSize = 40.0;
-        const maxTileSize = 56.0;
-        const gap = 6.0;
+        // Bigger tiles now that the card has real vertical room
+        const minTileSize = 64.0;
+        const maxTileSize = 96.0;
+        const gap = 10.0;
 
         final availableWidth = constraints.maxWidth;
 
-        // Calculate how many columns can fit
         final columns = (availableWidth / (minTileSize + gap)).floor().clamp(
           1,
           _bubbles.length,
         );
 
-        // Calculate tile width based on available space
         final tileWidth = ((availableWidth - (columns - 1) * gap) / columns)
             .clamp(minTileSize, maxTileSize);
 
-        // Show max 6 bubbles, with "more" indicator if needed
         const maxDisplay = 6;
         final displayBubbles = _bubbles.take(maxDisplay).toList();
         final hasMore = _bubbles.length > maxDisplay;
 
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          alignment: WrapAlignment.start,
-          children: [
-            for (final bubble in displayBubbles)
-              _BubbleRingChip(
-                title: _titleOf(bubble),
-                ringColor: _ringColor(_idOf(bubble)),
-                size: tileWidth,
-                onTap: () {
-                  widget.onOpenBubble(Map<String, dynamic>.from(bubble as Map));
-                },
-              ),
-            if (hasMore)
-              _BubbleRingChip(
-                title: '+${_bubbles.length - maxDisplay}',
-                ringColor: const Color(0xFFB9B4CC),
-                size: tileWidth,
-                onTap: widget.onViewAll,
-              ),
-          ],
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            alignment: WrapAlignment.start,
+            children: [
+              for (final bubble in displayBubbles)
+                _BubbleRingChip(
+                  title: _titleOf(bubble),
+                  ringColor: _ringColor(_idOf(bubble)),
+                  size: tileWidth,
+                  onTap: () {
+                    widget.onOpenBubble(
+                      Map<String, dynamic>.from(bubble as Map),
+                    );
+                  },
+                ),
+              if (hasMore)
+                _BubbleRingChip(
+                  title: '+${_bubbles.length - maxDisplay}',
+                  ringColor: const Color(0xFFB9B4CC),
+                  size: tileWidth,
+                  onTap: widget.onViewAll,
+                ),
+            ],
+          ),
         );
       },
     );
