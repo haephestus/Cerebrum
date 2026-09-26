@@ -75,7 +75,7 @@ class EditorSettingsStore {
   /// Loaded custom themes (oldest first) + the persisted active-theme name (may
   /// name a built-in). Tolerant: returns `(const [], null)` on missing/corrupt.
   static Future<({List<WheelTheme> custom, String? active})>
-      loadThemes() async {
+  loadThemes() async {
     final raw = await _readJson(await _themesFile());
     if (raw is! Map) return (custom: const <WheelTheme>[], active: null);
     final list = raw['themes'];
@@ -84,11 +84,12 @@ class EditorSettingsStore {
       for (final e in list) {
         if (e is! Map) continue;
         final name = (e['name'] as String?)?.trim();
-        final colors = (e['colors'] as List?)
-            ?.map((c) => CustomSwatch.parseHex(c?.toString()))
-            .whereType<Color>()
-            .map((c) => c.toARGB32() & 0x00FFFFFF)
-            .toList();
+        final colors =
+            (e['colors'] as List?)
+                ?.map((c) => CustomSwatch.parseHex(c?.toString()))
+                .whereType<Color>()
+                .map((c) => c.toARGB32() & 0x00FFFFFF)
+                .toList();
         if (name == null || name.isEmpty || colors == null || colors.isEmpty) {
           continue;
         }
@@ -99,18 +100,26 @@ class EditorSettingsStore {
   }
 
   static Future<void> saveThemes(
-      List<WheelTheme> custom, String activeName) async {
+    List<WheelTheme> custom,
+    String activeName,
+  ) async {
     await _writeJson(await _themesFile(), {
       'active': activeName,
-      'themes': custom
-          .map((t) => {
-                'name': t.name,
-                'colors': (t.sourceColors ?? const <int>[])
-                    .map((h) =>
-                        '#${(h & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}')
-                    .toList(),
-              })
-          .toList(),
+      'themes':
+          custom
+              .map(
+                (t) => {
+                  'name': t.name,
+                  'colors':
+                      (t.sourceColors ?? const <int>[])
+                          .map(
+                            (h) =>
+                                '#${(h & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
+                          )
+                          .toList(),
+                },
+              )
+              .toList(),
     });
   }
 
@@ -118,7 +127,9 @@ class EditorSettingsStore {
 
   static Future<EditorSettings> loadSettings() async {
     final raw = await _readJson(await _settingsFile());
-    return EditorSettings.fromJson(raw is Map ? Map<String, dynamic>.from(raw) : const {});
+    return EditorSettings.fromJson(
+      raw is Map ? Map<String, dynamic>.from(raw) : const {},
+    );
   }
 
   static Future<void> saveSettings(EditorSettings settings) async {
@@ -163,7 +174,10 @@ class CustomSwatch {
     final parsed = parseHex(json['hex'] as String?);
     if (parsed == null) return null;
     final name = (json['name'] as String?)?.trim();
-    return CustomSwatch(parsed, (name == null || name.isEmpty) ? parsed.hex : name);
+    return CustomSwatch(
+      parsed,
+      (name == null || name.isEmpty) ? parsed.hex : name,
+    );
   }
 
   /// `#RRGGBB` / `RRGGBB` → opaque [Color], or null if unparseable.
@@ -220,24 +234,23 @@ class EditorSettings {
     double? highlighterWidth,
     double? eraserWidth,
     bool? showHex,
-  }) =>
-      EditorSettings(
-        minWheelScale: minWheelScale ?? this.minWheelScale,
-        maxWheelScale: maxWheelScale ?? this.maxWheelScale,
-        penWidth: penWidth ?? this.penWidth,
-        highlighterWidth: highlighterWidth ?? this.highlighterWidth,
-        eraserWidth: eraserWidth ?? this.eraserWidth,
-        showHex: showHex ?? this.showHex,
-      );
+  }) => EditorSettings(
+    minWheelScale: minWheelScale ?? this.minWheelScale,
+    maxWheelScale: maxWheelScale ?? this.maxWheelScale,
+    penWidth: penWidth ?? this.penWidth,
+    highlighterWidth: highlighterWidth ?? this.highlighterWidth,
+    eraserWidth: eraserWidth ?? this.eraserWidth,
+    showHex: showHex ?? this.showHex,
+  );
 
   Map<String, dynamic> toJson() => {
-        'minWheelScale': minWheelScale,
-        'maxWheelScale': maxWheelScale,
-        'penWidth': penWidth,
-        'highlighterWidth': highlighterWidth,
-        'eraserWidth': eraserWidth,
-        'showHex': showHex,
-      };
+    'minWheelScale': minWheelScale,
+    'maxWheelScale': maxWheelScale,
+    'penWidth': penWidth,
+    'highlighterWidth': highlighterWidth,
+    'eraserWidth': eraserWidth,
+    'showHex': showHex,
+  };
 
   factory EditorSettings.fromJson(Map<String, dynamic> json) {
     double read(String k, double fallback) {
@@ -286,22 +299,25 @@ class WheelTheme {
   /// by hue, split into contiguous hue families, and order each family
   /// light→dark outward. Family count targets ~4 per family (big cells) without
   /// exceeding [maxBands]; unequal remainders create the ragged outer edge.
-  factory WheelTheme.fromColors(String name, List<int> colors,
-          {bool builtIn = false}) =>
-      WheelTheme(
-        name: name,
-        sectors: arrangeIntoWheel(colors),
-        builtIn: builtIn,
-        sourceColors: List<int>.unmodifiable(colors),
-      );
+  factory WheelTheme.fromColors(
+    String name,
+    List<int> colors, {
+    bool builtIn = false,
+  }) => WheelTheme(
+    name: name,
+    sectors: arrangeIntoWheel(colors),
+    builtIn: builtIn,
+    sourceColors: List<int>.unmodifiable(colors),
+  );
 
   static List<List<int>> arrangeIntoWheel(List<int> colors) {
     if (colors.isEmpty) return const [];
-    final items = colors.map((c) {
-      final hsv = HSVColor.fromColor(Color(0xFF000000 | c));
-      return (hex: c & 0xFFFFFF, hue: hsv.hue, val: hsv.value);
-    }).toList()
-      ..sort((a, b) => a.hue.compareTo(b.hue));
+    final items =
+        colors.map((c) {
+            final hsv = HSVColor.fromColor(Color(0xFF000000 | c));
+            return (hex: c & 0xFFFFFF, hue: hsv.hue, val: hsv.value);
+          }).toList()
+          ..sort((a, b) => a.hue.compareTo(b.hue));
     final n = items.length;
     var families = (n / 4).round().clamp(1, 18);
     if ((n / families).ceil() > maxBands) families = (n / maxBands).ceil();
@@ -324,13 +340,19 @@ class WheelTheme {
 
   /// Built-in themes (not persisted). The first is the default.
   static List<WheelTheme> builtIns() => [
-        const WheelTheme(
-            name: 'Spectrum', sectors: _kSpectrumSectors, builtIn: true),
-        WheelTheme.fromColors('Grayscale', _kGrayscale, builtIn: true),
-      ];
+    const WheelTheme(
+      name: 'Spectrum',
+      sectors: _kSpectrumSectors,
+      builtIn: true,
+    ),
+    WheelTheme.fromColors('Grayscale', _kGrayscale, builtIn: true),
+  ];
 
-  static const WheelTheme fallback =
-      WheelTheme(name: 'Spectrum', sectors: _kSpectrumSectors, builtIn: true);
+  static const WheelTheme fallback = WheelTheme(
+    name: 'Spectrum',
+    sectors: _kSpectrumSectors,
+    builtIn: true,
+  );
 }
 
 // Default "Spectrum" palette. GENERATED by scratchpad/gen_palette2.py (seed
@@ -359,6 +381,15 @@ const List<List<int>> _kSpectrumSectors = [
 
 // Example built-in built from a curated flat set (demonstrates fromColors).
 const List<int> _kGrayscale = [
-  0xFFFFFF, 0xE6E6E6, 0xCCCCCC, 0xB3B3B3, 0x999999, 0x808080,
-  0x666666, 0x4D4D4D, 0x333333, 0x1A1A1A, 0x000000,
+  0xFFFFFF,
+  0xE6E6E6,
+  0xCCCCCC,
+  0xB3B3B3,
+  0x999999,
+  0x808080,
+  0x666666,
+  0x4D4D4D,
+  0x333333,
+  0x1A1A1A,
+  0x000000,
 ];

@@ -49,6 +49,22 @@ class PlannerApi {
     );
   }
 
+  static Future<Map<String, dynamic>> getPhaseWeeks(
+    planId,
+    phaseId,
+    userId,
+  ) async {
+    final response = await http.get(
+      Uri.parse("$plannerEnpoint/$planId/weeks/phase/$phaseId"),
+      headers: await ApiConfig.headers(userId: userId),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+    throw Exception("Failed to get Phase Weeks");
+  }
+
   static Future<Map<String, dynamic>> studyPlan(String planId) async {
     final response = await http.get(Uri.parse("$plannerEnpoint/$planId"));
     if (response.statusCode == 200) {
@@ -94,6 +110,20 @@ class PlannerApi {
     );
     if (response.statusCode != 200) {
       throw Exception("Failed to complete task (${response.statusCode})");
+    }
+  }
+
+  static Future<void> statusUpdate({
+    required String planId,
+    required String status,
+    required String userId,
+  }) async {
+    final response = await http.post(
+      Uri.parse("$plannerEnpoint/update/$planId/$status"),
+      headers: await ApiConfig.headers(userId: userId),
+    );
+    if (response.statusCode != 200) {
+      throw Exception("Failed to update status(${response.statusCode})");
     }
   }
 

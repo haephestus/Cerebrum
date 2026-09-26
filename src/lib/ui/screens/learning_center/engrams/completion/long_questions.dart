@@ -1,7 +1,9 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
 import 'package:cerebrum/services/engram_sync_service.dart';
+import 'package:cerebrum/ui/widgets/learning_center/completion/long_question_status_cards.dart';
 
 class LongQuestionCompletionPage extends StatefulWidget {
   final Engram engram;
@@ -104,16 +106,24 @@ class _LongQuestionCompletionPageState
           ),
           const SizedBox(height: 16),
           if (_loading)
-            const Center(child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
-            ))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              ),
+            )
           else if (_attempt == null)
             _buildForm()
           else if (_attempt!.isGraded)
-            _GradedCard(attempt: _attempt!, onAnswerAgain: _answerAgain)
+            LongQuestionGradedCard(
+              attempt: _attempt!,
+              onAnswerAgain: _answerAgain,
+            )
           else
-            _PendingCard(attempt: _attempt!, onAnswerAgain: _answerAgain),
+            LongQuestionPendingCard(
+              attempt: _attempt!,
+              onAnswerAgain: _answerAgain,
+            ),
           // Reveal-after-answer: model answer / mark scheme for self-comparison
           // (only present when engrams were fetched with answers).
           if (!_loading && _attempt != null) _buildModelAnswer(c),
@@ -128,19 +138,23 @@ class _LongQuestionCompletionPageState
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Card(
-        color: Colors.grey.shade100,
+        color: context.cerebrum.surface.sunken,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Model answer',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                'Model answer',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               if ((c.answer ?? '').isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(c.answer!),
               ],
-              ...c.parts.where((p) => (p.markScheme ?? '').isNotEmpty).map(
+              ...c.parts
+                  .where((p) => (p.markScheme ?? '').isNotEmpty)
+                  .map(
                     (p) => Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text('(${p.part}) ${p.markScheme}'),
@@ -168,129 +182,16 @@ class _LongQuestionCompletionPageState
         const SizedBox(height: 16),
         ElevatedButton(
           onPressed: _submitting ? null : _submit,
-          child: _submitting
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Submit for grading'),
+          child:
+              _submitting
+                  ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Text('Submit for grading'),
         ),
       ],
-    );
-  }
-}
-
-/// Shown while an answer is queued offline or grading server-side.
-class _PendingCard extends StatelessWidget {
-  const _PendingCard({required this.attempt, required this.onAnswerAgain});
-  final EngramAttempt attempt;
-  final VoidCallback onAnswerAgain;
-
-  @override
-  Widget build(BuildContext context) {
-    final queued = attempt.isQueued;
-    return Card(
-      color: Colors.amber.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(queued ? Icons.cloud_off : Icons.hourglass_top,
-                    size: 20, color: Colors.amber.shade800),
-                const SizedBox(width: 8),
-                Text(
-                  queued ? 'Saved — will submit when online' : 'Grading in progress',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              queued
-                  ? "Your answer is stored on this device and will be sent for "
-                      "grading automatically once you're back online."
-                  : "Your answer was submitted. The result will appear here when "
-                      "grading finishes.",
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                OutlinedButton(
-                  onPressed: onAnswerAgain,
-                  child: const Text('Answer again'),
-                ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Shown once the LLM grade is back.
-class _GradedCard extends StatelessWidget {
-  const _GradedCard({required this.attempt, required this.onAnswerAgain});
-  final EngramAttempt attempt;
-  final VoidCallback onAnswerAgain;
-
-  @override
-  Widget build(BuildContext context) {
-    final result = attempt.result ?? const {};
-    // Result schema is daemon-defined; render the common fields if present,
-    // otherwise fall back to a readable dump so nothing is lost.
-    final score = result['score'] ?? result['marks'] ?? result['grade'];
-    final feedback = result['feedback'] ?? result['comment'] ?? result['rationale'];
-
-    return Card(
-      color: Colors.green.shade50,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
-                const SizedBox(width: 8),
-                const Text('Graded', style: TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (score != null)
-              Text('Score: $score', style: const TextStyle(fontSize: 16)),
-            if (feedback != null) ...[
-              const SizedBox(height: 8),
-              Text('$feedback'),
-            ],
-            if (score == null && feedback == null)
-              Text(result.isEmpty ? 'No detail returned.' : result.toString()),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                OutlinedButton(
-                  onPressed: onAnswerAgain,
-                  child: const Text('Answer again'),
-                ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -20,13 +21,9 @@ const String kAiStatusKey = 'ai_status'; // idle | loading | done | error
 
 /// Builds an AI-feedback node. No delta — it isn't editable text.
 Node aiBlockNode({String prompt = ''}) => Node(
-      type: kAiBlockType,
-      attributes: {
-        kAiPromptKey: prompt,
-        kAiFeedbackKey: '',
-        kAiStatusKey: 'idle',
-      },
-    );
+  type: kAiBlockType,
+  attributes: {kAiPromptKey: prompt, kAiFeedbackKey: '', kAiStatusKey: 'idle'},
+);
 
 class AiBlockComponentBuilder extends BlockComponentBuilder {
   AiBlockComponentBuilder({super.configuration});
@@ -64,8 +61,9 @@ class _AiBlockComponentWidgetState extends State<AiBlockComponentWidget> {
       Provider.of<EditorState>(context, listen: false);
 
   void _update(Map<String, dynamic> patch) {
-    final tx = editorState.transaction
-      ..updateNode(node, {...node.attributes, ...patch});
+    final tx =
+        editorState.transaction
+          ..updateNode(node, {...node.attributes, ...patch});
     editorState.apply(tx);
   }
 
@@ -95,23 +93,29 @@ class _AiBlockComponentWidgetState extends State<AiBlockComponentWidget> {
           margin: const EdgeInsets.symmetric(vertical: 6),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFFF3F0FA),
+            color: context.cerebrum.surface.sunken,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFD8CFF0)),
+            border: Border.all(color: context.cerebrum.surface.outline),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.auto_awesome,
-                      size: 16, color: Color(0xFF6C4BD8)),
+                  Icon(
+                    Icons.auto_awesome,
+                    size: 16,
+                    color: context.cerebrum.brand.primary,
+                  ),
                   const SizedBox(width: 6),
-                  const Text('AI feedback',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF4B3B7A))),
+                  Text(
+                    'AI feedback',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: context.cerebrum.brand.primaryDeep,
+                    ),
+                  ),
                   const Spacer(),
                   if (status == 'loading')
                     const SizedBox(
@@ -129,11 +133,14 @@ class _AiBlockComponentWidgetState extends State<AiBlockComponentWidget> {
               if (prompt.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 2, bottom: 6),
-                  child: Text(prompt,
-                      style: const TextStyle(
-                          fontSize: 11,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.black54)),
+                  child: Text(
+                    prompt,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                      color: context.cerebrum.text.muted,
+                    ),
+                  ),
                 ),
               Text(
                 feedback.isEmpty
@@ -141,7 +148,10 @@ class _AiBlockComponentWidgetState extends State<AiBlockComponentWidget> {
                     : feedback,
                 style: TextStyle(
                   fontSize: 13,
-                  color: feedback.isEmpty ? Colors.black38 : Colors.black87,
+                  color:
+                      feedback.isEmpty
+                          ? context.cerebrum.text.disabled
+                          : context.cerebrum.text.strong,
                 ),
               ),
             ],

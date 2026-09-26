@@ -103,9 +103,9 @@ class BubblesApi {
     };
 
     final response = await http.post(
-      Uri.parse("$bubblesEndpoint/create").replace(
-        queryParameters: {"bubble_id": bubbleId},
-      ),
+      Uri.parse(
+        "$bubblesEndpoint/create",
+      ).replace(queryParameters: {"bubble_id": bubbleId}),
       headers: await ApiConfig.headers(),
       body: jsonEncode(bubbleData),
     );
@@ -273,7 +273,8 @@ class BubbleNotesApi {
     required List<Map<String, dynamic>> pages,
     String? noteId,
   }) async {
-    final id = noteId ??
+    final id =
+        noteId ??
         (filename.endsWith('.json')
             ? filename.substring(0, filename.length - 5)
             : filename);

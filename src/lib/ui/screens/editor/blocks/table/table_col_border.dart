@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -90,9 +91,10 @@ class _TableColBorderState extends State<TableColBorder> {
           height: context.select(
             (Node n) => n.attributes[CerebrumTableBlockKeys.colsHeight],
           ),
-          color: _borderHovering || _borderDragging
-              ? widget.borderHoverColor
-              : widget.borderColor,
+          color:
+              _borderHovering || _borderDragging
+                  ? widget.borderHoverColor
+                  : widget.borderColor,
         ),
       ),
     );
@@ -104,7 +106,7 @@ class _TableColBorderState extends State<TableColBorder> {
       height: context.select(
         (Node n) => n.attributes[CerebrumTableBlockKeys.colsHeight],
       ),
-      color: Colors.grey,
+      color: context.cerebrum.surface.outlineStrong,
     );
   }
 }

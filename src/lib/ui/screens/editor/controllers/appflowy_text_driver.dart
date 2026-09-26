@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/widgets.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -95,8 +96,9 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// [requestEditorFocus]; without it a note opens / a mode flips with no
   /// caret and the user has to click to navigate. Passed to AppFlowyEditor's
   /// `focusNode:` so the keyboard service uses THIS node and taps focus it.
-  final FocusNode editorFocusNode =
-      FocusNode(debugLabel: 'cerebrum-page-editor');
+  final FocusNode editorFocusNode = FocusNode(
+    debugLabel: 'cerebrum-page-editor',
+  );
 
   bool _disposed = false;
 
@@ -519,9 +521,10 @@ class AppFlowyTextDriver extends ChangeNotifier
       return;
     }
     final wanted = blockIds.toSet();
-    _highlightedBlockIds = colorString == null
-        ? _highlightedBlockIds.difference(wanted)
-        : _highlightedBlockIds.union(wanted);
+    _highlightedBlockIds =
+        colorString == null
+            ? _highlightedBlockIds.difference(wanted)
+            : _highlightedBlockIds.union(wanted);
 
     final nodes = <Node>[];
     for (final child in _editorState.document.root.children) {
@@ -856,7 +859,9 @@ class _HeadingIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color =
-        isSelected ? const Color(0xFF2E7BF6) : const Color(0xFF44474D);
+        isSelected
+            ? context.cerebrum.code.selection
+            : context.cerebrum.code.textDefault;
     return SizedBox(
       width: 20,
       height: 18,

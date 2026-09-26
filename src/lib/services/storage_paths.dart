@@ -80,7 +80,10 @@ class StoragePaths {
     }
   }
 
-  static Future<void> _copyRecursively(Directory source, Directory target) async {
+  static Future<void> _copyRecursively(
+    Directory source,
+    Directory target,
+  ) async {
     for (final entity in source.listSync(recursive: true)) {
       final relative = entity.path.substring(source.path.length + 1);
       final destination = '${target.path}/$relative';

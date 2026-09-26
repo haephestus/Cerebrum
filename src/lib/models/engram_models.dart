@@ -228,6 +228,7 @@ class LongQuestionContent extends EngramContent {
 
 class Engram {
   final String id;
+  final String? bubbleId;
   final String noteId;
   final EngramType type;
   final int targetCognitiveLevel;
@@ -244,6 +245,7 @@ class Engram {
 
   Engram({
     required this.id,
+    this.bubbleId,
     required this.noteId,
     required this.type,
     required this.targetCognitiveLevel,
@@ -278,14 +280,16 @@ class Engram {
     final scheduledRaw = json['scheduled_at'] ?? json['due_at'];
     return Engram(
       id: json['id'] as String,
+      bubbleId: json['bubble_id'] as String?,
       noteId: json['note_id'] as String,
       type: type,
       targetCognitiveLevel: json['target_cognitive_level'] as int,
       tags: List<String>.from(json['tags'] as List),
       content: content,
-      scheduledAt: scheduledRaw is String
-          ? DateTime.tryParse(scheduledRaw)?.toLocal()
-          : null,
+      scheduledAt:
+          scheduledRaw is String
+              ? DateTime.tryParse(scheduledRaw)?.toLocal()
+              : null,
       state: json['state'] as String?,
     );
   }

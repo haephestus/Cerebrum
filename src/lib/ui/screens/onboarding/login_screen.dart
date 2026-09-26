@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/api/user_api.dart';
 
@@ -61,15 +62,23 @@ class _LoginScreenState extends State<LoginScreen> {
       widget.onLoggedIn();
     } on AccountAlreadyExistsException {
       if (!mounted) return;
-      setState(() => _errorMessage =
-          'An account with that email already exists. Try logging in.');
+      setState(
+        () =>
+            _errorMessage =
+                'An account with that email already exists. Try logging in.',
+      );
     } on InvalidCredentialsException {
       if (!mounted) return;
       setState(() => _errorMessage = 'Invalid email or password.');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorMessage =
-          _isSignup ? 'Could not create your account.' : 'Could not log in.');
+      setState(
+        () =>
+            _errorMessage =
+                _isSignup
+                    ? 'Could not create your account.'
+                    : 'Could not log in.',
+      );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -78,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.cerebrum.surface.canvas,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
@@ -90,13 +99,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.bubble_chart, size: 64, color: Colors.black87),
+                  Icon(
+                    Icons.bubble_chart,
+                    size: 64,
+                    color: context.cerebrum.text.strong,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     _isSignup ? 'Create your account' : 'Welcome back',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold),
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 32),
                   if (_isSignup) ...[
@@ -138,11 +153,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       labelText: 'Password',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility),
-                        onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed:
+                            () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                       ),
                     ),
                     validator: (value) {
@@ -159,7 +178,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 16),
                     Text(
                       _errorMessage!,
-                      style: const TextStyle(color: Colors.red),
+                      style: TextStyle(color: context.cerebrum.status.danger),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -167,17 +186,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   FilledButton(
                     onPressed: _isSubmitting ? null : _submit,
                     style: FilledButton.styleFrom(
-                      backgroundColor: Colors.black,
+                      backgroundColor: context.cerebrum.text.strong,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: _isSubmitting
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
-                          )
-                        : Text(_isSignup ? 'Create account' : 'Log in'),
+                    child:
+                        _isSubmitting
+                            ? SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: context.cerebrum.text.onBrand,
+                              ),
+                            )
+                            : Text(_isSignup ? 'Create account' : 'Log in'),
                   ),
                   const SizedBox(height: 12),
                   TextButton(

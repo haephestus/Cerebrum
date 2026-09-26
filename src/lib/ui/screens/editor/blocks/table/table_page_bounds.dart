@@ -19,8 +19,8 @@ class PagedTableBounds extends InheritedWidget {
 
   final GlobalKey sheetKey;
 
-  static PagedTableBounds? maybeOf(BuildContext context) => context
-      .getInheritedWidgetOfExactType<PagedTableBounds>();
+  static PagedTableBounds? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<PagedTableBounds>();
 
   @override
   bool updateShouldNotify(PagedTableBounds oldWidget) =>
@@ -32,11 +32,7 @@ class PagedTableBounds extends InheritedWidget {
 /// — the caller then falls back to the stock behaviour (and the overflow
 /// splitter still enforces the page bound on row growth).
 class TablePageBounds {
-  const TablePageBounds({
-    this.sheetWidth,
-    this.sheetHeight,
-    this.tableTop,
-  });
+  const TablePageBounds({this.sheetWidth, this.sheetHeight, this.tableTop});
 
   final double? sheetWidth;
   final double? sheetHeight;
@@ -54,10 +50,7 @@ class TablePageBounds {
 
   /// True when adding a column of [newColWidth] keeps the table row
   /// (columns + add button) within the sheet's content width.
-  bool canAddCol({
-    required double tableWidth,
-    required double newColWidth,
-  }) {
+  bool canAddCol({required double tableWidth, required double newColWidth}) {
     final w = sheetWidth;
     if (w == null) return true;
     return tableWidth + newColWidth + addButtonSize <= w;

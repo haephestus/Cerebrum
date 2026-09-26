@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -41,80 +42,79 @@ class CerebrumTableBlockComponentBuilder extends BlockComponentBuilder {
       menuBuilder: menuBuilder,
       tableStyle: tableStyle,
       showActions: showActions(node),
-      actionBuilder: (context, state) => actionBuilder(
-        blockComponentContext,
-        state,
-      ),
-      actionTrailingBuilder: (context, state) => actionTrailingBuilder(
-        blockComponentContext,
-        state,
-      ),
+      actionBuilder:
+          (context, state) => actionBuilder(blockComponentContext, state),
+      actionTrailingBuilder:
+          (context, state) =>
+              actionTrailingBuilder(blockComponentContext, state),
     );
   }
 
   @override
   BlockComponentValidate get validate => (node) {
-        // check the node is valid
-        if (node.attributes.isEmpty) {
-          AppFlowyEditorLog.editor
-              .debug('CerebrumTableBlockComponentBuilder: node is empty');
-          return false;
-        }
+    // check the node is valid
+    if (node.attributes.isEmpty) {
+      AppFlowyEditorLog.editor.debug(
+        'CerebrumTableBlockComponentBuilder: node is empty',
+      );
+      return false;
+    }
 
-        // check the node has colLen and rowsLen
-        if (!node.attributes.containsKey(CerebrumTableBlockKeys.colsLen) ||
-            !node.attributes.containsKey(CerebrumTableBlockKeys.rowsLen)) {
+    // check the node has colLen and rowsLen
+    if (!node.attributes.containsKey(CerebrumTableBlockKeys.colsLen) ||
+        !node.attributes.containsKey(CerebrumTableBlockKeys.rowsLen)) {
+      AppFlowyEditorLog.editor.debug(
+        'CerebrumTableBlockComponentBuilder: node has no colsLen or rowsLen',
+      );
+      return false;
+    }
+
+    final colsLen = node.attributes[CerebrumTableBlockKeys.colsLen];
+    final rowsLen = node.attributes[CerebrumTableBlockKeys.rowsLen];
+
+    // check its children
+    final children = node.children;
+    if (children.isEmpty) {
+      AppFlowyEditorLog.editor.debug(
+        'CerebrumTableBlockComponentBuilder: children is empty',
+      );
+      return false;
+    }
+
+    if (children.length != colsLen * rowsLen) {
+      AppFlowyEditorLog.editor.debug(
+        'CerebrumTableBlockComponentBuilder: children length(${children.length}) is not equal to colsLen * rowsLen($colsLen * $rowsLen)',
+      );
+      return false;
+    }
+
+    // all children should contain rowPosition and colPosition
+    for (var i = 0; i < colsLen; i++) {
+      for (var j = 0; j < rowsLen; j++) {
+        final child = children.where(
+          (n) =>
+              n.attributes[CerebrumTableCellKeys.colPosition] == i &&
+              n.attributes[CerebrumTableCellKeys.rowPosition] == j,
+        );
+        if (child.isEmpty) {
           AppFlowyEditorLog.editor.debug(
-            'CerebrumTableBlockComponentBuilder: node has no colsLen or rowsLen',
+            'CerebrumTableBlockComponentBuilder: child($i, $j) is empty',
           );
           return false;
         }
 
-        final colsLen = node.attributes[CerebrumTableBlockKeys.colsLen];
-        final rowsLen = node.attributes[CerebrumTableBlockKeys.rowsLen];
-
-        // check its children
-        final children = node.children;
-        if (children.isEmpty) {
-          AppFlowyEditorLog.editor
-              .debug('CerebrumTableBlockComponentBuilder: children is empty');
-          return false;
-        }
-
-        if (children.length != colsLen * rowsLen) {
+        // should only contains one child
+        if (child.length != 1) {
           AppFlowyEditorLog.editor.debug(
-            'CerebrumTableBlockComponentBuilder: children length(${children.length}) is not equal to colsLen * rowsLen($colsLen * $rowsLen)',
+            'CerebrumTableBlockComponentBuilder: child($i, $j) is not unique',
           );
           return false;
         }
+      }
+    }
 
-        // all children should contain rowPosition and colPosition
-        for (var i = 0; i < colsLen; i++) {
-          for (var j = 0; j < rowsLen; j++) {
-            final child = children.where(
-              (n) =>
-                  n.attributes[CerebrumTableCellKeys.colPosition] == i &&
-                  n.attributes[CerebrumTableCellKeys.rowPosition] == j,
-            );
-            if (child.isEmpty) {
-              AppFlowyEditorLog.editor.debug(
-                'CerebrumTableBlockComponentBuilder: child($i, $j) is empty',
-              );
-              return false;
-            }
-
-            // should only contains one child
-            if (child.length != 1) {
-              AppFlowyEditorLog.editor.debug(
-                'CerebrumTableBlockComponentBuilder: child($i, $j) is not unique',
-              );
-              return false;
-            }
-          }
-        }
-
-        return true;
-      };
+    return true;
+  };
 }
 
 class CerebrumTableStyle {
@@ -124,8 +124,11 @@ class CerebrumTableStyle {
   final double borderWidth;
   final Widget addIcon;
   final Widget handlerIcon;
-  final Color borderColor;
-  final Color borderHoverColor;
+
+  /// Overrides for the themed defaults. `null` means "resolve from the
+  /// active theme at paint time", which is why these cannot be const.
+  final Color? borderColor;
+  final Color? borderHoverColor;
 
   const CerebrumTableStyle({
     this.colWidth = 160,
@@ -134,9 +137,17 @@ class CerebrumTableStyle {
     this.borderWidth = 2,
     this.addIcon = CerebrumTableDefaults.addIcon,
     this.handlerIcon = CerebrumTableDefaults.handlerIcon,
-    this.borderColor = CerebrumTableDefaults.borderColor,
-    this.borderHoverColor = CerebrumTableDefaults.borderHoverColor,
+    this.borderColor,
+    this.borderHoverColor,
   });
+
+  /// Cell border, themed unless explicitly overridden.
+  Color border(BuildContext context) =>
+      borderColor ?? context.cerebrum.surface.outlineStrong;
+
+  /// Border while the column is hovered/resizing, themed unless overridden.
+  Color borderHover(BuildContext context) =>
+      borderHoverColor ?? context.cerebrum.brand.primary;
 }
 
 class CerebrumTableDefaults {
@@ -153,20 +164,17 @@ class CerebrumTableDefaults {
   static const Widget addIcon = Icon(Icons.add, size: 20);
 
   static const Widget handlerIcon = Icon(Icons.drag_indicator);
-
-  static const Color borderColor = Colors.grey;
-
-  static const Color borderHoverColor = Colors.blue;
 }
 
-typedef CerebrumTableBlockComponentMenuBuilder = Widget Function(
-  Node,
-  EditorState,
-  int,
-  TableDirection,
-  VoidCallback?,
-  VoidCallback?,
-);
+typedef CerebrumTableBlockComponentMenuBuilder =
+    Widget Function(
+      Node,
+      EditorState,
+      int,
+      TableDirection,
+      VoidCallback?,
+      VoidCallback?,
+    );
 
 class CerebrumTableBlockComponentWidget extends BlockComponentStatefulWidget {
   const CerebrumTableBlockComponentWidget({
@@ -221,11 +229,7 @@ class _CerebrumTableBlockComponentWidgetState
       ),
     );
 
-    child = Padding(
-      key: tableKey,
-      padding: padding,
-      child: child,
-    );
+    child = Padding(key: tableKey, padding: padding, child: child);
 
     child = BlockSelectionContainer(
       node: node,
@@ -233,9 +237,7 @@ class _CerebrumTableBlockComponentWidgetState
       listenable: editorState.selectionNotifier,
       remoteSelection: editorState.remoteSelections,
       blockColor: editorState.editorStyle.selectionColor,
-      supportTypes: const [
-        BlockSelectionType.block,
-      ],
+      supportTypes: const [BlockSelectionType.block],
       child: child,
     );
 
@@ -283,11 +285,8 @@ class _CerebrumTableBlockComponentWidgetState
   }
 
   @override
-  Selection getSelectionInRange(Offset start, Offset end) => Selection.single(
-        path: widget.node.path,
-        startOffset: 0,
-        endOffset: 1,
-      );
+  Selection getSelectionInRange(Offset start, Offset end) =>
+      Selection.single(path: widget.node.path, startOffset: 0, endOffset: 1);
 
   @override
   bool get shouldCursorBlink => false;
@@ -296,16 +295,11 @@ class _CerebrumTableBlockComponentWidgetState
   CursorStyle get cursorStyle => CursorStyle.cover;
 
   @override
-  Offset localToGlobal(
-    Offset offset, {
-    bool shiftWithBaseOffset = false,
-  }) =>
+  Offset localToGlobal(Offset offset, {bool shiftWithBaseOffset = false}) =>
       _renderBox.localToGlobal(offset);
 
   @override
-  Rect getBlockRect({
-    bool shiftWithBaseOffset = false,
-  }) {
+  Rect getBlockRect({bool shiftWithBaseOffset = false}) {
     return getRectsInSelection(Selection.invalid()).first;
   }
 

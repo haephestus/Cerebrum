@@ -1,5 +1,5 @@
 import 'package:cerebrum/ui/screens/home/gap_extract.dart';
-import 'package:cerebrum/ui/screens/home/gap_models.dart';
+import 'package:cerebrum/models/gap_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Fixtures model the REAL daemon payload (verified 2026-09-09):

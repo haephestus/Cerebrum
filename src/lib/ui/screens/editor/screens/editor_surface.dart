@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/text_editing_driver.dart';
@@ -71,13 +72,16 @@ class _ModeBadge extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: isNormal ? Colors.blueGrey : Colors.teal,
+          color:
+              isNormal
+                  ? context.cerebrum.editor.modeBadgeNormal
+                  : context.cerebrum.editor.modeBadgeInsert,
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
           isNormal ? 'NORMAL' : 'INSERT',
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: context.cerebrum.text.onModeBadge,
             fontSize: 11,
             fontWeight: FontWeight.bold,
             letterSpacing: 1,

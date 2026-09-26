@@ -49,28 +49,30 @@ class _TableActionHandlerState extends State<TableActionHandler> {
       transform: widget.transform,
       height: widget.height,
       child: Visibility(
-        visible: (widget.visible || _visible || _menuShown) &&
+        visible:
+            (widget.visible || _visible || _menuShown) &&
             widget.editorState.editable,
         child: MouseRegion(
           onEnter: (_) => setState(() => _visible = true),
           onExit: (_) => setState(() => _visible = false),
-          child: widget.menuBuilder != null
-              ? widget.menuBuilder!(
-                  widget.node,
-                  widget.editorState,
-                  widget.position,
-                  widget.dir,
-                  () => _menuShown = true,
-                  () => setState(() => _menuShown = false),
-                )
-              : defaultMenuBuilder(
-                  context,
-                  widget.node,
-                  widget.editorState,
-                  widget.position,
-                  widget.dir,
-                  tableAnchorKey: widget.tableAnchorKey,
-                ),
+          child:
+              widget.menuBuilder != null
+                  ? widget.menuBuilder!(
+                    widget.node,
+                    widget.editorState,
+                    widget.position,
+                    widget.dir,
+                    () => _menuShown = true,
+                    () => setState(() => _menuShown = false),
+                  )
+                  : defaultMenuBuilder(
+                    context,
+                    widget.node,
+                    widget.editorState,
+                    widget.position,
+                    widget.dir,
+                    tableAnchorKey: widget.tableAnchorKey,
+                  ),
         ),
       ),
     );
@@ -106,12 +108,13 @@ Widget defaultMenuBuilder(
             pageBounds: pageBounds,
           );
         },
-        child: dir == TableDirection.col
-            ? Transform.rotate(
-                angle: math.pi / 2,
-                child: CerebrumTableDefaults.handlerIcon,
-              )
-            : CerebrumTableDefaults.handlerIcon,
+        child:
+            dir == TableDirection.col
+                ? Transform.rotate(
+                  angle: math.pi / 2,
+                  child: CerebrumTableDefaults.handlerIcon,
+                )
+                : CerebrumTableDefaults.handlerIcon,
       ),
     ),
   );

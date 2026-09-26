@@ -73,6 +73,20 @@ class ConfigsApi {
     }
   }
 
+  static Future<Map<String, dynamic>> updateOllamaKey(String ollamaKey) async {
+    final response = await http.post(
+      Uri.parse(
+        "$configsEndpoint/config/models/ollama_key?ollama_key=$ollamaKey",
+      ),
+      headers: await ApiConfig.headers(),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception("Failed to update ollama key: ${response.body}");
+    }
+  }
+
   // Fixed: Use correct endpoint for Ollama status
   static Future<Map<String, dynamic>> fetchOllamaStatus() async {
     final response = await http.get(

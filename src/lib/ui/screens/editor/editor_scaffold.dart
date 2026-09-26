@@ -15,6 +15,7 @@ import 'package:cerebrum/ui/screens/editor/controllers/text_editing_driver.dart'
 import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
 import 'package:cerebrum/ui/screens/editor/screens/paged_editor.dart';
 import 'package:cerebrum/ui/screens/editor/screens/radial_tool_dial.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 
@@ -455,7 +456,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to update analysis setting: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: context.cerebrum.status.danger,
           ),
         );
       }
@@ -783,9 +784,9 @@ class _EditorScaffoldState extends State<EditorScaffold> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Analysis generated successfully!'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Text('Analysis generated successfully!'),
+            backgroundColor: context.cerebrum.status.success,
           ),
         );
       }
@@ -805,7 +806,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to generate analysis: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: context.cerebrum.status.danger,
           ),
         );
       }
@@ -889,9 +890,10 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       if (selectable != null) {
         final start = selectable.start();
         final end = selectable.end();
-        target = start == end
-            ? Selection.collapsed(start)
-            : Selection(start: start, end: end);
+        target =
+            start == end
+                ? Selection.collapsed(start)
+                : Selection(start: start, end: end);
       }
     }
     if (target == null && document.root.children.isNotEmpty) {
@@ -1040,8 +1042,9 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                     cur == null
                         ? 'No analysis chunks'
                         : 'Chunk ${_analysisMode.index + 1} / ${_analysisMode.count}';
+                final tokens = context.cerebrum;
                 return Material(
-                  color: Colors.deepPurple,
+                  color: tokens.brand.primary,
                   borderRadius: BorderRadius.circular(24),
                   elevation: 4,
                   child: Padding(
@@ -1050,9 +1053,9 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.chevron_left,
-                            color: Colors.white,
+                            color: tokens.brand.onPrimary,
                           ),
                           onPressed:
                               _analysisMode.hasChunks
@@ -1061,15 +1064,15 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                         ),
                         Text(
                           label,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: tokens.brand.onPrimary,
                             fontSize: 12,
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.chevron_right,
-                            color: Colors.white,
+                            color: tokens.brand.onPrimary,
                           ),
                           onPressed:
                               _analysisMode.hasChunks
@@ -1079,9 +1082,9 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                         const SizedBox(width: 4),
                         TextButton(
                           onPressed: _analysisMode.openFullPanel,
-                          child: const Text(
+                          child: Text(
                             'Full analysis',
-                            style: TextStyle(color: Colors.white),
+                            style: TextStyle(color: tokens.brand.onPrimary),
                           ),
                         ),
                       ],
@@ -1119,10 +1122,11 @@ class _EditorScaffoldState extends State<EditorScaffold> {
           animation: vimMode,
           builder: (context, __) {
             if (!vimMode.isEnabled) return const SizedBox.shrink();
+            final editor = context.cerebrum.editor;
             final (label, color) = switch (vimMode.value) {
-              VimMode.normal => ('NORMAL', Colors.blueGrey),
-              VimMode.insert => ('INSERT', Colors.teal),
-              VimMode.analysis => ('ANALYSIS', Colors.deepPurple),
+              VimMode.normal => ('NORMAL', editor.modeBadgeNormal),
+              VimMode.insert => ('INSERT', editor.modeBadgeInsert),
+              VimMode.analysis => ('ANALYSIS', editor.modeBadgeAnalysis),
             };
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1132,8 +1136,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
               ),
               child: Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.cerebrum.text.onModeBadge,
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1,
@@ -1209,11 +1213,11 @@ class _EditorScaffoldState extends State<EditorScaffold> {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
           if (_isGeneratingAnalysis)
-            const Padding(
-              padding: EdgeInsets.all(12),
+            Padding(
+              padding: const EdgeInsets.all(12),
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.orange,
+                color: context.cerebrum.editor.analysisBadge,
               ),
             ),
 
@@ -1363,7 +1367,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   CheckedPopupMenuItem<String>(
                     value: 'toggle_vim_mode',
                     checked: _vimModeEnabled,
-                    enabled: _vimModeAvailable && !_editorController.drawingEnabled,
+                    enabled:
+                        _vimModeAvailable && !_editorController.drawingEnabled,
                     child: Text(
                       _vimModeAvailable
                           ? 'Neovim keybindings'
@@ -1372,7 +1377,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   ),
                   PopupMenuItem<String>(
                     value: 'enter_analysis_mode',
-                    enabled: _vimModeEnabled && !_editorController.drawingEnabled,
+                    enabled:
+                        _vimModeEnabled && !_editorController.drawingEnabled,
                     child: const Text('Analysis review mode (vim)'),
                   ),
                 ],
@@ -1393,16 +1399,16 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                 animation: _editorController,
                 builder: (context, _) {
                   final driver = _editorController.activeController.driver;
-                  final vimMode = driver is VimModeAware
-                      ? (driver as VimModeAware).vimMode
-                      : null;
+                  final vimMode =
+                      driver is VimModeAware
+                          ? (driver as VimModeAware).vimMode
+                          : null;
                   Widget pagedEditor() => PagedEditor(
                     controller: _editorController,
                     partialEraser: _partialEraser,
                     eraserWidth: _eraserWidth,
                     analysisForBlock:
-                        (_showAnalysisPanel ||
-                                (vimMode?.isAnalysis ?? false))
+                        (_showAnalysisPanel || (vimMode?.isAnalysis ?? false))
                             ? _lookupBlockAnalysis
                             : null,
                   );
@@ -1516,13 +1522,13 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                         ),
                         const Divider(),
                         if (!_analysisEnabled)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Text(
                               'Analysis is currently turned off for this note.',
                               style: TextStyle(
                                 fontStyle: FontStyle.italic,
-                                color: Colors.grey,
+                                color: context.cerebrum.text.muted,
                               ),
                             ),
                           ),
@@ -1618,7 +1624,9 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                                 hasUnsaved ? Icons.circle : Icons.check,
                                 size: 14,
                                 color:
-                                    hasUnsaved ? Colors.orange : Colors.green,
+                                    hasUnsaved
+                                        ? context.cerebrum.editor.unsavedBadge
+                                        : context.cerebrum.editor.savedBadge,
                               ),
                             const SizedBox(width: 6),
                             Text(
@@ -1650,17 +1658,18 @@ class _ChunkExpansionTile extends StatelessWidget {
 
   const _ChunkExpansionTile({required this.chunk});
 
-  Color _severityColor(String severity) {
+  Color _severityColor(BuildContext context, String severity) {
+    final status = context.cerebrum.status;
     switch (severity.toLowerCase()) {
       case 'critical':
       case 'high':
-        return Colors.red;
+        return status.danger;
       case 'medium':
-        return Colors.orange;
+        return status.warning;
       case 'low':
-        return Colors.green;
+        return status.success;
       default:
-        return Colors.grey;
+        return status.neutral;
     }
   }
 
@@ -1687,10 +1696,13 @@ class _ChunkExpansionTile extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: context.cerebrum.surface.sunken,
                   borderRadius: BorderRadius.circular(6),
                   border: Border(
-                    left: BorderSide(color: Colors.grey.shade400, width: 3),
+                    left: BorderSide(
+                      color: context.cerebrum.brand.primary,
+                      width: 3,
+                    ),
                   ),
                 ),
                 child: Text(
@@ -1718,7 +1730,7 @@ class _ChunkExpansionTile extends StatelessWidget {
 /// (only if it actually differs from the claim) / gap explanation.
 class _FindingTile extends StatelessWidget {
   final Map<String, dynamic> finding;
-  final Color Function(String) severityColor;
+  final Color Function(BuildContext, String) severityColor;
 
   const _FindingTile({required this.finding, required this.severityColor});
 
@@ -1734,7 +1746,7 @@ class _FindingTile extends StatelessWidget {
     return ExpansionTile(
       leading: CircleAvatar(
         radius: 6,
-        backgroundColor: severityColor(severity),
+        backgroundColor: severityColor(context, severity),
       ),
       title: Text(
         type,
@@ -1742,7 +1754,7 @@ class _FindingTile extends StatelessWidget {
       ),
       subtitle: Text(
         severity.toUpperCase(),
-        style: TextStyle(fontSize: 11, color: severityColor(severity)),
+        style: TextStyle(fontSize: 11, color: severityColor(context, severity)),
       ),
       children: [
         Padding(

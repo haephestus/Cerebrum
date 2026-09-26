@@ -99,12 +99,12 @@ class _PagedEditorState extends State<PagedEditor> {
                 // overflowing tail (from block `fromIndex`) onto the next page.
                 // A table reports a measured height budget so the controller
                 // can split it at a row boundary (see PagedNoteController).
-                onOverflow: (fromIndex, {tableAvailableHeight}) =>
-                    c.pushOverflow(
-                  i,
-                  fromIndex,
-                  tableAvailableHeight: tableAvailableHeight,
-                ),
+                onOverflow:
+                    (fromIndex, {tableAvailableHeight}) => c.pushOverflow(
+                      i,
+                      fromIndex,
+                      tableAvailableHeight: tableAvailableHeight,
+                    ),
               ),
             ),
           );

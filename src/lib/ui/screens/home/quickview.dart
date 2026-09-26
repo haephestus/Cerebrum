@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'dart:io';
 
 import 'package:cerebrum/services/note_store.dart';
@@ -5,7 +6,7 @@ import 'package:cerebrum/services/storage_paths.dart';
 import 'package:cerebrum/ui/screens/editor/editor_scaffold.dart';
 import 'package:flutter/material.dart';
 
-import 'gap_models.dart';
+import '../../../models/gap_models.dart';
 import 'gap_repository.dart';
 
 /// Home's primary "continue work" surface.
@@ -205,12 +206,12 @@ class _QuickviewState extends State<Quickview> with WidgetsBindingObserver {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
-            color: Colors.black,
-            child: const Text(
+            color: context.cerebrum.text.strong,
+            child: Text(
               'Where You Left Off',
               style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
+                color: context.cerebrum.text.onAccent,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -234,10 +235,10 @@ class _QuickviewState extends State<Quickview> with WidgetsBindingObserver {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.note_alt_outlined,
               size: 56,
-              color: Color(0xFF8E8E93),
+              color: context.cerebrum.text.faint,
             ),
             const SizedBox(height: 16),
             const Text(
@@ -245,10 +246,13 @@ class _QuickviewState extends State<Quickview> with WidgetsBindingObserver {
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Create a note inside a study bubble and it will show up here.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.black54),
+              style: TextStyle(
+                fontSize: 13,
+                color: context.cerebrum.text.muted,
+              ),
             ),
           ],
         ),
@@ -320,7 +324,7 @@ class _RecentNoteCardState extends State<_RecentNoteCard> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -334,12 +338,15 @@ class _RecentNoteCardState extends State<_RecentNoteCard> {
                   return FadeTransition(opacity: animation, child: child);
                 },
                 child: Text(
-                  _hovering ? 'Click to continue' : 'Edited ${widget.timeAgo}',
+                  _hovering ? 'Click to open' : 'Edited ${widget.timeAgo}',
                   key: ValueKey(_hovering),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: _hovering ? FontWeight.w600 : FontWeight.normal,
-                    color: _hovering ? const Color(0xFF6C4FCE) : Colors.black45,
+                    color:
+                        _hovering
+                            ? context.cerebrum.brand.primary
+                            : context.cerebrum.text.faint,
                   ),
                 ),
               ),
@@ -362,20 +369,17 @@ class _ReadingCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Continue reading',
-          style: TextStyle(fontSize: 13, color: Colors.black54),
+          style: TextStyle(fontSize: 13, color: context.cerebrum.text.muted),
         ),
-
         const SizedBox(height: 8),
-
         Text(
           reading.item.title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-
         if (reading.item.detail != null &&
             reading.item.detail!.trim().isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -383,19 +387,15 @@ class _ReadingCard extends StatelessWidget {
             reading.item.detail!,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
+            style: TextStyle(fontSize: 13, color: context.cerebrum.text.muted),
           ),
         ],
-
         const SizedBox(height: 4),
-
         Text(
           'Suggested from ${reading.evidence.noteTitle}',
-          style: const TextStyle(fontSize: 12, color: Colors.black45),
+          style: TextStyle(fontSize: 12, color: context.cerebrum.text.faint),
         ),
-
         const SizedBox(height: 16),
-
         OutlinedButton.icon(
           onPressed: onTap,
           icon: const Icon(Icons.menu_book_outlined, size: 18),

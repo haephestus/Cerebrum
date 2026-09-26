@@ -21,8 +21,9 @@ void showActionMenu(
   TableDirection dir, {
   TablePageBounds? pageBounds,
 }) {
-  final Offset pos =
-      (context.findRenderObject() as RenderBox).localToGlobal(Offset.zero);
+  final Offset pos = (context.findRenderObject() as RenderBox).localToGlobal(
+    Offset.zero,
+  );
   final rect = Rect.fromLTWH(
     pos.dx,
     pos.dy,
@@ -41,77 +42,103 @@ void showActionMenu(
 
   final tableNode = TableNode(node: node);
 
-  overlay = FullScreenOverlayEntry(
-    top: top,
-    bottom: bottom,
-    left: left,
-    builder: (context) {
-      return basicOverlay(
-        context,
-        width: 200,
-        height: 200,
-        children: [
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colAddBefore
-                  : AppFlowyEditorL10n.current.rowAddBefore,
-              dir == TableDirection.col
-                  ? Icons.first_page
-                  : Icons.vertical_align_top, () {
-            if (_canAddRowOrCol(pageBounds, tableNode, position, dir)) {
-              CerebrumTableActions.add(node, position, editorState, dir);
-            }
-            dismissOverlay();
-          }),
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colAddAfter
-                  : AppFlowyEditorL10n.current.rowAddAfter,
-              dir == TableDirection.col
-                  ? Icons.last_page
-                  : Icons.vertical_align_bottom, () {
-            if (_canAddRowOrCol(pageBounds, tableNode, position + 1, dir)) {
-              CerebrumTableActions.add(node, position + 1, editorState, dir);
-            }
-            dismissOverlay();
-          }),
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colRemove
-                  : AppFlowyEditorL10n.current.rowRemove,
-              Icons.delete, () {
-            CerebrumTableActions.delete(node, position, editorState, dir);
-            dismissOverlay();
-          }),
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colDuplicate
-                  : AppFlowyEditorL10n.current.rowDuplicate,
-              Icons.content_copy, () {
-            // Duplicating a column/row also GROWS the table — apply the same
-            // page-bounds guard (the copy mirrors the existing col/row size).
-            if (_canAddRowOrCol(pageBounds, tableNode, position, dir)) {
-              CerebrumTableActions.duplicate(node, position, editorState, dir);
-            }
-            dismissOverlay();
-          }),
-          _menuItem(
-              context,
-              dir == TableDirection.col
-                  ? AppFlowyEditorL10n.current.colClear
-                  : AppFlowyEditorL10n.current.rowClear,
-              Icons.clear, () {
-            CerebrumTableActions.clear(node, position, editorState, dir);
-            dismissOverlay();
-          }),
-        ],
-      );
-    },
-  ).build();
+  overlay =
+      FullScreenOverlayEntry(
+        top: top,
+        bottom: bottom,
+        left: left,
+        builder: (context) {
+          return basicOverlay(
+            context,
+            width: 200,
+            height: 200,
+            children: [
+              _menuItem(
+                context,
+                dir == TableDirection.col
+                    ? AppFlowyEditorL10n.current.colAddBefore
+                    : AppFlowyEditorL10n.current.rowAddBefore,
+                dir == TableDirection.col
+                    ? Icons.first_page
+                    : Icons.vertical_align_top,
+                () {
+                  if (_canAddRowOrCol(pageBounds, tableNode, position, dir)) {
+                    CerebrumTableActions.add(node, position, editorState, dir);
+                  }
+                  dismissOverlay();
+                },
+              ),
+              _menuItem(
+                context,
+                dir == TableDirection.col
+                    ? AppFlowyEditorL10n.current.colAddAfter
+                    : AppFlowyEditorL10n.current.rowAddAfter,
+                dir == TableDirection.col
+                    ? Icons.last_page
+                    : Icons.vertical_align_bottom,
+                () {
+                  if (_canAddRowOrCol(
+                    pageBounds,
+                    tableNode,
+                    position + 1,
+                    dir,
+                  )) {
+                    CerebrumTableActions.add(
+                      node,
+                      position + 1,
+                      editorState,
+                      dir,
+                    );
+                  }
+                  dismissOverlay();
+                },
+              ),
+              _menuItem(
+                context,
+                dir == TableDirection.col
+                    ? AppFlowyEditorL10n.current.colRemove
+                    : AppFlowyEditorL10n.current.rowRemove,
+                Icons.delete,
+                () {
+                  CerebrumTableActions.delete(node, position, editorState, dir);
+                  dismissOverlay();
+                },
+              ),
+              _menuItem(
+                context,
+                dir == TableDirection.col
+                    ? AppFlowyEditorL10n.current.colDuplicate
+                    : AppFlowyEditorL10n.current.rowDuplicate,
+                Icons.content_copy,
+                () {
+                  // Duplicating a column/row also GROWS the table — apply the same
+                  // page-bounds guard (the copy mirrors the existing col/row size).
+                  if (_canAddRowOrCol(pageBounds, tableNode, position, dir)) {
+                    CerebrumTableActions.duplicate(
+                      node,
+                      position,
+                      editorState,
+                      dir,
+                    );
+                  }
+                  dismissOverlay();
+                },
+              ),
+              _menuItem(
+                context,
+                dir == TableDirection.col
+                    ? AppFlowyEditorL10n.current.colClear
+                    : AppFlowyEditorL10n.current.rowClear,
+                Icons.clear,
+                () {
+                  CerebrumTableActions.clear(node, position, editorState, dir);
+                  dismissOverlay();
+                },
+              ),
+            ],
+          );
+        },
+      ).build();
   Overlay.of(context, rootOverlay: true).insert(overlay!);
 }
 
@@ -127,17 +154,19 @@ bool _canAddRowOrCol(
   if (dir == TableDirection.col) {
     // A new column mirrors the existing column's width (add/duplicate before
     // an existing position) or the table default (add at the very end).
-    final newWidth = position < tableNode.colsLen
-        ? tableNode.getColWidth(position)
-        : tableNode.config.colDefaultWidth;
+    final newWidth =
+        position < tableNode.colsLen
+            ? tableNode.getColWidth(position)
+            : tableNode.config.colDefaultWidth;
     return bounds.canAddCol(
       tableWidth: tableNode.tableWidth,
       newColWidth: newWidth,
     );
   }
-  final newHeight = position < tableNode.rowsLen
-      ? tableNode.getRowHeight(position)
-      : tableNode.config.rowDefaultHeight;
+  final newHeight =
+      position < tableNode.rowsLen
+          ? tableNode.getRowHeight(position)
+          : tableNode.config.rowDefaultHeight;
   return bounds.canAddRow(
     colsHeight: tableNode.colsHeight,
     newRowHeight: newHeight,

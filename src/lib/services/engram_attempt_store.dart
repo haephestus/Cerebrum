@@ -115,9 +115,10 @@ class EngramAttemptStore {
     targetCognitiveLevel: r.targetCognitiveLevel,
     status: r.status,
     jobId: r.jobId,
-    result: r.resultJson == null
-        ? null
-        : Map<String, dynamic>.from(jsonDecode(r.resultJson!) as Map),
+    result:
+        r.resultJson == null
+            ? null
+            : Map<String, dynamic>.from(jsonDecode(r.resultJson!) as Map),
     error: r.error,
     seen: r.seen,
     createdAt: r.createdAt.toUtc().toIso8601String(),
@@ -141,8 +142,9 @@ class EngramAttemptStore {
         targetCognitiveLevel: Value(attempt.targetCognitiveLevel),
         status: Value(attempt.status),
         jobId: Value(attempt.jobId),
-        resultJson:
-            Value(attempt.result == null ? null : jsonEncode(attempt.result)),
+        resultJson: Value(
+          attempt.result == null ? null : jsonEncode(attempt.result),
+        ),
         error: Value(attempt.error),
         seen: Value(attempt.seen),
         createdAt: _parse(attempt.createdAt),

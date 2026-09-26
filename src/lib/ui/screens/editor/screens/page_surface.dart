@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/ui/screens/editor/blocks/table/table_page_bounds.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
@@ -74,10 +75,7 @@ class PageSurface extends StatefulWidget {
   /// space the table head may occupy (`pageBottom - tableTop`) so the
   /// controller can SPLIT the table at a row boundary instead of moving the
   /// whole block — the piece that keeps a page from becoming scrollable.
-  final void Function(
-    int fromBlockIndex, {
-    double? tableAvailableHeight,
-  })?
+  final void Function(int fromBlockIndex, {double? tableAvailableHeight})?
   onOverflow;
 
   final double aspectRatio;
@@ -218,11 +216,11 @@ class _PageSurfaceState extends State<PageSurface> {
         aspectRatio: widget.aspectRatio,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.cerebrum.surface.raised,
             borderRadius: BorderRadius.circular(4),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Colors.black26,
+                color: context.cerebrum.editor.pageShadow,
                 blurRadius: 6,
                 offset: Offset(0, 2),
               ),
@@ -264,8 +262,8 @@ class _PageSurfaceState extends State<PageSurface> {
                         child: IgnorePointer(
                           child: Text(
                             '${widget.pageNumber}',
-                            style: const TextStyle(
-                              color: Colors.black38,
+                            style: TextStyle(
+                              color: context.cerebrum.text.disabled,
                               fontSize: 11,
                             ),
                           ),
@@ -304,8 +302,8 @@ class _PageSurfaceState extends State<PageSurface> {
 
     final coveredIds = <String>{
       for (final chunk in chunks)
-        for (final id in
-            (chunk['blockIds'] as List?)?.cast<String>() ?? const [])
+        for (final id
+            in (chunk['blockIds'] as List?)?.cast<String>() ?? const [])
           id,
     };
 
@@ -365,13 +363,15 @@ class _PageSurfaceState extends State<PageSurface> {
         child: IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: stale
-                  ? Colors.orange.withValues(alpha: 0.14)
-                  : Colors.amber.withValues(alpha: 0.18),
+              color:
+                  stale
+                      ? context.cerebrum.editor.staleTint
+                      : context.cerebrum.editor.analysisTint,
               border: Border.all(
-                color: (stale ? Colors.orange : Colors.amber).withValues(
-                  alpha: 0.75,
-                ),
+                color: (stale
+                        ? context.cerebrum.editor.unsavedBadge
+                        : context.cerebrum.editor.analysisBadge)
+                    .withValues(alpha: 0.75),
                 width: stale ? 1.6 : 1.2,
               ),
               borderRadius: BorderRadius.circular(3),
@@ -406,8 +406,8 @@ class _PageSurfaceState extends State<PageSurface> {
         (widget.controller.documentJson['children'] as List?) ?? const [];
     final ids = <String>{
       for (final chunk in chunks)
-        for (final id in
-            (chunk['blockIds'] as List?)?.cast<String>() ?? const [])
+        for (final id
+            in (chunk['blockIds'] as List?)?.cast<String>() ?? const [])
           id,
     };
     if (ids.isEmpty) return null;
@@ -429,8 +429,7 @@ class _PageSurfaceState extends State<PageSurface> {
     if (ids.isEmpty) return 0;
     final present = <String>{
       for (final b
-          in (widget.controller.documentJson['children'] as List?) ??
-              const [])
+          in (widget.controller.documentJson['children'] as List?) ?? const [])
         if ((b as Map?)?['id']?.toString() case final String id) id,
     };
     return ids.where((id) => !present.contains(id)).length;
@@ -485,19 +484,20 @@ class _AnalysisPopover extends StatelessWidget {
   /// (recorded blocks deleted / content added since the analysis ran).
   final int staleCount;
 
-  static Color _severityColor(String severity) {
+  static Color _severityColor(BuildContext context, String severity) {
+    final status = context.cerebrum.status;
     switch (severity.toLowerCase()) {
       case 'high':
       case 'critical':
-        return Colors.red;
+        return status.danger;
       case 'medium':
       case 'moderate':
-        return Colors.orange;
+        return status.warning;
       case 'low':
       case 'minor':
-        return Colors.amber;
+        return status.warning;
       default:
-        return Colors.blueGrey;
+        return status.neutral;
     }
   }
 
@@ -512,7 +512,7 @@ class _AnalysisPopover extends StatelessWidget {
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(10),
-      color: Colors.white,
+      color: context.cerebrum.surface.raised,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
         child: Padding(
@@ -530,45 +530,45 @@ class _AnalysisPopover extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade800,
+                      color: context.cerebrum.text.muted,
                     ),
                   ),
-const Spacer(),
-              InkResponse(
-                onTap: onClose,
-                child: const Icon(Icons.close, size: 16),
-              ),
-            ],
-          ),
-          if (staleCount > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    size: 14,
-                    color: Colors.orange.shade800,
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      staleCount == 1
-                          ? '1 referenced block no longer matches the note — '
-                                'this analysis may be out of date.'
-                          : '$staleCount referenced blocks no longer match the '
-                                'note — this analysis may be out of date.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.orange.shade800,
-                      ),
-                    ),
+                  const Spacer(),
+                  InkResponse(
+                    onTap: onClose,
+                    child: const Icon(Icons.close, size: 16),
                   ),
                 ],
               ),
-            ),
-          const Divider(height: 12),
+              if (staleCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 14,
+                        color: context.cerebrum.editor.staleBadge,
+                      ),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          staleCount == 1
+                              ? '1 referenced block no longer matches the note — '
+                                  'this analysis may be out of date.'
+                              : '$staleCount referenced blocks no longer match the '
+                                  'note — this analysis may be out of date.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: context.cerebrum.editor.staleBadge,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const Divider(height: 12),
               if (findings.isEmpty)
                 const Text(
                   'This block is covered by analysis, but has no specific findings.',
@@ -580,7 +580,7 @@ const Spacer(),
                     shrinkWrap: true,
                     itemCount: findings.length,
                     separatorBuilder: (_, __) => const Divider(height: 12),
-                    itemBuilder: (context, i) => _finding(findings[i]),
+                    itemBuilder: (context, i) => _finding(context, findings[i]),
                   ),
                 ),
             ],
@@ -590,7 +590,7 @@ const Spacer(),
     );
   }
 
-  Widget _finding(Map<String, dynamic> finding) {
+  Widget _finding(BuildContext context, Map<String, dynamic> finding) {
     final severity = (finding['severity'] ?? 'unknown').toString();
     final type = (finding['type'] ?? 'finding').toString().replaceAll('_', ' ');
     final gap = finding['gap_explanation'] as String?;
@@ -602,7 +602,10 @@ const Spacer(),
       children: [
         Row(
           children: [
-            CircleAvatar(radius: 5, backgroundColor: _severityColor(severity)),
+            CircleAvatar(
+              radius: 5,
+              backgroundColor: _severityColor(context, severity),
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -615,7 +618,10 @@ const Spacer(),
             ),
             Text(
               severity.toUpperCase(),
-              style: TextStyle(fontSize: 10, color: _severityColor(severity)),
+              style: TextStyle(
+                fontSize: 10,
+                color: _severityColor(context, severity),
+              ),
             ),
           ],
         ),

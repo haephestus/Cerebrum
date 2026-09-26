@@ -26,12 +26,17 @@ class SyncApi {
       body: jsonEncode(note),
     );
     if (response.statusCode != 200) {
-      throw Exception("sync push failed: ${response.statusCode} ${response.body}");
+      throw Exception(
+        "sync push failed: ${response.statusCode} ${response.body}",
+      );
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  static Future<Map<String, dynamic>> pull(String bubbleId, String noteId) async {
+  static Future<Map<String, dynamic>> pull(
+    String bubbleId,
+    String noteId,
+  ) async {
     final response = await http.get(
       Uri.parse("$baseUrl/sync/pull/$bubbleId/$noteId"),
       headers: await ApiConfig.headers(json: false),

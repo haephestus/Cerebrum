@@ -1,3 +1,5 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/api/configs_api.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/api/api_config.dart';
 import 'package:cerebrum/services/user_session.dart';
@@ -16,6 +18,7 @@ class _ConnectionSettingsState extends State<ConnectionSettings> {
   final _localUrlController = TextEditingController();
   final _cloudUrlController = TextEditingController();
   final _daemonKeyController = TextEditingController();
+  final _ollamaKeyController = TextEditingController();
 
   DeploymentMode _mode = DeploymentMode.local;
   bool _obscureKey = true;
@@ -32,12 +35,14 @@ class _ConnectionSettingsState extends State<ConnectionSettings> {
     final local = await ApiConfig.urlFor(DeploymentMode.local);
     final cloud = await ApiConfig.urlFor(DeploymentMode.cloud);
     final key = await UserSession.getDaemonKey();
+    final ollamaKey = await UserSession.getOllamaKey();
     if (!mounted) return;
     setState(() {
       _mode = ApiConfig.mode;
       _localUrlController.text = local;
       _cloudUrlController.text = cloud;
       _daemonKeyController.text = key ?? '';
+      _ollamaKeyController.text = ollamaKey ?? '';
       _loading = false;
     });
   }
@@ -47,6 +52,7 @@ class _ConnectionSettingsState extends State<ConnectionSettings> {
     _localUrlController.dispose();
     _cloudUrlController.dispose();
     _daemonKeyController.dispose();
+    _ollamaKeyController.dispose();
     super.dispose();
   }
 
@@ -55,11 +61,17 @@ class _ConnectionSettingsState extends State<ConnectionSettings> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ApiConfig.setBaseUrl(
-          DeploymentMode.local, _localUrlController.text.trim());
+        DeploymentMode.local,
+        _localUrlController.text.trim(),
+      );
       await ApiConfig.setBaseUrl(
-          DeploymentMode.cloud, _cloudUrlController.text.trim());
+        DeploymentMode.cloud,
+        _cloudUrlController.text.trim(),
+      );
       await ApiConfig.setMode(_mode); // sets active baseUrl for the chosen mode
       await UserSession.saveDaemonKey(_daemonKeyController.text.trim());
+      await UserSession.saveOllamaKey(_ollamaKeyController.text.trim());
+      await ConfigsApi.updateOllamaKey(_ollamaKeyController.text.trim());
       messenger.showSnackBar(
         const SnackBar(content: Text('Connection settings saved')),
       );
@@ -88,7 +100,7 @@ class _ConnectionSettingsState extends State<ConnectionSettings> {
         const SizedBox(height: 4),
         Text(
           'Which daemon this app talks to.',
-          style: TextStyle(color: Colors.grey[600]),
+          style: TextStyle(color: context.cerebrum.text.muted),
         ),
         const SizedBox(height: 20),
         SegmentedButton<DeploymentMode>(
@@ -127,11 +139,26 @@ class _ConnectionSettingsState extends State<ConnectionSettings> {
         ),
         const SizedBox(height: 16),
         TextField(
+          controller: _ollamaKeyController,
+          obscureText: _obscureKey,
+          decoration: InputDecoration(
+            labelText: 'Ollama API Key',
+            hintText: 'Enter your ollama key',
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              onPressed: () => setState(() => _obscureKey = !_obscureKey),
+              icon: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
           controller: _daemonKeyController,
           obscureText: _obscureKey,
           decoration: InputDecoration(
             labelText: 'Daemon key (local mode)',
-            helperText: 'Printed by the daemon on startup. Not used in cloud mode.',
+            helperText:
+                'Printed by the daemon on startup. Not used in cloud mode.',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
               icon: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility),
@@ -145,17 +172,20 @@ class _ConnectionSettingsState extends State<ConnectionSettings> {
           child: FilledButton(
             onPressed: _saving ? null : _save,
             style: FilledButton.styleFrom(
-              backgroundColor: Colors.black,
+              backgroundColor: context.cerebrum.text.strong,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             ),
-            child: _saving
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Save'),
+            child:
+                _saving
+                    ? SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: context.cerebrum.text.onBrand,
+                      ),
+                    )
+                    : const Text('Save'),
           ),
         ),
       ],

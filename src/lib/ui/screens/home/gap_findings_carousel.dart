@@ -1,6 +1,7 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 
-import 'gap_models.dart';
+import '../../../models/gap_models.dart';
 import 'gap_repository.dart';
 
 /// Paged "gap reports & findings" surface: one page per study bubble's full
@@ -138,9 +139,9 @@ class _GapFindingsCarouselState extends State<GapFindingsCarousel>
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F1FA),
+        color: context.cerebrum.surface.sunken,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE3DEF2)),
+        border: Border.all(color: context.cerebrum.surface.outline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,7 +149,7 @@ class _GapFindingsCarouselState extends State<GapFindingsCarousel>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -158,7 +159,10 @@ class _GapFindingsCarouselState extends State<GapFindingsCarousel>
                   SizedBox(height: 2),
                   Text(
                     'Most recently analyzed bubble first.',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.cerebrum.text.muted,
+                    ),
                   ),
                 ],
               ),
@@ -176,7 +180,10 @@ class _GapFindingsCarouselState extends State<GapFindingsCarousel>
                   ),
                   Text(
                     '${_page + 1} / ${pages.length}',
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.cerebrum.text.muted,
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.chevron_right),
@@ -244,7 +251,10 @@ class _BubbleFindingsPage extends StatelessWidget {
               if (summary.countLine.isNotEmpty)
                 Text(
                   summary.countLine,
-                  style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: context.cerebrum.text.muted,
+                  ),
                 ),
             ],
           ),
@@ -268,8 +278,6 @@ class _FindingRow extends StatelessWidget {
 
   const _FindingRow({required this.item});
 
-  static const _ink = Color(0xFF2F2940);
-
   @override
   Widget build(BuildContext context) {
     final evidence = item.evidence.isNotEmpty ? item.evidence.first : null;
@@ -280,15 +288,15 @@ class _FindingRow extends StatelessWidget {
           margin: const EdgeInsets.only(top: 1),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: const Color(0xFFE3DEF2),
+            color: context.cerebrum.surface.outline,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(
             item.kind.label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF6C4FCE),
+              color: context.cerebrum.brand.primary,
             ),
           ),
         ),
@@ -299,16 +307,19 @@ class _FindingRow extends StatelessWidget {
             children: [
               Text(
                 item.title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: _ink,
+                  color: context.cerebrum.brand.ink,
                 ),
               ),
               if (item.detail != null && item.detail!.trim().isNotEmpty)
                 Text(
                   item.detail!,
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.cerebrum.text.muted,
+                  ),
                 ),
               if (evidence != null) ...[
                 const SizedBox(height: 2),
@@ -316,7 +327,10 @@ class _FindingRow extends StatelessWidget {
                   evidence.analysisVersion != null
                       ? '${evidence.noteTitle} · v${evidence.analysisVersion!}'
                       : evidence.noteTitle,
-                  style: const TextStyle(fontSize: 10, color: Colors.black45),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: context.cerebrum.text.faint,
+                  ),
                 ),
               ],
             ],

@@ -1,7 +1,9 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
 import 'package:cerebrum/services/engram_sync_service.dart';
+import 'package:cerebrum/ui/widgets/learning_center/completion/short_question_attempt_card.dart';
 
 class ShortQuestionCompletionPage extends StatefulWidget {
   final Engram engram;
@@ -67,12 +69,15 @@ class _ShortQuestionCompletionPageState
       // question_index is matched against each question's `question_number`
       // (server drops answers with no matching number) — see the daemon's
       // ai_grading.questions_by_index.
-      final responses = questions
-          .map<Map<String, dynamic>>((q) => {
-                'question_index': q.questionNumber,
-                'raw_answer': _controllerFor(q.questionNumber).text,
-              })
-          .toList();
+      final responses =
+          questions
+              .map<Map<String, dynamic>>(
+                (q) => {
+                  'question_index': q.questionNumber,
+                  'raw_answer': _controllerFor(q.questionNumber).text,
+                },
+              )
+              .toList();
 
       // Queue-first: always saved locally, sent now if online, else on reconnect.
       final attempt = await EngramSyncService.submit(
@@ -123,16 +128,25 @@ class _ShortQuestionCompletionPageState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(q.stem,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(q.stem, style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('Your answer',
-                  style: TextStyle(fontSize: 12, color: Colors.black54)),
+              Text(
+                'Your answer',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.cerebrum.text.muted,
+                ),
+              ),
               Text(yours.isEmpty ? '—' : yours),
               if (expected != null && expected.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                const Text('Model answer',
-                    style: TextStyle(fontSize: 12, color: Colors.black54)),
+                Text(
+                  'Model answer',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.cerebrum.text.muted,
+                  ),
+                ),
                 Text(expected),
               ],
             ],
@@ -148,162 +162,71 @@ class _ShortQuestionCompletionPageState
 
     return Scaffold(
       appBar: AppBar(title: const Text('Short Questions')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _attempt != null
+      body:
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _attempt != null
               ? ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    _AttemptStatus(
-                      attempt: _attempt!,
-                      onAnswerAgain: _answerAgain,
-                    ),
-                    const SizedBox(height: 16),
-                    ..._buildComparison(c),
-                  ],
-                )
+                padding: const EdgeInsets.all(20),
+                children: [
+                  ShortQuestionAttemptCard(
+                    attempt: _attempt!,
+                    onAnswerAgain: _answerAgain,
+                  ),
+                  const SizedBox(height: 16),
+                  ..._buildComparison(c),
+                ],
+              )
               : ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    ...c.questions.map((q) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              q.stem,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            if (q.hint != null && q.hint!.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  'Hint: ${q.hint}',
-                                  style: const TextStyle(
-                                    fontStyle: FontStyle.italic,
-                                    fontSize: 12,
-                                  ),
+                padding: const EdgeInsets.all(20),
+                children: [
+                  ...c.questions.map((q) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            q.stem,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          if (q.hint != null && q.hint!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Hint: ${q.hint}',
+                                style: const TextStyle(
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 12,
                                 ),
                               ),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: _controllerFor(q.questionNumber),
-                              maxLines: 3,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                hintText: 'Your answer...',
-                              ),
                             ),
-                          ],
-                        ),
-                      );
-                    }),
-                    ElevatedButton(
-                      onPressed:
-                          _submitting ? null : () => _submit(c.questions),
-                      child: _submitting
-                          ? const SizedBox(
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _controllerFor(q.questionNumber),
+                            maxLines: 3,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              hintText: 'Your answer...',
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  ElevatedButton(
+                    onPressed: _submitting ? null : () => _submit(c.questions),
+                    child:
+                        _submitting
+                            ? const SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('Submit All'),
-                    ),
-                  ],
-                ),
-    );
-  }
-}
-
-/// Compact pending/graded status for a submitted short-question attempt.
-class _AttemptStatus extends StatelessWidget {
-  const _AttemptStatus({required this.attempt, required this.onAnswerAgain});
-  final EngramAttempt attempt;
-  final VoidCallback onAnswerAgain;
-
-  @override
-  Widget build(BuildContext context) {
-    final graded = attempt.isGraded;
-    final queued = attempt.isQueued;
-    final result = attempt.result ?? const {};
-    final score = result['score'] ?? result['marks'] ?? result['grade'];
-    final feedback =
-        result['feedback'] ?? result['comment'] ?? result['rationale'];
-
-    final IconData icon;
-    final Color color;
-    final String title;
-    final String body;
-    if (graded) {
-      icon = Icons.check_circle;
-      color = Colors.green;
-      title = 'Graded';
-      body = '';
-    } else if (queued) {
-      icon = Icons.cloud_off;
-      color = Colors.amber;
-      title = 'Saved — will submit when online';
-      body = "Your answers are stored on this device and will be sent for "
-          "grading automatically once you're back online.";
-    } else {
-      icon = Icons.hourglass_top;
-      color = Colors.amber;
-      title = 'Grading in progress';
-      body = 'Your answers were submitted. Results will appear here when '
-          'grading finishes.';
-    }
-
-    return Card(
-      color: color.withValues(alpha: 0.08),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(title,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-            if (body.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(body),
-            ],
-            if (graded) ...[
-              const SizedBox(height: 8),
-              if (score != null)
-                Text('Score: $score', style: const TextStyle(fontSize: 16)),
-              if (feedback != null) ...[
-                const SizedBox(height: 8),
-                Text('$feedback'),
-              ],
-              if (score == null && feedback == null)
-                Text(result.isEmpty ? 'No detail returned.' : result.toString()),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                OutlinedButton(
-                  onPressed: onAnswerAgain,
-                  child: const Text('Answer again'),
-                ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+                            : const Text('Submit All'),
+                  ),
+                ],
+              ),
     );
   }
 }

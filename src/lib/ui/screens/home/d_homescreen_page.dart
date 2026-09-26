@@ -1,10 +1,11 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/services/user_session.dart';
 import 'package:cerebrum/ui/screens/editor/editor_scaffold.dart';
 import 'package:cerebrum/ui/screens/home/dashboard_pulse_strip.dart';
 import 'package:cerebrum/ui/screens/home/file_library_launcher.dart';
 import 'package:cerebrum/ui/screens/home/gap_findings_carousel.dart';
-import 'package:cerebrum/ui/screens/home/gap_models.dart';
+import 'package:cerebrum/models/gap_models.dart';
 import 'package:cerebrum/ui/screens/home/priority_gap_card.dart';
 import 'package:cerebrum/ui/screens/home/quickview.dart';
 import 'package:cerebrum/ui/screens/home/study_bubbles_summary.dart';
@@ -15,8 +16,7 @@ import 'package:flutter/material.dart';
 ///   1. Pulse strip        -- real counts only, "where do things stand?"
 ///   2. Upcoming engrams    -- unchanged component; self-hides when empty
 ///   3. Continue + attention row:
-///        left  = Quickview        -- the STRONG widget: resume a note
-///                                     and/or continue a suggested reading
+///        left  = Quickview        -- the STRONG widget: resume a note and/or continue a suggested reading
 ///        right = PriorityGapCard  -- compact "needs attention" notice
 ///                StudyBubblesSummaryCard -- beneath it
 ///   4. Gap reports & findings -- paged carousel, one bubble per page
@@ -130,8 +130,11 @@ class _DHomescreenState extends State<DHomescreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
+        backgroundColor: colorScheme.surface,
         title: Text(
           _username == null ? 'Welcome back' : 'Welcome back, $_username',
         ),
@@ -144,9 +147,7 @@ class _DHomescreenState extends State<DHomescreen> {
             children: [
               // Layer 2: untouched -- same component, same show/hide rule.
               const UpcomingEngramsSection(),
-
               const SizedBox(height: 16),
-
               // Layer 3: continuity (strong) beside attention (compact),
               // reflowing to a stack below the width breakpoint.
               LayoutBuilder(
@@ -169,13 +170,13 @@ class _DHomescreenState extends State<DHomescreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
+                            Text(
                               //better label? idk?
                               'Your favorite study bubbles',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1A1526),
+                                color: context.cerebrum.text.onModeBadge,
                               ),
                             ),
                             TextButton(
@@ -187,19 +188,18 @@ class _DHomescreenState extends State<DHomescreen> {
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              child: const Text(
+                              child: Text(
                                 'View all',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: Color(0xFF6C4FCE),
+                                  color: context.cerebrum.brand.primary,
                                 ),
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 4),
-                        //TODO: (agent)show the most active bubbles here(filter by most
-                        // edited)
+                        //TODO: (agent)show the most active bubbles here(filter by most edited)
                         Expanded(
                           child: StudyBubblesSummaryCard(
                             onOpenBubble: widget.onOpenBubble,

@@ -73,7 +73,8 @@ class MasteryRecord {
     intervalDays: (j['interval_days'] as num?)?.toInt() ?? 0,
     repetitions: (j['repetitions'] as num?)?.toInt() ?? 0,
     lapses: (j['lapses'] as num?)?.toInt() ?? 0,
-    dueAt: j['due_at'] == null ? null : DateTime.tryParse(j['due_at'] as String),
+    dueAt:
+        j['due_at'] == null ? null : DateTime.tryParse(j['due_at'] as String),
     lastGrade: j['last_grade'] as String?,
     masteryState: (j['mastery_state'] as String?) ?? 'learning',
     updatedAt:

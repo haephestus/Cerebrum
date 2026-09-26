@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:cerebrum/api/planner_api.dart';
@@ -123,15 +124,7 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
 
   @override
   Widget build(BuildContext context) {
-    final anchored =
-        <
-          ({
-            String planId,
-            Map<String, dynamic> plan,
-            DateTime start,
-            DateTime end,
-          })
-        >[];
+    final anchored = <_PlanBar>[];
     for (final p in widget.plans) {
       final start = _parseStart(p);
       if (start == null) continue;
@@ -143,7 +136,6 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
       ));
     }
     if (anchored.isEmpty) return _buildEmpty(context);
-
     DateTime rangeStart = anchored.first.start;
     DateTime rangeEnd = anchored.first.end;
     for (final a in anchored) {
@@ -151,7 +143,6 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
       if (a.end.isAfter(rangeEnd)) rangeEnd = a.end;
     }
     rangeStart = DateTime(rangeStart.year, rangeStart.month, 1);
-    // End-exclusive so the last bar's month gets a full column.
     rangeEnd = DateTime(rangeEnd.year, rangeEnd.month + 1, 1);
 
     final totalDays = rangeEnd.difference(rangeStart).inDays;
@@ -167,7 +158,8 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
     final showToday = !today.isBefore(rangeStart) && today.isBefore(rangeEnd);
     final todayX = xOf(today);
 
-    final chartHeight = _headerHeight + anchored.length * _rowHeight + 16;
+    // Content only needs this much height for its rows...
+    final intrinsicHeight = _headerHeight + anchored.length * _rowHeight + 16;
 
     return Listener(
       onPointerSignal: _onPointerSignal,
@@ -177,59 +169,75 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
           controller: _scrollController,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.only(left: 16, right: 16, top: 0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: SizedBox(
-              width: totalWidth,
-              height: chartHeight,
-              child: Stack(
-                children: [
-                  // Alternating month shading, purely a reading aid.
-                  for (var m = 0; m < monthCount; m++)
-                    if (m.isEven)
-                      Positioned(
-                        left: m * _monthWidth,
-                        top: 0,
-                        bottom: 0,
-                        width: _monthWidth,
-                        child: Container(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withValues(alpha: 0.4),
-                        ),
-                      ),
-                  if (showToday) ...[
-                    Positioned(
-                      left: todayX - 1,
-                      top: _headerHeight,
-                      bottom: 0,
-                      child: Container(width: 2, color: Colors.redAccent),
-                    ),
-                    Positioned(
-                      left: todayX - 5,
-                      top: _headerHeight - 12,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: Colors.redAccent,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ],
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: LayoutBuilder(
+            // ...but never shrink below whatever the parent (the 380px
+            // portfolio pane) actually gave us — fill it, don't float
+            // inside a taller empty box.
+            builder: (context, constraints) {
+              final chartHeight =
+                  constraints.hasBoundedHeight
+                      ? (intrinsicHeight > constraints.maxHeight
+                          ? intrinsicHeight
+                          : constraints.maxHeight)
+                      : intrinsicHeight;
+
+              return SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: SizedBox(
+                  width: totalWidth,
+                  height: chartHeight,
+                  child: Stack(
                     children: [
-                      _buildRuler(context, rangeStart, monthCount),
-                      for (var i = 0; i < anchored.length; i++)
-                        _buildPlanRow(context, anchored[i], xOf, pxPerDay),
+                      for (var m = 0; m < monthCount; m++)
+                        if (m.isEven)
+                          Positioned(
+                            left: m * _monthWidth,
+                            top: 0,
+                            bottom: 0,
+                            width: _monthWidth,
+                            child: Container(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                            ),
+                          ),
+                      if (showToday) ...[
+                        Positioned(
+                          left: todayX - 1,
+                          top: _headerHeight,
+                          bottom: 0,
+                          child: Container(
+                            width: 2,
+                            color: context.cerebrum.status.dangerStrong,
+                          ),
+                        ),
+                        Positioned(
+                          left: todayX - 5,
+                          top: _headerHeight - 12,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: context.cerebrum.status.dangerStrong,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ],
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildRuler(context, rangeStart, monthCount),
+                          for (var i = 0; i < anchored.length; i++)
+                            _buildPlanRow(context, anchored[i], xOf, pxPerDay),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -264,8 +272,7 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
 
   Widget _buildPlanRow(
     BuildContext context,
-    ({String planId, Map<String, dynamic> plan, DateTime start, DateTime end})
-    a,
+    _PlanBar a,
     double Function(DateTime) xOf,
     double pxPerDay,
   ) {
@@ -287,7 +294,7 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
             child: GestureDetector(
               onTap: () => widget.onPlanTap(a.plan),
               child: Container(
-                height: 14,
+                height: 28,
                 width: width,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.75),
@@ -301,10 +308,10 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
                       a.plan['target_role']?.toString() ?? 'Untitled plan',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: context.cerebrum.text.onBrand,
                       ),
                     ),
                   ),
@@ -385,11 +392,11 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
   Color _statusColor(String status, BuildContext context) {
     switch (status) {
       case 'active':
-        return Colors.green;
+        return context.cerebrum.status.success;
       case 'completed':
-        return Colors.blue;
+        return context.cerebrum.status.info;
       case 'archived':
-        return Colors.grey;
+        return context.cerebrum.surface.outlineStrong;
       default:
         return Theme.of(context).colorScheme.primary;
     }
@@ -415,3 +422,6 @@ class _PlanPortfolioGanttState extends State<PlanPortfolioGantt> {
     });
   }
 }
+
+typedef _PlanBar =
+    ({String planId, Map<String, dynamic> plan, DateTime start, DateTime end});

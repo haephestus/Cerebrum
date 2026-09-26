@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/api/knowledgebase_api.dart';
 
@@ -105,7 +106,10 @@ class _FileLibraryState extends State<FileLibrary> {
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: Text(
                 _status!,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.cerebrum.surface.outlineStrong,
+                ),
               ),
             ),
           // Wrap the registry in Expanded so it consumes the remaining
@@ -128,7 +132,9 @@ class _FileLibraryState extends State<FileLibrary> {
     // Cleaned up nested Row/Expanded issues. ListView handles horizontal space natively.
     return Container(
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+        border: Border(
+          top: BorderSide(color: context.cerebrum.surface.outline),
+        ),
       ),
       child: ListView.builder(
         itemCount: _registry.length,

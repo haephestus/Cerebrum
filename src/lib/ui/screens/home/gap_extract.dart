@@ -17,7 +17,7 @@
 /// the fallback; rendering "None" would fail the no-fabricated-data gate.
 library;
 
-import 'gap_models.dart';
+import '../../../models/gap_models.dart';
 
 /// Patterns the daemon emits when analysis produced no data for a field.
 const _fillPatterns = [

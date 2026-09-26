@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/services/user_session.dart';
 import 'package:cerebrum/ui/desktop_main.dart';
@@ -49,8 +50,8 @@ class _AppEntryPointState extends State<AppEntryPoint> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            backgroundColor: Colors.white,
+          return Scaffold(
+            backgroundColor: context.cerebrum.surface.canvas,
             body: Center(child: CircularProgressIndicator()),
           );
         }
@@ -61,17 +62,14 @@ class _AppEntryPointState extends State<AppEntryPoint> {
         // Service throws out of _resolveRoute). Surface it instead of banging.
         if (snapshot.hasError || snapshot.data == null) {
           return Scaffold(
-            backgroundColor: Colors.white,
+            backgroundColor: context.cerebrum.surface.canvas,
             body: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text("Couldn't start the app — session check failed."),
                   const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _refresh,
-                    child: const Text('Retry'),
-                  ),
+                  FilledButton(onPressed: _refresh, child: const Text('Retry')),
                 ],
               ),
             ),

@@ -1,4 +1,5 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_highlight/flutter_highlight.dart';
@@ -188,7 +189,8 @@ class _CodeBlockComponentWidgetState extends State<CodeBlockComponentWidget> {
           margin: const EdgeInsets.symmetric(vertical: 4),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: const Color(0xFF282C34), // matches atomOneDarkTheme bg
+            // One Dark family; see CodeColors.background.
+            color: context.cerebrum.code.background,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
@@ -258,9 +260,11 @@ class _CodeBlockHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: const BoxDecoration(
-        color: Color(0xFF21252B),
-        border: Border(bottom: BorderSide(color: Color(0xFF181A1F))),
+      decoration: BoxDecoration(
+        color: context.cerebrum.code.header,
+        border: Border(
+          bottom: BorderSide(color: context.cerebrum.code.headerBorder),
+        ),
       ),
       child: Row(
         children: [
@@ -271,13 +275,16 @@ class _CodeBlockHeader extends StatelessWidget {
                       ? language
                       : 'plaintext',
               isDense: true,
-              dropdownColor: const Color(0xFF21252B),
-              icon: const Icon(
+              dropdownColor: context.cerebrum.code.header,
+              icon: Icon(
                 Icons.arrow_drop_down,
                 size: 16,
-                color: Colors.white54,
+                color: context.cerebrum.code.onCodeMuted,
               ),
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(
+                color: context.cerebrum.text.onDarkIcon,
+                fontSize: 12,
+              ),
               items: [
                 for (final lang in kCodeBlockLanguages)
                   DropdownMenuItem(value: lang, child: Text(lang)),
@@ -289,7 +296,11 @@ class _CodeBlockHeader extends StatelessWidget {
           ),
           const Spacer(),
           IconButton(
-            icon: const Icon(Icons.copy, size: 15, color: Colors.white54),
+            icon: Icon(
+              Icons.copy,
+              size: 15,
+              color: context.cerebrum.code.onCodeMuted,
+            ),
             tooltip: 'Copy code',
             visualDensity: VisualDensity.compact,
             onPressed: onCopy,

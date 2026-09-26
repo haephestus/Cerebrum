@@ -1,16 +1,17 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 
 ButtonStyle buildOverlayButtonStyle(BuildContext context) {
   return ButtonStyle(
-    backgroundColor: WidgetStateProperty.resolveWith<Color>(
-      (Set<WidgetState> states) {
-        if (states.contains(WidgetState.hovered)) {
-          return Theme.of(context).hoverColor;
-        }
-        return Colors.transparent;
-      },
-    ),
+    backgroundColor: WidgetStateProperty.resolveWith<Color>((
+      Set<WidgetState> states,
+    ) {
+      if (states.contains(WidgetState.hovered)) {
+        return Theme.of(context).hoverColor;
+      }
+      return Colors.transparent;
+    }),
   );
 }
 
@@ -20,7 +21,7 @@ BoxDecoration buildOverlayDecoration(BuildContext context) {
     borderRadius: BorderRadius.circular(6),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withValues(alpha: 0.2),
+        color: context.cerebrum.shadow.strong,
         blurRadius: 10,
         offset: const Offset(0, 2),
       ),

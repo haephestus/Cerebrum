@@ -150,8 +150,9 @@ class EditorShortcuts {
   ) {
     return CommandShortcutEvent(
       key: 'Swallow Enter in analysis mode',
-      getDescription: () =>
-          'Prevent Enter from editing the document in analysis review mode',
+      getDescription:
+          () =>
+              'Prevent Enter from editing the document in analysis review mode',
       command: 'enter',
       handler: (editorState) {
         if (!mode.isAnalysis) return KeyEventResult.ignored;
@@ -239,14 +240,17 @@ class VimCharacterShortcuts {
 
   static List<CharacterShortcutEvent> getCharacterShortcuts(
     VimModeController mode, {
+
     /// Analysis-review-mode chunk stepping wired by the driver: +1 = next
     /// chunk, -1 = previous. When non-null, 'n'/'N' step chunks while in
     /// analysis mode instead of doing anything else.
     void Function(int delta)? onStepAnalysisChunk,
+
     /// Wired by the scaffold so pressing 'n' in NORMAL mode lazy-loads the
     /// analysis before entering review mode. When null, 'n' just flips the vim
     /// mode to analysis with no chunks loaded.
     VoidCallback? onEnterAnalysisMode,
+
     /// Wired by the scaffold so pressing 'o' in ANALYSIS mode toggles the full
     /// analysis panel (the overview tab) without changing the vim mode.
     /// Distinct from [onEnterAnalysisMode] — that key switches modes, this one
@@ -356,8 +360,9 @@ class VimCharacterShortcuts {
       CharacterShortcutEvent(
         key: 'vim toggle analysis panel',
         character: 'o',
-        handler: (editorState) =>
-            _handleToggleAnalysisPanel(mode, onToggleAnalysisPanel),
+        handler:
+            (editorState) =>
+                _handleToggleAnalysisPanel(mode, onToggleAnalysisPanel),
       ),
       // ENTER as an IME insertion (`'\n'`) must not edit while in analysis
       // mode. The raw-key swallow in EditorShortcuts can't cover this path:
@@ -486,8 +491,8 @@ class VimCharacterShortcuts {
   }) {
     return CommandShortcutEvent(
       key: 'vim raw-key "$command"',
-      getDescription: () =>
-          '"$command" navigation that works without the IME attached',
+      getDescription:
+          () => '"$command" navigation that works without the IME attached',
       command: command,
       handler: (editorState) {
         if (!mode.isNormal && !mode.isAnalysis) {
@@ -512,8 +517,8 @@ class VimCharacterShortcuts {
   }) {
     return CommandShortcutEvent(
       key: 'vim raw-key "$command"',
-      getDescription: () =>
-          'Enter analysis mode / step chunk without the IME attached',
+      getDescription:
+          () => 'Enter analysis mode / step chunk without the IME attached',
       command: command,
       handler: (editorState) {
         if (!mode.isNormal && !mode.isAnalysis) {
@@ -542,8 +547,8 @@ class VimCharacterShortcuts {
   ) {
     return CommandShortcutEvent(
       key: 'vim raw-key "$command"',
-      getDescription: () =>
-          'Toggle the analysis panel without the IME attached',
+      getDescription:
+          () => 'Toggle the analysis panel without the IME attached',
       command: command,
       handler: (editorState) {
         if (!mode.isNormal && !mode.isAnalysis) {
@@ -739,11 +744,7 @@ class VimCharacterShortcuts {
     required int delta,
   }) async {
     if (_selectionIsInTableCell(editorState) &&
-        _moveInTableCell(
-          editorState,
-          horizontal: horizontal,
-          delta: delta,
-        )) {
+        _moveInTableCell(editorState, horizontal: horizontal, delta: delta)) {
       return;
     }
     if (horizontal) {
@@ -780,11 +781,12 @@ class VimCharacterShortcuts {
     // nested inside the cell; the cell node carries the row/col position.
     final node = editorState.getNodeAtPath(selection.end.path);
     if (node == null) return false;
-    final cell = node.type == CerebrumTableCellKeys.type
-        ? node
-        : (node.parent?.type == CerebrumTableCellKeys.type
-              ? node.parent
-              : null);
+    final cell =
+        node.type == CerebrumTableCellKeys.type
+            ? node
+            : (node.parent?.type == CerebrumTableCellKeys.type
+                ? node.parent
+                : null);
     if (cell == null) return false;
 
     final table = cell.parent;
@@ -838,11 +840,12 @@ class VimCharacterShortcuts {
     final targetDelta = targetChild?.delta;
     if (targetChild == null || targetDelta == null) return true;
 
-    final offset = horizontal
-        ? (delta < 0 ? targetDelta.length : 0)
-        : (targetDelta.length > selection.start.offset
-              ? selection.start.offset
-              : targetDelta.length);
+    final offset =
+        horizontal
+            ? (delta < 0 ? targetDelta.length : 0)
+            : (targetDelta.length > selection.start.offset
+                ? selection.start.offset
+                : targetDelta.length);
 
     editorState.updateSelectionWithReason(
       Selection.collapsed(Position(path: targetChild.path, offset: offset)),

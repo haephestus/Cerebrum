@@ -6,7 +6,7 @@ import 'package:cerebrum/api/learning_center_api.dart';
 import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/services/storage_paths.dart';
 import 'gap_extract.dart';
-import 'gap_models.dart';
+import '../../../models/gap_models.dart';
 
 /// Fetches the hero's rollup: every bubble's gaps, grouped per study bubble.
 ///

@@ -1,6 +1,7 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/api/bubbles_api.dart';
-import 'package:cerebrum/ui/screens/study_bubble/d_study_bubble_page.dart';
+import 'package:cerebrum/ui/widgets/study_bubble/create_study_bubble_dialog.dart';
 
 import 'gap_repository.dart';
 
@@ -88,10 +89,7 @@ class _StudyBubblesSummaryCardState extends State<StudyBubblesSummaryCard> {
   }
 
   Future<void> _createBubble() async {
-    final newBubble = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const DStudyBubblePage(addMode: true)),
-    );
+    final newBubble = await showCreateStudyBubbleDialog(context);
 
     if (newBubble != null && mounted) {
       setState(() {
@@ -129,14 +127,14 @@ class _StudyBubblesSummaryCardState extends State<StudyBubblesSummaryCard> {
     final attention = bubbleId == null ? null : _attentionByBubble[bubbleId];
 
     if (attention == null || attention == 0) {
-      return const Color(0xFFB9B4CC);
+      return context.cerebrum.status.neutralSoft;
     }
 
     if (attention <= 3) {
-      return const Color(0xFFC9A24B);
+      return context.cerebrum.brand.accent;
     }
 
-    return const Color(0xFFB3261E);
+    return context.cerebrum.status.danger;
   }
 
   @override
@@ -173,7 +171,10 @@ class _StudyBubblesSummaryCardState extends State<StudyBubblesSummaryCard> {
           children: [
             Text(
               'Couldn\'t load.',
-              style: TextStyle(color: Colors.red.shade700, fontSize: 11),
+              style: TextStyle(
+                color: context.cerebrum.status.dangerDeep,
+                fontSize: 11,
+              ),
             ),
             TextButton(
               onPressed: _fetch,
@@ -244,7 +245,7 @@ class _StudyBubblesSummaryCardState extends State<StudyBubblesSummaryCard> {
               if (hasMore)
                 _BubbleRingChip(
                   title: '+${_bubbles.length - maxDisplay}',
-                  ringColor: const Color(0xFFB9B4CC),
+                  ringColor: context.cerebrum.status.neutralSoft,
                   size: tileWidth,
                   onTap: widget.onViewAll,
                 ),
@@ -275,7 +276,7 @@ class _BubbleRingChip extends StatelessWidget {
       message: title,
       waitDuration: const Duration(milliseconds: 400),
       child: Material(
-        color: Colors.grey.shade200, // Transparent background
+        color: context.cerebrum.surface.overlay, // Transparent background
         borderRadius: BorderRadius.circular(6),
         child: InkWell(
           borderRadius: BorderRadius.circular(6),
@@ -294,7 +295,7 @@ class _BubbleRingChip extends StatelessWidget {
                 child: Icon(
                   Icons.bubble_chart,
                   size: size * 0.18,
-                  color: const Color(0xFF6C4FCE),
+                  color: context.cerebrum.brand.primary,
                 ),
               ),
             ),

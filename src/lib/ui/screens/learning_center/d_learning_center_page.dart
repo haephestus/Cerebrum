@@ -1,21 +1,56 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/api/learning_center_api.dart';
+import 'package:cerebrum/api/bubbles_api.dart';
 import 'package:cerebrum/api/planner_api.dart';
+import 'package:cerebrum/api/metrics_api.dart';
+import 'package:cerebrum/models/performance_metrics.dart';
+import 'package:cerebrum/ui/widgets/learning_center/dash/due_today_strip.dart';
+import 'package:cerebrum/ui/widgets/learning_center/dash/performance_panel.dart';
+import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/ui/screens/learning_center/study_plan_detail_page.dart';
+import 'package:cerebrum/ui/screens/learning_center/engrams/engrams_section.dart';
 import 'package:cerebrum/ui/screens/learning_center/engrams/completion/mcq.dart';
 import 'package:cerebrum/ui/screens/learning_center/engrams/completion/flashcard.dart';
 import 'package:cerebrum/ui/screens/learning_center/engrams/completion/short_question.dart';
 import 'package:cerebrum/ui/screens/learning_center/engrams/completion/long_questions.dart';
-import 'package:cerebrum/ui/widgets/floating_modal.dart';
-import 'package:cerebrum/ui/widgets/plan_portfolio_gantt.dart';
+import 'package:cerebrum/ui/widgets/learning_center/create_study_plan_dialog.dart';
+import 'package:cerebrum/ui/widgets/learning_center/gantt/plan_portfolio_gantt.dart';
 
-/// Learning Center — ONE page. Portfolio timeline on top (approved-plan
-/// gantt with an upcoming-draft staging pane left), per-bubble engrams
-/// beneath. No tabs — spec [[features/study-plan-annual-view]].
+/// Learning Center — ONE page: the dashboard carousel on top, then
+/// per-bubble engrams beneath. No tabs — spec
+/// [[features/study-plan-annual-view]].
+///
+/// The dashboard carousel (_buildDashboardCarousel) is a fixed-height,
+/// dot-indicated PageView with three swipeable pages —
+///   - Due today (DueTodayStrip, ui/widgets/learning_center/due_today_strip.dart):
+///     a full carousel page, not a bare strip. Real due filtering: only
+///     engrams whose `scheduled_at`/`due_at` has arrived by now, soonest
+///     first. Nothing scheduled → the strip's honest "Nothing due today."
+///     Never a synthesized due time (Phase 2 dashboard honesty rule).
+///   - Performance (PerformancePanel,
+///     ui/widgets/learning_center/performance_panel.dart): weak-point
+///     concepts come from the real engram tag grouping; mastery/streak
+///     come from MetricsApi via _metricsFuture. Until the daemon
+///     performance endpoint exists
+///     ([[features/engram-performance-report]]),
+///     MetricsApi.getSummary throws, _fetchMetrics degrades to null, and
+///     the panel shows "--" — never a fabricated number.
+///   - Plans: the portfolio timeline — approved plans as calendar-anchored
+///     bars (PlanPortfolioGantt,
+///     ui/widgets/learning_center/plan_portfolio_gantt.dart) with the
+///     upcoming-draft staging pane left (_buildUpcomingPane). This pane
+///     owns ALL draft UI on the page; tap a bar or draft to open the full
+///     detail page. The carousel is the portfolio's ONLY surface — there
+///     is no standalone Plans section below, so the same gantt never
+///     renders twice. The phase-level (Focus) gantt is gone; the detail
+///     page owns that view now.
 ///
 /// Backed by GET /study_plan/user/all (every status; drafts feed the
-/// staging pane) and GET /learn/engrams/list.
+/// staging pane), GET /learn/engrams/list, GET /study_plan/{id}/progress
+/// (per-plan KPI chips inside the portfolio gantt), and the optional
+/// MetricsApi.getSummary.
 class DLearningCenterPage extends StatefulWidget {
   final String userId;
 
@@ -26,26 +61,109 @@ class DLearningCenterPage extends StatefulWidget {
 }
 
 class _DLearningCenterPageState extends State<DLearningCenterPage> {
-  late Future<EngramListResponse> _engramsFuture;
+  late Future<EngramsViewData> _engramsFuture;
   late Future<List<Map<String, dynamic>>> _plansFuture;
+  late Future<PerformanceMetrics?> _metricsFuture;
+
+  final PageController _dashboardPageController = PageController();
+  int _dashboardPageIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _loadEngrams();
     _loadPlans();
+    _loadMetrics();
   }
 
   void _loadEngrams() {
-    _engramsFuture = LearningCenterApi.listEngrams(userId: widget.userId);
+    _engramsFuture = _fetchEngramsView();
+  }
+
+  Future<EngramsViewData> _fetchEngramsView({
+    int? cognitiveLevel,
+    String? severity,
+  }) async {
+    final response = await LearningCenterApi.listEngrams(
+      userId: widget.userId,
+      cognitiveLevel: cognitiveLevel,
+      severity: severity,
+    );
+
+    // Local-first name resolution. Bubble names come from the daemon; note
+    // titles from the local index (no daemon round-trip per note).
+    final bubbleNames = <String, String>{};
+    try {
+      final bubbles = await BubblesApi.fetchBubbles();
+      for (final b in bubbles.whereType<Map>()) {
+        if (b['id'] != null) {
+          final name = b['name'] ?? b['title'];
+          bubbleNames['${b['id']}'] =
+              name is String && name.trim().isNotEmpty ? name : '${b['id']}';
+        }
+      }
+    } catch (_) {
+      // Daemon unreachable — bubble names degrade to raw ids below.
+    }
+
+    final noteTitles = <String, Map<String, String>>{};
+    try {
+      for (final bubbleId in bubbleNames.keys) {
+        final notes = await NoteStore.listNotes(bubbleId);
+        noteTitles[bubbleId] = {
+          for (final n in notes)
+            if (n['note_id'] != null)
+              '${n['note_id']}': '${n['title'] ?? 'Untitled'}',
+        };
+      }
+    } catch (_) {
+      // Note titles degrade to raw note ids below.
+    }
+
+    return EngramsViewData(
+      response: response,
+      bubbleNames: bubbleNames,
+      noteTitles: noteTitles,
+    );
+  }
+
+  Future<void> _statusUpdate(planId, status, userId) async {
+    try {
+      await PlannerApi.statusUpdate(
+        planId: planId,
+        status: status,
+        userId: userId,
+      );
+      _refreshPlans();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Failed to approve plan $e")));
+      }
+    }
   }
 
   void _loadPlans() {
     _plansFuture = PlannerApi.getPlans(userId: widget.userId);
   }
 
+  void _loadMetrics() {
+    _metricsFuture = _fetchMetrics();
+  }
+
+  Future<PerformanceMetrics?> _fetchMetrics() async {
+    try {
+      return await MetricsApi.getSummary(userId: widget.userId);
+    } catch (_) {
+      // Metrics are optional until the daemon performance endpoint exists.
+      return null;
+    }
+  }
+
   void _refreshEngrams() => setState(_loadEngrams);
   void _refreshPlans() => setState(_loadPlans);
+  void _refreshMetrics() => setState(_loadMetrics);
 
   void _openEngram(Engram e) async {
     Widget page;
@@ -86,7 +204,7 @@ class _DLearningCenterPageState extends State<DLearningCenterPage> {
   Future<void> _showCreatePlanDialog() async {
     final created = await showDialog<bool>(
       context: context,
-      builder: (_) => _CreateStudyPlanDialog(userId: widget.userId),
+      builder: (_) => CreateStudyPlanDialog(userId: widget.userId),
     );
 
     if (created == true && mounted) {
@@ -102,61 +220,30 @@ class _DLearningCenterPageState extends State<DLearningCenterPage> {
     }
   }
 
-  String _typeLabel(EngramType t) => switch (t) {
-    EngramType.mcq => 'Multiple Choice',
-    EngramType.flashcard => 'Flashcards',
-    EngramType.shortQuestion => 'Short Questions',
-    EngramType.longQuestion => 'Long Questions',
-    EngramType.unknown => 'Other',
-  };
-
-  IconData _typeIcon(EngramType t) => switch (t) {
-    EngramType.mcq => Icons.quiz_outlined,
-    EngramType.flashcard => Icons.style_outlined,
-    EngramType.shortQuestion => Icons.short_text,
-    EngramType.longQuestion => Icons.article_outlined,
-    EngramType.unknown => Icons.help_outline,
-  };
-
-  String _previewText(Engram e) {
-    switch (e.type) {
-      case EngramType.mcq:
-        return (e.content as McqContent).stem;
-      case EngramType.flashcard:
-        return (e.content as FlashcardContent).front;
-      case EngramType.shortQuestion:
-        final c = e.content as ShortQuestionContent;
-        return c.questions.isNotEmpty
-            ? c.questions.first.stem
-            : 'Short question set';
-      case EngramType.longQuestion:
-        return (e.content as LongQuestionContent).questionStem;
-      case EngramType.unknown:
-        return 'Untitled item';
-    }
+  @override
+  void dispose() {
+    _dashboardPageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return _buildGlobalOverview();
-  }
-
-  /// ONE rolling page — portfolio timeline on top (approved-plan gantt with
-  /// an upcoming-draft staging pane), per-bubble engrams beneath.
-  Widget _buildGlobalOverview() {
     return Scaffold(
       appBar: AppBar(title: const Text('Learning Center')),
       body: RefreshIndicator(
         onRefresh: _refreshAll,
         child: ListView(
           padding: const EdgeInsets.only(bottom: 32),
-          children: [_buildPlansSection(), _buildEngramsSection()],
+          children: [
+            const SizedBox(height: 8),
+            _buildDashboardCarousel(),
+            EngramsSection(
+              future: _engramsFuture,
+              refetch: _fetchEngramsView,
+              onEngramTap: _openEngram,
+            ),
+          ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showCreatePlanDialog,
-        icon: const Icon(Icons.add),
-        label: const Text('New Plan'),
       ),
     );
   }
@@ -164,35 +251,222 @@ class _DLearningCenterPageState extends State<DLearningCenterPage> {
   Future<void> _refreshAll() async {
     _refreshPlans();
     _refreshEngrams();
-    await Future.wait([_plansFuture, _engramsFuture]);
+    _refreshMetrics();
+    await Future.wait([_plansFuture, _engramsFuture, _metricsFuture]);
   }
 
-  /// Portfolio timeline section: divider between the upcoming-draft staging
-  /// pane (left, flat list — NO kanban columns) and the approved-plan gantt
-  /// (right, calendar bars with predicted start dates).
-  Widget _buildPlansSection() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _plansFuture,
+  // ---------------------------------------------------------------------
+  // Dashboard carousel
+  //
+  // The three pages answer three different questions:
+  //   1. What should I work on?      -> Due today
+  //   2. Where do I need attention?  -> Performance
+  //   3. Where is my plan at a glance? -> Plans portfolio timeline
+  //
+  // Keep them as separate swipeable pages rather than stacking the panels.
+  // The carousel has a stable height so PageView does not fight Flutter's
+  // unbounded vertical constraints. Each page can scroll internally if its
+  // content is taller than the viewport.
+  // ---------------------------------------------------------------------
+
+  Widget _buildDashboardCarousel() {
+    const pages = 2;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            height: 440,
+            child: PageView(
+              controller: _dashboardPageController,
+              onPageChanged: (index) {
+                if (mounted) {
+                  setState(() => _dashboardPageIndex = index);
+                }
+              },
+              children: [
+                SingleChildScrollView(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      SingleChildScrollView(
+                        padding: EdgeInsets.zero,
+                        child: _buildPerformancePanel(),
+                      ),
+                      SingleChildScrollView(
+                        padding: EdgeInsets.zero,
+                        child: _buildDueTodayCard(),
+                      ),
+                    ],
+                  ),
+                ),
+                SingleChildScrollView(
+                  padding: EdgeInsets.zero,
+                  child: _buildPortfolioCarouselPage(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(pages, (index) {
+              final active = index == _dashboardPageIndex;
+
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 18 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color:
+                      active
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outlineVariant,
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Due-today as a complete carousel page rather than a bare strip.
+  Widget _buildDueTodayCard() {
+    return FutureBuilder<EngramsViewData>(
+      future: _engramsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
-            height: 220,
+            height: 96,
             child: Center(child: CircularProgressIndicator()),
           );
         }
-        if (snapshot.hasError) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text('Error: ${snapshot.error}'),
-          );
+
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const SizedBox.shrink();
         }
-        final allPlans = snapshot.data ?? const <Map<String, dynamic>>[];
-        return _buildPortfolioPane(allPlans);
+
+        final due = _dueTodayEngrams(snapshot.data!.response.engrams);
+
+        return DueTodayStrip(
+          engrams: due,
+          typeIconOf: engramTypeIcon,
+          typeLabelOf: engramTypeLabel,
+          previewTextOf: engramPreview,
+          onTap: _openEngram,
+        );
       },
     );
   }
 
-  Widget _buildPortfolioPane(List<Map<String, dynamic>> allPlans) {
+  /// Engrams whose daemon `scheduled_at`/`due_at` has arrived by now,
+  /// soonest due first. Absent schedule → the item is not "due" — it is
+  /// simply not scheduled yet, and the strip says so honestly.
+  List<Engram> _dueTodayEngrams(List<Engram> all) {
+    final now = DateTime.now();
+    final due =
+        all.where((e) {
+            final at = e.scheduledAt;
+            return at != null && !at.isAfter(now);
+          }).toList()
+          ..sort((a, b) => a.scheduledAt!.compareTo(b.scheduledAt!));
+    return due;
+  }
+
+  /// Performance summary. Weak points come from real engram tags; optional
+  /// mastery/streak metrics come from MetricsApi when that endpoint exists.
+  Widget _buildPerformancePanel() {
+    return FutureBuilder<EngramsViewData>(
+      future: _engramsFuture,
+      builder: (context, engramsSnapshot) {
+        final weakPoints =
+            engramsSnapshot.hasData
+                ? engramsSnapshot.data!.response.engrams
+                    .where(isWeakPoint)
+                    .toList()
+                : const <Engram>[];
+
+        return FutureBuilder<PerformanceMetrics?>(
+          future: _metricsFuture,
+          builder: (context, metricsSnapshot) {
+            return PerformancePanel(
+              metrics: metricsSnapshot.data,
+              weakPointConcepts: _weakPointConceptCounts(weakPoints),
+              onConceptTap: (concept) => _openWeakConcept(concept, weakPoints),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// The portfolio timeline as a full carousel page — wrapped in the
+  /// same surface/border card as the Performance page. Empty / error
+  /// states degrade honestly instead of faking a timeline.
+  Widget _buildPortfolioCarouselPage() {
+    return Container(
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface),
+      padding: const EdgeInsets.all(16),
+      child: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _plansFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox(
+              height: 220,
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (snapshot.hasError) {
+            return Text('Error: ${snapshot.error}');
+          }
+          final allPlans = snapshot.data ?? const <Map<String, dynamic>>[];
+          return _buildPlanPane(allPlans);
+        },
+      ),
+    );
+  }
+
+  Map<String, int> _weakPointConceptCounts(List<Engram> weakPoints) {
+    final counts = <String, int>{};
+    for (final e in weakPoints) {
+      final concept = weakPointConcept(e);
+      counts[concept] = (counts[concept] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  void _openWeakConcept(String concept, List<Engram> weakPoints) {
+    final match = weakPoints.firstWhere(
+      (e) => weakPointConcept(e) == concept,
+      orElse: () => weakPoints.first,
+    );
+    _openEngram(match);
+  }
+
+  void _scrollToEngramsSection() {
+    // TODO: wire this to an actual scroll position (e.g. give the page's
+    // ListView a ScrollController and scroll to the Engrams section's
+    // context) once "Browse all engrams" needs to do more than remind you
+    // the section already exists further down the page.
+  }
+
+  // ---------------------------------------------------------------------
+  // Plans portfolio pane (carousel page 2). Approved plans render as
+  // calendar bars (PlanPortfolioGantt) with an upcoming-draft staging pane
+  // left — UNCHANGED from the annual-view spec; this pane owns ALL draft
+  // UI on the page. The carousel is its only surface: there is no
+  // standalone Plans section below, so the same gantt never renders twice.
+  // The phase-level (Focus) gantt is gone; StudyPlanDetailPage owns that
+  // view now.
+  // ---------------------------------------------------------------------
+
+  /// Timeline: approved plans as calendar bars, upcoming drafts staged
+  /// left. This pane owns ALL draft UI on the page.
+  Widget _buildPlanPane(List<Map<String, dynamic>> allPlans) {
     final drafts =
         allPlans
             .where((p) => ((p['status'] as String?) ?? 'active') == 'draft')
@@ -242,8 +516,10 @@ class _DLearningCenterPageState extends State<DLearningCenterPage> {
   /// draft-review feature [[features/study-plan-draft-review]].
   Widget _buildUpcomingPane(List<Map<String, dynamic>> drafts) {
     return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+      ),
       width: 240,
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
       child:
           drafts.isEmpty
               ? Padding(
@@ -270,18 +546,32 @@ class _DLearningCenterPageState extends State<DLearningCenterPage> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-                    child: Text(
-                      'Upcoming',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Upcoming',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        Spacer(),
+                        // NOTE: Temporary placement
+                        IconButton(
+                          onPressed: _showCreatePlanDialog,
+                          icon: Icon(Icons.add_rounded),
+                        ),
+                      ],
                     ),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     child: Text(
-                      '${drafts.length} draft(s) awaiting approval',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      drafts.length == 1
+                          ? '${drafts.length} draft awaiting approval'
+                          : '${drafts.length} draft(s) awaiting approval',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: context.cerebrum.status.danger,
+                      ),
                     ),
                   ),
                   Expanded(
@@ -291,19 +581,57 @@ class _DLearningCenterPageState extends State<DLearningCenterPage> {
                       itemBuilder: (context, i) {
                         final plan = drafts[i];
                         return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            dense: true,
-                            title: Text(
-                              plan['target_role']?.toString() ??
-                                  'Untitled plan',
-                              style: const TextStyle(fontSize: 13),
+                          elevation: 0,
+                          margin: const EdgeInsets.only(bottom: 18),
+                          child: GestureDetector(
+                            // 1. Change to onSecondaryTapDown to capture cursor details
+                            onSecondaryTapDown: (TapDownDetails details) {
+                              showMenu(
+                                context: context,
+                                // 2. Position the menu precisely at the cursor location
+                                position: RelativeRect.fromLTRB(
+                                  details.globalPosition.dx,
+                                  details.globalPosition.dy,
+                                  details.globalPosition.dx + 1,
+                                  details.globalPosition.dy + 1,
+                                ),
+                                items: [
+                                  PopupMenuItem(
+                                    value: 'approve',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.check,
+                                          color:
+                                              context.cerebrum.status.success,
+                                          size: 18,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text('Approve Plan'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ).then((selectedValue) {
+                                // 3. Handle the selection
+                                if (selectedValue == 'approve') {
+                                  _statusUpdate(
+                                    plan['plan_id'],
+                                    'active',
+                                    widget.userId,
+                                  );
+                                }
+                              });
+                            },
+                            child: ListTile(
+                              dense: true,
+                              title: Text(
+                                plan['target_role']?.toString() ??
+                                    'Untitled plan',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                              onTap: () => _openPlan(plan),
                             ),
-                            subtitle: Text(
-                              'draft · v${plan['version'] ?? 1}',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                            onTap: () => _openPlan(plan),
                           ),
                         );
                       },
@@ -311,250 +639,6 @@ class _DLearningCenterPageState extends State<DLearningCenterPage> {
                   ),
                 ],
               ),
-    );
-  }
-
-  /// Per-bubble engrams section beneath the timeline.
-  Widget _buildEngramsSection() {
-    return FutureBuilder<EngramListResponse>(
-      future: _engramsFuture,
-      builder: (context, snapshot) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 4),
-              child: Text(
-                'Engrams',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            if (snapshot.connectionState == ConnectionState.waiting)
-              const SizedBox(
-                height: 160,
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (snapshot.hasError)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Error: ${snapshot.error}'),
-              )
-            else
-              _buildEngramsList(context, snapshot.data!),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Grouped-by-type engrams list. Embedded into the page ListView, so it
-  /// never scrolls itself.
-  Widget _buildEngramsList(BuildContext context, EngramListResponse response) {
-    final engrams = response.engrams;
-    if (engrams.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-        child: Text('No engrams yet.'),
-      );
-    }
-
-    // Grouped by TYPE only, for now. Grouping by upcoming/new/old
-    // (due date) needs engram_mastery.state / next_due_at added to
-    // the /engrams/list response first -- _sanitize_for_presentation
-    // on the backend currently strips down to content/tags/level,
-    // no mastery info at all.
-    final grouped = <EngramType, List<Engram>>{};
-    for (final e in engrams) {
-      grouped.putIfAbsent(e.type, () => []).add(e);
-    }
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children:
-          grouped.entries.map((entry) {
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: ExpansionTile(
-                leading: Icon(_typeIcon(entry.key)),
-                title: Text(_typeLabel(entry.key)),
-                subtitle: Text('${entry.value.length} item(s)'),
-                children:
-                    entry.value.map((e) {
-                      return ListTile(
-                        title: Text(_previewText(e)),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _openEngram(e),
-                      );
-                    }).toList(),
-              ),
-            );
-          }).toList(),
-    );
-  }
-}
-
-/// Form dialog for POST /study_plan/generate. `user_profile` and
-/// `target_role` are required by the backend's StudyPlanRequest --
-/// `context` and a free-text profile note are optional. I don't have
-/// visibility into what shape user_profile is actually expected to be
-/// (study_planner_inator.generate_study_plan takes it as a raw dict), so
-/// this sends a minimal {"notes": "..."} or {} rather than guessing at
-/// specific keys. If generate_study_plan expects particular fields
-/// (e.g. current_level, hours_per_week, prior_experience), tell me and
-/// I'll turn "Profile notes" into proper structured fields instead.
-class _CreateStudyPlanDialog extends StatefulWidget {
-  final String userId;
-  const _CreateStudyPlanDialog({required this.userId});
-
-  @override
-  State<_CreateStudyPlanDialog> createState() => _CreateStudyPlanDialogState();
-}
-
-class _CreateStudyPlanDialogState extends State<_CreateStudyPlanDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _targetRoleController = TextEditingController();
-  final _contextController = TextEditingController();
-  final _profileNotesController = TextEditingController();
-
-  bool _submitting = false;
-  String? _error;
-
-  @override
-  void dispose() {
-    _targetRoleController.dispose();
-    _contextController.dispose();
-    _profileNotesController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _submitting = true;
-      _error = null;
-    });
-
-    try {
-      // PlannerApi.generatePlan takes positional args and expects
-      // userProfile as Map<String, Map<dynamic, dynamic>> — nesting the
-      // free-text note under a single key to satisfy that shape. If
-      // generate_study_plan on the backend actually expects specific
-      // structured keys (current_level, hours_per_week, etc.) rather
-      // than a single nested note, swap this for those fields instead.
-      // historicalPlanId is required with no null option in the current
-      // signature — passing '' for a brand-new plan; if the backend
-      // needs to distinguish "no history" from "history id is empty
-      // string", that param should become nullable instead.
-      await PlannerApi.generatePlan(
-        widget.userId,
-        {
-          'notes': {'text': _profileNotesController.text.trim()},
-        },
-        _targetRoleController.text.trim(),
-        _contextController.text.trim(),
-        '',
-      );
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = 'Could not start plan generation: $e');
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FloatingModal(
-      title: 'New Study Plan',
-      widthFactor: 0.8,
-      heightFactor: 0.8,
-      onClose: _submitting ? null : () => Navigator.of(context).pop(false),
-      actions: [
-        TextButton(
-          onPressed:
-              _submitting ? null : () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        const SizedBox(width: 8),
-        FilledButton(
-          onPressed: _submitting ? null : _submit,
-          child:
-              _submitting
-                  ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                  : const Text('Create'),
-        ),
-      ],
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextFormField(
-              controller: _targetRoleController,
-              decoration: const InputDecoration(
-                labelText: 'Target role / goal',
-                hintText: 'e.g. "Backend Engineer" or "MCAT prep"',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Target role is required';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-            // Expanded so Context and Profile notes share the remaining
-            // vertical space evenly, instead of collapsing to their
-            // maxLines minimum -- this is the actual fix for "give the
-            // user room to see what they're typing".
-            Expanded(
-              child: TextFormField(
-                controller: _contextController,
-                expands: true,
-                maxLines: null,
-                textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(
-                  labelText: 'Context (optional)',
-                  hintText: 'Anything the planner should know up front',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: TextFormField(
-                controller: _profileNotesController,
-                expands: true,
-                maxLines: null,
-                textAlignVertical: TextAlignVertical.top,
-                decoration: const InputDecoration(
-                  labelText: 'Profile notes (optional)',
-                  hintText: 'Current level, hours/week available, etc.',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                ),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

@@ -1,6 +1,7 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 
-import 'gap_models.dart';
+import '../../../models/gap_models.dart';
 import 'gap_repository.dart';
 
 /// Right-column "needs your attention" widget: the single highest-severity
@@ -22,10 +23,9 @@ String _scopeLabel(GapItem item) {
   if (evidence != null && evidence.blockIds.isNotEmpty) {
     final lead = evidence.excerpt;
     if (lead != null) {
-      final first = lead.split('\n').firstWhere(
-        (l) => l.trim().isNotEmpty,
-        orElse: () => '',
-      );
+      final first = lead
+          .split('\n')
+          .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
       return 'In: $first';
     }
     return 'In: this section';
@@ -112,10 +112,10 @@ class _PriorityGapCardState extends State<PriorityGapCard>
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF5F5),
+        color: context.cerebrum.status.dangerSurface,
         borderRadius: BorderRadius.circular(12),
-        border: const Border(
-          left: BorderSide(color: Color(0xFFB3261E), width: 4),
+        border: Border(
+          left: BorderSide(color: context.cerebrum.status.danger, width: 4),
         ),
       ),
       child: Column(
@@ -123,18 +123,18 @@ class _PriorityGapCardState extends State<PriorityGapCard>
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.priority_high_rounded,
                 size: 16,
-                color: Color(0xFF8C2F2F),
+                color: context.cerebrum.status.dangerDeep,
               ),
               const SizedBox(width: 6),
-              const Text(
+              Text(
                 'Needs your attention',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF8C2F2F),
+                  color: context.cerebrum.status.dangerDeep,
                 ),
               ),
             ],
@@ -152,7 +152,10 @@ class _PriorityGapCardState extends State<PriorityGapCard>
               item.detail!,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: TextStyle(
+                fontSize: 12,
+                color: context.cerebrum.text.muted,
+              ),
             ),
           ],
           const SizedBox(height: 8),
@@ -161,10 +164,10 @@ class _PriorityGapCardState extends State<PriorityGapCard>
           // the overview) have no block target.
           Text(
             _scopeLabel(item),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w500,
-              color: Color(0xFF8C2F2F),
+              color: context.cerebrum.status.dangerDeep,
               fontStyle: FontStyle.italic,
             ),
           ),

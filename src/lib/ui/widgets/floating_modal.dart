@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 
 /// Shared "floating window" chrome: a centered, rounded card sized as a
@@ -51,10 +52,10 @@ class FloatingModal extends StatelessWidget {
           maxHeight: screenSize.height * heightFactor,
         ),
         child: Material(
-          color: Colors.white,
+          color: context.cerebrum.surface.raised,
           borderRadius: BorderRadius.circular(16),
           elevation: 8,
-          shadowColor: Colors.black.withValues(alpha: 0.2),
+          shadowColor: context.cerebrum.text.strong.withValues(alpha: 0.2),
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(

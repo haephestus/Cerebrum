@@ -40,8 +40,9 @@ class EngramStore {
           bubbleId: Value((e['bubble_id'] as String?) ?? bubbleId),
           noteId: Value(e['note_id'] as String?),
           type: type,
-          targetCognitiveLevel:
-              Value((e['target_cognitive_level'] as num?)?.toInt() ?? 1),
+          targetCognitiveLevel: Value(
+            (e['target_cognitive_level'] as num?)?.toInt() ?? 1,
+          ),
           tagsJson: Value(jsonEncode(e['tags'] ?? const [])),
           contentJson: jsonEncode(e['content'] ?? const {}),
           updatedAt: now,
@@ -74,6 +75,7 @@ class EngramStore {
     try {
       return Engram.fromJson({
         'id': r.id,
+        'bubble_id': r.bubbleId,
         'note_id': r.noteId ?? '',
         'type': r.type,
         'target_cognitive_level': r.targetCognitiveLevel,

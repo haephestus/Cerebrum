@@ -95,11 +95,7 @@ class SyncService {
 
     final items = await _deleteOutbox();
     if (!items.any((i) => i['bubbleId'] == bubbleId && i['noteId'] == noteId)) {
-      items.add({
-        'bubbleId': bubbleId,
-        'noteId': noteId,
-        'filename': filename,
-      });
+      items.add({'bubbleId': bubbleId, 'noteId': noteId, 'filename': filename});
       await _saveDeleteOutbox(items);
     }
     await _pushDelete(bubbleId, noteId, filename); // best-effort now
@@ -203,11 +199,12 @@ class SyncService {
           content: {
             'document': pages.isNotEmpty ? pages.first['document'] : const {},
           },
-          ink: pages.isNotEmpty
-              ? List<Map<String, dynamic>>.from(
-                  (pages.first['ink'] as List?) ?? const [],
-                )
-              : const [],
+          ink:
+              pages.isNotEmpty
+                  ? List<Map<String, dynamic>>.from(
+                    (pages.first['ink'] as List?) ?? const [],
+                  )
+                  : const [],
         );
         filename = created['filename'] as String?;
         result = created;
@@ -233,12 +230,14 @@ class SyncService {
       // Persist the server-confirmed copy locally so a background drain also
       // captures daemon-assigned fields (notably a new note's `filename`) —
       // otherwise the next save would treat it as new again and duplicate it.
-      final mergedPages = result['pages'] != null
-          ? List<Map<String, dynamic>>.from(
-              (result['pages'] as List)
-                  .map((e) => Map<String, dynamic>.from(e as Map)),
-            )
-          : pages;
+      final mergedPages =
+          result['pages'] != null
+              ? List<Map<String, dynamic>>.from(
+                (result['pages'] as List).map(
+                  (e) => Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              : pages;
       await NoteStore.writeNote(
         bubbleId: bubbleId,
         noteId: noteId,
@@ -281,7 +280,8 @@ class SyncService {
     final items = await _outbox();
     // one pending push per note — replace any earlier queued version
     items.removeWhere(
-      (i) => i['bubbleId'] == entry['bubbleId'] && i['noteId'] == entry['noteId'],
+      (i) =>
+          i['bubbleId'] == entry['bubbleId'] && i['noteId'] == entry['noteId'],
     );
     items.add(entry);
     await _saveOutbox(items);
@@ -289,7 +289,9 @@ class SyncService {
 
   static Future<void> _dequeue(String bubbleId, String noteId) async {
     final items = await _outbox();
-    items.removeWhere((i) => i['bubbleId'] == bubbleId && i['noteId'] == noteId);
+    items.removeWhere(
+      (i) => i['bubbleId'] == bubbleId && i['noteId'] == noteId,
+    );
     await _saveOutbox(items);
   }
 
@@ -418,14 +420,18 @@ class SyncService {
     );
   }
 
-  static Future<void> _saveDeleteOutbox(List<Map<String, dynamic>> items) async {
+  static Future<void> _saveDeleteOutbox(
+    List<Map<String, dynamic>> items,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kDeleteOutbox, jsonEncode(items));
   }
 
   static Future<void> _dequeueDelete(String bubbleId, String noteId) async {
     final items = await _deleteOutbox();
-    items.removeWhere((i) => i['bubbleId'] == bubbleId && i['noteId'] == noteId);
+    items.removeWhere(
+      (i) => i['bubbleId'] == bubbleId && i['noteId'] == noteId,
+    );
     await _saveDeleteOutbox(items);
   }
 }

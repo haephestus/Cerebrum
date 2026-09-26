@@ -182,6 +182,7 @@ class PagedNoteController extends ChangeNotifier {
   final List<NotePage> _pages;
   int _activeIndex = 0;
   bool _drawingEnabled = false;
+
   /// Vim-enabled state per page, captured when drawing turns ON so it can be
   /// restored when drawing turns OFF (see [toggleDrawingMode]).
   final Map<String, bool> _vimEnabledBeforeDrawing = {};
@@ -422,18 +423,14 @@ class PagedNoteController extends ChangeNotifier {
 
     _flowing = true;
 
-    final kept = keptHead == null
-        ? children.sublist(0, fromBlockIndex)
-        : [
-            ...children.sublist(0, fromBlockIndex),
-            keptHead,
-          ];
-    final moved = keptHead == null
-        ? children.sublist(fromBlockIndex)
-        : [
-            movedTail!,
-            ...children.sublist(fromBlockIndex + 1),
-          ];
+    final kept =
+        keptHead == null
+            ? children.sublist(0, fromBlockIndex)
+            : [...children.sublist(0, fromBlockIndex), keptHead];
+    final moved =
+        keptHead == null
+            ? children.sublist(fromBlockIndex)
+            : [movedTail!, ...children.sublist(fromBlockIndex + 1)];
 
     // Capture the source page's caret AND vim mode before we tear it down.
     int? srcCaretBlock;
@@ -460,7 +457,8 @@ class PagedNoteController extends ChangeNotifier {
     // page; otherwise it stays on this (trimmed) page — EXCEPT a caret reseated
     // onto the head table, which always stays put. Exactly ONE page gets a
     // caret — the other passes seedCaret:false so no second cursor lingers.
-    final caretMoved = !reseatedTableCaret &&
+    final caretMoved =
+        !reseatedTableCaret &&
         srcCaretBlock != null &&
         srcCaretBlock >= fromBlockIndex;
     final targetCaretBlock =
@@ -535,9 +533,10 @@ class PagedNoteController extends ChangeNotifier {
     // Focus the page that OWNS the caret after the flow: the target when the
     // caret moved, the trimmed source when it stayed (or was reseated onto the
     // head table). Registered LAST so it is the deciding post-frame request.
-    final focusDriver = caretMoved
-        ? target.controller.driver
-        : (srcCaretBlock != null ? trimmed.controller.driver : null);
+    final focusDriver =
+        caretMoved
+            ? target.controller.driver
+            : (srcCaretBlock != null ? trimmed.controller.driver : null);
     if (focusDriver is AppFlowyTextDriver) focusDriver.requestEditorFocus();
 
     if (caretMoved) _activeIndex = pageIndex + 1;

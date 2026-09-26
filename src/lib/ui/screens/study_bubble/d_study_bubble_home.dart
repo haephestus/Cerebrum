@@ -1,10 +1,11 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/api/bubbles_api.dart';
 import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/services/user_session.dart';
 import 'package:cerebrum/ui/screens/home/gap_repository.dart';
-import 'package:cerebrum/ui/screens/study_bubble/d_study_bubble_page.dart';
-import 'package:cerebrum/ui/widgets/card_view.dart';
+import 'package:cerebrum/ui/widgets/study_bubble/card_view.dart';
+import 'package:cerebrum/ui/widgets/study_bubble/create_study_bubble_dialog.dart';
 
 /// The study-bubbles grid page.
 ///
@@ -155,12 +156,12 @@ class _DStudyBubbleHomeState extends State<DStudyBubbleHome> {
   Color _ringColor(String? bubbleId) {
     final attention = bubbleId == null ? null : _attentionByBubble[bubbleId];
     if (attention == null || attention == 0) {
-      return const Color(0xFFB9B4CC);
+      return context.cerebrum.status.neutralSoft;
     }
     if (attention <= 3) {
-      return const Color(0xFFC9A24B);
+      return context.cerebrum.brand.accent;
     }
-    return const Color(0xFFB3261E);
+    return context.cerebrum.status.danger;
   }
 
   bool _matches(Map<String, dynamic> bubble, String query) {
@@ -185,12 +186,9 @@ class _DStudyBubbleHomeState extends State<DStudyBubbleHome> {
   }
 
   void _addBubbleWidget() async {
-    final newBubble = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const DStudyBubblePage(addMode: true)),
-    );
+    final newBubble = await showCreateStudyBubbleDialog(context);
 
-    // When creation page returns a bubble
+    // When creation returns a bubble
     if (newBubble != null && mounted) {
       setState(() => bubbles.insert(0, Map<String, dynamic>.from(newBubble)));
     }
@@ -209,9 +207,9 @@ class _DStudyBubbleHomeState extends State<DStudyBubbleHome> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text(
+                child: Text(
                   "Delete",
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: context.cerebrum.status.danger),
                 ),
               ),
               TextButton(
@@ -257,33 +255,34 @@ class _DStudyBubbleHomeState extends State<DStudyBubbleHome> {
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text("Edit Study Bubble"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: const InputDecoration(labelText: "Name"),
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text("Edit Study Bubble"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: "Name"),
+                ),
+                TextField(
+                  controller: descCtrl,
+                  decoration: const InputDecoration(labelText: "Description"),
+                  maxLines: 3,
+                ),
+              ],
             ),
-            TextField(
-              controller: descCtrl,
-              decoration: const InputDecoration(labelText: "Description"),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text("Cancel"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text("Cancel"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text("Save"),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text("Save"),
-          ),
-        ],
-      ),
     );
 
     if (saved != true) return;
@@ -367,7 +366,7 @@ class _DStudyBubbleHomeState extends State<DStudyBubbleHome> {
           children: [
             Text(
               'Couldn\'t load study bubbles.',
-              style: TextStyle(color: Colors.red.shade700),
+              style: TextStyle(color: context.cerebrum.status.dangerDeep),
             ),
             TextButton(onPressed: _load, child: const Text('Retry')),
           ],
@@ -380,7 +379,11 @@ class _DStudyBubbleHomeState extends State<DStudyBubbleHome> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.bubble_chart, size: 56, color: Color(0xFFB9B4CC)),
+            Icon(
+              Icons.bubble_chart,
+              size: 56,
+              color: context.cerebrum.status.neutralSoft,
+            ),
             const SizedBox(height: 12),
             const Text(
               'No study bubbles yet',
@@ -389,7 +392,10 @@ class _DStudyBubbleHomeState extends State<DStudyBubbleHome> {
             const SizedBox(height: 4),
             Text(
               'Create your first study bubble to start collecting notes.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              style: TextStyle(
+                color: context.cerebrum.text.muted,
+                fontSize: 13,
+              ),
             ),
           ],
         ),
@@ -401,7 +407,7 @@ class _DStudyBubbleHomeState extends State<DStudyBubbleHome> {
       return Center(
         child: Text(
           'No bubbles match "${_query.trim()}".',
-          style: TextStyle(color: Colors.grey.shade600),
+          style: TextStyle(color: context.cerebrum.text.muted),
         ),
       );
     }
@@ -460,7 +466,7 @@ class _ResumeBubbleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF2A2A30),
+      color: context.cerebrum.surface.cardSurface,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -473,12 +479,12 @@ class _ResumeBubbleRow extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6C4FCE),
+                  color: context.cerebrum.brand.primary,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.play_arrow,
-                  color: Colors.white,
+                  color: context.cerebrum.text.onDark,
                   size: 22,
                 ),
               ),
@@ -490,7 +496,9 @@ class _ResumeBubbleRow extends StatelessWidget {
                     Text(
                       'CONTINUE WHERE YOU LEFT OFF',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.45),
+                        color: context.cerebrum.text.onDark.withValues(
+                          alpha: 0.45,
+                        ),
                         fontSize: 10,
                         letterSpacing: 1.1,
                         fontWeight: FontWeight.w600,
@@ -501,8 +509,8 @@ class _ResumeBubbleRow extends StatelessWidget {
                       '${bubble['name'] ?? 'Study bubble'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.cerebrum.text.onDark,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -512,7 +520,7 @@ class _ResumeBubbleRow extends StatelessWidget {
               ),
               Icon(
                 Icons.chevron_right,
-                color: Colors.white.withValues(alpha: 0.7),
+                color: context.cerebrum.text.onDark.withValues(alpha: 0.7),
               ),
             ],
           ),

@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 
 class SidebarButton extends StatefulWidget {
@@ -34,14 +35,17 @@ class _SidebarButtonState extends State<SidebarButton> {
             Container(
               width: 4,
               height: 66, // match button height roughly
-              color: widget.selected ? Colors.blue : Colors.transparent,
+              color:
+                  widget.selected
+                      ? context.cerebrum.surface.canvas
+                      : Colors.transparent,
             ),
             const SizedBox(width: 4), // spacing between bar and button
             Expanded(
               child: TextButton(
                 // Hover effect
                 style: TextButton.styleFrom(
-                  foregroundColor: Colors.blue,
+                  foregroundColor: context.cerebrum.surface.canvas,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.zero,
@@ -51,7 +55,11 @@ class _SidebarButtonState extends State<SidebarButton> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(widget.icon, size: 40, color: Colors.blue),
+                    Icon(
+                      widget.icon,
+                      size: 26,
+                      color: context.cerebrum.surface.canvas,
+                    ),
                     const SizedBox(height: 8),
                     if (_hovering)
                       AnimatedSlide(
@@ -63,8 +71,8 @@ class _SidebarButtonState extends State<SidebarButton> {
                           child: Text(
                             widget.label,
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.blue,
+                            style: TextStyle(
+                              color: context.cerebrum.surface.canvas,
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                             ),
@@ -81,4 +89,3 @@ class _SidebarButtonState extends State<SidebarButton> {
     );
   }
 }
-

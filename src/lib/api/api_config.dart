@@ -26,9 +26,10 @@ class ApiConfig {
   /// mode + URLs into [baseUrl].
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    mode = prefs.getString(_keyMode) == 'cloud'
-        ? DeploymentMode.cloud
-        : DeploymentMode.local;
+    mode =
+        prefs.getString(_keyMode) == 'cloud'
+            ? DeploymentMode.cloud
+            : DeploymentMode.local;
     baseUrl = _urlFor(prefs, mode);
   }
 
@@ -47,7 +48,10 @@ class ApiConfig {
 
   static Future<void> setMode(DeploymentMode m) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyMode, m == DeploymentMode.cloud ? 'cloud' : 'local');
+    await prefs.setString(
+      _keyMode,
+      m == DeploymentMode.cloud ? 'cloud' : 'local',
+    );
     mode = m;
     baseUrl = _urlFor(prefs, m);
   }

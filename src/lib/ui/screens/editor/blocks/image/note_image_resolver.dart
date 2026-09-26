@@ -112,8 +112,7 @@ class NoteImageResolver {
     Map<String, dynamic> document,
     String Function(String) map,
   ) {
-    final copy =
-        jsonDecode(jsonEncode(document)) as Map<String, dynamic>;
+    final copy = jsonDecode(jsonEncode(document)) as Map<String, dynamic>;
     void walk(Map node) {
       if (node['type'] == 'image') {
         final data = node['data'];

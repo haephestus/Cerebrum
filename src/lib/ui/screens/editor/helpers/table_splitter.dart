@@ -138,7 +138,8 @@ Map<String, dynamic> _data(Block block) {
   return d is Map<String, dynamic> ? d : <String, dynamic>{};
 }
 
-int? _int(Object? v) => v is num ? v.toInt() : (v is String ? int.tryParse(v) : null);
+int? _int(Object? v) =>
+    v is num ? v.toInt() : (v is String ? int.tryParse(v) : null);
 
 /// Deep clone via JSON-safe structures (blocks are plain maps/lists/scalars).
 Object? _deep(Object? v) {

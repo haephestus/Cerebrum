@@ -91,7 +91,10 @@ class NoteStore {
       });
       // Analysis is server-owned; only persist it when the daemon supplied one.
       if (page['analysis'] != null) {
-        await _writeJson(File('${pageDir.path}/analysis.json'), page['analysis']);
+        await _writeJson(
+          File('${pageDir.path}/analysis.json'),
+          page['analysis'],
+        );
       }
     }
 
@@ -108,11 +111,12 @@ class NoteStore {
       }
     }
 
-    final fullManifest = Map<String, dynamic>.from(manifest)
-      ..['note_id'] = noteId
-      ..['bubble_id'] = bubbleId
-      ..['page_order'] = pageIds
-      ..['updated_at'] = DateTime.now().toUtc().toIso8601String();
+    final fullManifest =
+        Map<String, dynamic>.from(manifest)
+          ..['note_id'] = noteId
+          ..['bubble_id'] = bubbleId
+          ..['page_order'] = pageIds
+          ..['updated_at'] = DateTime.now().toUtc().toIso8601String();
     await _writeJson(File('${noteDir.path}/manifest.json'), fullManifest);
 
     await _updateIndex(bubbleId, noteId, fullManifest);
@@ -442,7 +446,10 @@ class NoteStore {
     if (!await file.exists()) return [];
     final raw = await _readJson(file);
     if (raw is! List) return [];
-    return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   // -- json io -----------------------------------------------------------

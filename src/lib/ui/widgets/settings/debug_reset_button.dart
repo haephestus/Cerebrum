@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:cerebrum/services/user_session.dart';
@@ -31,7 +32,9 @@ class DebugResetOnboardingButton extends StatelessWidget {
 
     return OutlinedButton.icon(
       onPressed: () => _reset(context),
-      style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: context.cerebrum.status.danger,
+      ),
       icon: const Icon(Icons.restart_alt),
       label: const Text('DEBUG: Reset onboarding + login'),
     );

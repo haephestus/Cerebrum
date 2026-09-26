@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
@@ -58,8 +59,10 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
     setState(() => _submitting = true);
     try {
       // 1) Grade LOCALLY first — immediate, offline-first SRS feedback.
-      final mastery =
-          await OfflineMastery.applyFlashcard(widget.engram.id, rating);
+      final mastery = await OfflineMastery.applyFlashcard(
+        widget.engram.id,
+        rating,
+      );
       // 2) Queue the answer for the daemon (record + server-side scheduling).
       final attempt = await EngramSyncService.submit(
         engramId: widget.engram.id,
@@ -110,8 +113,11 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
                 height: 220,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: _flipped ? Colors.indigo.shade50 : Colors.white,
-                  border: Border.all(color: Colors.black12),
+                  color:
+                      _flipped
+                          ? context.cerebrum.status.infoSurface
+                          : context.cerebrum.surface.raised,
+                  border: Border.all(color: context.cerebrum.surface.outline),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 alignment: Alignment.center,
@@ -126,19 +132,39 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
             ),
             const SizedBox(height: 12),
             if (!_flipped)
-              const Text(
+              Text(
                 'Tap the card to reveal the answer',
-                style: TextStyle(color: Colors.black54),
+                style: TextStyle(color: context.cerebrum.text.muted),
               ),
             const SizedBox(height: 24),
             if (_flipped && !rated)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _rateButton('again', Colors.red, _submitting, _rate),
-                  _rateButton('hard', Colors.orange, _submitting, _rate),
-                  _rateButton('good', Colors.blue, _submitting, _rate),
-                  _rateButton('easy', Colors.green, _submitting, _rate),
+                  _rateButton(
+                    'again',
+                    context.cerebrum.status.danger,
+                    _submitting,
+                    _rate,
+                  ),
+                  _rateButton(
+                    'hard',
+                    context.cerebrum.status.warning,
+                    _submitting,
+                    _rate,
+                  ),
+                  _rateButton(
+                    'good',
+                    context.cerebrum.status.info,
+                    _submitting,
+                    _rate,
+                  ),
+                  _rateButton(
+                    'easy',
+                    context.cerebrum.status.success,
+                    _submitting,
+                    _rate,
+                  ),
                 ],
               ),
             if (rated) _ratedPanel(),
@@ -160,8 +186,8 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
           const SizedBox(height: 6),
           Text(
             m.masteryState,
-            style: const TextStyle(
-              color: Colors.black87,
+            style: TextStyle(
+              color: context.cerebrum.text.strong,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -170,7 +196,7 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
           Text(
             'next review ~${m.intervalDays} '
             '${m.intervalDays == 1 ? 'day' : 'days'} (offline estimate)',
-            style: const TextStyle(color: Colors.black54, fontSize: 12),
+            style: TextStyle(color: context.cerebrum.text.muted, fontSize: 12),
           ),
         ],
         const SizedBox(height: 6),
@@ -193,13 +219,16 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
         Icon(
           synced ? Icons.check : Icons.cloud_off,
           size: 16,
-          color: synced ? Colors.green.shade700 : Colors.amber.shade800,
+          color:
+              synced
+                  ? context.cerebrum.status.success
+                  : context.cerebrum.status.warningStrong,
         ),
         const SizedBox(width: 4),
         Flexible(
           child: Text(
             synced ? 'Synced' : 'Saved — will sync when online',
-            style: const TextStyle(color: Colors.black54),
+            style: TextStyle(color: context.cerebrum.text.muted),
           ),
         ),
       ],
@@ -215,7 +244,7 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white,
+        foregroundColor: context.cerebrum.text.onBrand,
       ),
       onPressed: disabled ? null : () => onRate(label),
       child: Text(label),

@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -9,7 +10,7 @@ import 'package:cerebrum/services/sync_service.dart';
 import 'package:cerebrum/ui/screens/editor/blocks/image/note_image_resolver.dart';
 import 'package:cerebrum/ui/screens/editor/editor_scaffold.dart';
 import 'package:cerebrum/ui/screens/home/gap_repository.dart';
-import 'package:cerebrum/ui/widgets/note_card_view.dart';
+import 'package:cerebrum/ui/widgets/study_bubble/note_card_view.dart';
 
 /// The per-note facts a card renders. Everything here is either a local
 /// NoteStore fact or a daemon-cached state (analysis status / gap rollup);
@@ -21,7 +22,8 @@ class _NoteCardData {
   final String snippet;
   final bool dirty; // local unsynced edits
   final String? lastEdited; // ISO or null when unknown (chip hidden)
-  final AnalysisDisplayStatus analysis; // needs / current / stale / off / unknown
+  final AnalysisDisplayStatus
+  analysis; // needs / current / stale / off / unknown
   final int? gapCount; // null when the rollup has no data for this note
 
   const _NoteCardData({
@@ -38,8 +40,7 @@ class _NoteCardData {
   String get key => filename ?? noteId ?? title;
 
   /// Sort key 1: needs-analysis float to the top.
-  bool get needsAnalysis =>
-      analysis == AnalysisDisplayStatus.needsAnalysis;
+  bool get needsAnalysis => analysis == AnalysisDisplayStatus.needsAnalysis;
 
   /// Sort key 2: more gaps = higher attention (null gap count sorts last so an
   /// unknown isn't ranked above a known zero).
@@ -52,16 +53,10 @@ extension on _NoteCardData {
 }
 
 class DStudyBubblePage extends StatefulWidget {
-  final bool addMode;
   final Map<String, dynamic>? bubble;
   final VoidCallback? onBack;
 
-  const DStudyBubblePage({
-    super.key,
-    this.addMode = false,
-    this.bubble,
-    this.onBack,
-  });
+  const DStudyBubblePage({super.key, this.bubble, this.onBack});
 
   @override
   State<DStudyBubblePage> createState() => _DStudyBubblePageState();
@@ -70,9 +65,6 @@ class DStudyBubblePage extends StatefulWidget {
 class _DStudyBubblePageState extends State<DStudyBubblePage> {
   List<Map<String, dynamic>> notes = [];
   late String bubbleId;
-  final TextEditingController nameCtrl = TextEditingController();
-  final TextEditingController descCtrl = TextEditingController();
-  bool isLoading = false;
 
   // Enriched per-note card data, keyed by the same key used in `notes`.
   Map<String, _NoteCardData> _cardData = const {};
@@ -93,7 +85,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   void initState() {
     super.initState();
 
-    if (!widget.addMode && widget.bubble != null) {
+    if (widget.bubble != null) {
       bubbleId = widget.bubble!["id"].toString();
       loadNotes(bubbleId);
       _loadSyncIndicator();
@@ -172,18 +164,17 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   /// Enrich the note list into card data using ONLY local facts + cached
   /// daemon state (gap rollup). Snippet comes from each note's pages when the
   /// payload carries them (daemon list), else a cheap local first-page read.
-  Map<String, _NoteCardData> _buildCardData(
-    List<Map<String, dynamic>> source,
-  ) {
+  Map<String, _NoteCardData> _buildCardData(List<Map<String, dynamic>> source) {
     final out = <String, _NoteCardData>{};
 
     for (final n in source) {
       final noteId = n['note_id'] as String?;
       final filename = n['filename'] as String?;
       final key = filename ?? noteId ?? '${n['title']}';
-      final title = (n['title'] as String?)?.trim().isNotEmpty == true
-          ? n['title'].toString().trim()
-          : 'Untitled';
+      final title =
+          (n['title'] as String?)?.trim().isNotEmpty == true
+              ? n['title'].toString().trim()
+              : 'Untitled';
 
       final localDirty = n['dirty'] == true;
       final lastEdited =
@@ -217,11 +208,11 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
         // Optimistic from what the list payload says (manifest may carry the
         // note-level overview); refined by _refreshOnlineFacts.
         final hasOverview =
-            n['manifest'] is Map &&
-            (n['manifest'] as Map)['overview'] != null;
-        analysis = hasOverview
-            ? AnalysisDisplayStatus.current
-            : AnalysisDisplayStatus.needsAnalysis;
+            n['manifest'] is Map && (n['manifest'] as Map)['overview'] != null;
+        analysis =
+            hasOverview
+                ? AnalysisDisplayStatus.current
+                : AnalysisDisplayStatus.needsAnalysis;
       }
 
       out[key] = _NoteCardData(
@@ -267,9 +258,10 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
         if (v.noteId != noteId) return;
         final AnalysisDisplayStatus next;
         if (status['exists'] == true) {
-          next = status['is_current'] == true
-              ? AnalysisDisplayStatus.current
-              : AnalysisDisplayStatus.stale;
+          next =
+              status['is_current'] == true
+                  ? AnalysisDisplayStatus.current
+                  : AnalysisDisplayStatus.stale;
         } else {
           next = AnalysisDisplayStatus.needsAnalysis;
         }
@@ -329,7 +321,9 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
 
   /// Snippet for local-only notes (no server pages in the payload): the cheap
   /// per-note disk read.
-  Future<void> _hydrateLocalSnippets(List<Map<String, dynamic>> localOnly) async {
+  Future<void> _hydrateLocalSnippets(
+    List<Map<String, dynamic>> localOnly,
+  ) async {
     for (final n in localOnly) {
       final noteId = n['note_id'] as String?;
       final key = n['filename'] ?? noteId;
@@ -367,13 +361,14 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   /// The attention-sorted card list: needs-analysis first, then gap count
   /// desc, then recency desc.
   List<_NoteCardData> get _sortedCards {
-    final list = notes
-        .map((n) {
-          final key = n['filename'] ?? n['note_id'] ?? '${n['title']}';
-          return _cardData[key];
-        })
-        .whereType<_NoteCardData>()
-        .toList();
+    final list =
+        notes
+            .map((n) {
+              final key = n['filename'] ?? n['note_id'] ?? '${n['title']}';
+              return _cardData[key];
+            })
+            .whereType<_NoteCardData>()
+            .toList();
 
     list.sort((a, b) {
       if (a.needsAnalysis != b.needsAnalysis) {
@@ -644,85 +639,26 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
     _loadSyncIndicator();
   }
 
-  // -----------------------
-  // Create bubble (add mode)
-  // -----------------------
-  Future<void> createBubble() async {
-    setState(() => isLoading = true);
-    try {
-      final name = nameCtrl.text.trim();
-      final result = await BubblesApi.createBubble(
-        name: name,
-        description: descCtrl.text.trim(),
-        domains: [],
-        userGoals: [],
-        // md5-of-name (matches the daemon fallback), kept distinct from the
-        // ULID note ids. Hash the exact string we send as `name`.
-        bubbleId: bubbleIdFromName(name),
-      );
-      if (mounted) {
-        Navigator.pop(context, result);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("$e")));
-      }
-    } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (widget.addMode) {
-      return Scaffold(
-        appBar: AppBar(title: const Text("Create Study Bubble")),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(labelText: "Bubble Name"),
-              ),
-              TextField(
-                controller: descCtrl,
-                decoration: const InputDecoration(labelText: "Description"),
-              ),
-              const SizedBox(height: 20),
-              isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: createBubble,
-                      child: const Text("Create"),
-                    ),
-            ],
-          ),
-        ),
-      );
-    }
-
     final cards = _sortedCards;
     final selected = _selectedKey == null ? null : _cardData[_selectedKey];
 
     // Desktop view
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: context.cerebrum.text.strong,
       body: Row(
         children: [
           // CENTER: notes list
           Expanded(
             flex: 2,
             child: Container(
-              color: Colors.white,
+              color: context.cerebrum.text.onDark,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildHeader(),
+                  // show in mobile mode?? we will see
+                  //_buildHeader(),
                   Expanded(
                     child: ListView.builder(
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
@@ -755,8 +691,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
                             onOpen: () {
                               final note = notes.firstWhere(
                                 (n) =>
-                                    (n['filename'] ?? n['note_id']) ==
-                                    data.key,
+                                    (n['filename'] ?? n['note_id']) == data.key,
                                 orElse: () => const {},
                               );
                               if (note.isNotEmpty) _openNote(note);
@@ -775,25 +710,29 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
           // RIGHT: context sidebar — updates on selection.
           Container(
             width: 400,
-            color: Colors.black,
+            color: context.cerebrum.text.strong,
             padding: const EdgeInsets.all(16),
             child: _ContextSidebar(
               bubble: widget.bubble,
               selected: selected,
               bubbleId: bubbleId,
-              onOpen: selected == null
-                  ? null
-                  : () {
-                      final note = notes.firstWhere(
-                        (n) => (n['filename'] ?? n['note_id']) == selected.key,
-                        orElse: () => const {},
-                      );
-                      if (note.isNotEmpty) _openNote(note);
-                    },
-              onDelete: selected == null ? null : () => _confirmDelete(selected),
-              onRunAnalysis: selected == null || selected.filename == null
-                  ? null
-                  : () => _runAnalysis(selected),
+              onOpen:
+                  selected == null
+                      ? null
+                      : () {
+                        final note = notes.firstWhere(
+                          (n) =>
+                              (n['filename'] ?? n['note_id']) == selected.key,
+                          orElse: () => const {},
+                        );
+                        if (note.isNotEmpty) _openNote(note);
+                      },
+              onDelete:
+                  selected == null ? null : () => _confirmDelete(selected),
+              onRunAnalysis:
+                  selected == null || selected.filename == null
+                      ? null
+                      : () => _runAnalysis(selected),
               onBack: () {
                 if (widget.onBack != null) {
                   widget.onBack!();
@@ -811,8 +750,10 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFE5E5EA))),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: context.cerebrum.surface.outline),
+        ),
       ),
       child: Row(
         children: [
@@ -821,16 +762,10 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
               widget.bubble?['name'] ?? "No name",
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
-          _SyncIndicator(
-            pending: _pendingSync,
-            loaded: _syncIndicatorLoaded,
-          ),
+          _SyncIndicator(pending: _pendingSync, loaded: _syncIndicatorLoaded),
           IconButton(
             icon: const Icon(Icons.arrow_back),
             tooltip: "Back to Study Bubbles",
@@ -866,9 +801,9 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
         filename: filename,
       );
       if (mounted && result != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Analysis generated")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Analysis generated")));
       }
       await loadNotes(bubbleId);
     } catch (e) {
@@ -886,15 +821,13 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
       builder:
           (dialogContext) => AlertDialog(
             title: const Text("Delete Note"),
-            content: const Text(
-              "Are you sure you want to delete this note?",
-            ),
+            content: const Text("Are you sure you want to delete this note?"),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text(
+                child: Text(
                   "Delete",
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: context.cerebrum.status.danger),
                 ),
               ),
               TextButton(
@@ -906,11 +839,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
     );
 
     if (confirm == true) {
-      await deleteNote(
-        bubbleId,
-        data.filename,
-        noteId: data.noteId,
-      );
+      await deleteNote(bubbleId, data.filename, noteId: data.noteId);
       if (mounted && _selectedKey == data.key) {
         setState(() => _selectedKey = null);
       }
@@ -922,24 +851,17 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   Color _ringColor(_NoteCardData data) {
     switch (data.analysis) {
       case AnalysisDisplayStatus.needsAnalysis:
-        return const Color(0xFFB3261E);
+        return context.cerebrum.status.danger;
       case AnalysisDisplayStatus.stale:
-        return const Color(0xFFC9A24B);
+        return context.cerebrum.brand.accent;
       case AnalysisDisplayStatus.current:
       case AnalysisDisplayStatus.off:
       case AnalysisDisplayStatus.unknown:
         break;
     }
     final gaps = data.gapCount;
-    if (gaps != null && gaps > 3) return const Color(0xFFC9A24B);
-    return const Color(0xFFB9B4CC);
-  }
-
-  @override
-  void dispose() {
-    nameCtrl.dispose();
-    descCtrl.dispose();
-    super.dispose();
+    if (gaps != null && gaps > 3) return context.cerebrum.brand.accent;
+    return context.cerebrum.status.neutralSoft;
   }
 }
 
@@ -957,21 +879,24 @@ class _AddNoteTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: const Color(0xFFF4F2F8),
+        color: context.cerebrum.surface.canvas,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(14),
-          child: const Padding(
+          child: Padding(
             padding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               children: [
-                Icon(Icons.add_circle_outline, color: Color(0xFF2B5BD7)),
+                Icon(
+                  Icons.add_circle_outline,
+                  color: context.cerebrum.status.info,
+                ),
                 SizedBox(width: 10),
                 Text(
                   "Add New Note",
                   style: TextStyle(
-                    color: Color(0xFF2B5BD7),
+                    color: context.cerebrum.status.info,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -994,7 +919,11 @@ class _EmptyNotes extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.notes, size: 48, color: Color(0xFFB9B4CC)),
+          Icon(
+            Icons.notes,
+            size: 48,
+            color: context.cerebrum.status.neutralSoft,
+          ),
           const SizedBox(height: 12),
           const Text(
             'No notes yet',
@@ -1003,7 +932,7 @@ class _EmptyNotes extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Use "Add New Note" above to create your first note.',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            style: TextStyle(color: context.cerebrum.text.muted, fontSize: 13),
           ),
         ],
       ),
@@ -1024,13 +953,17 @@ class _SyncIndicator extends StatelessWidget {
     if (!loaded) return const SizedBox.shrink();
 
     final pendingNow = pending > 0;
-    final color = pendingNow ? const Color(0xFFC9A24B) : const Color(0xFF2E7D32);
+    final color =
+        pendingNow
+            ? context.cerebrum.brand.accent
+            : context.cerebrum.status.success;
     final icon = pendingNow ? Icons.cloud_upload_outlined : Icons.cloud_done;
 
     return Tooltip(
-      message: pendingNow
-          ? '$pending change${pending == 1 ? '' : 's'} waiting to sync'
-          : 'All changes synced',
+      message:
+          pendingNow
+              ? '$pending change${pending == 1 ? '' : 's'} waiting to sync'
+              : 'All changes synced',
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1051,6 +984,7 @@ class _SyncIndicator extends StatelessWidget {
     );
   }
 }
+
 /// The context sidebar's right pane — analysis status for the selected note
 /// plus quick actions. Updates on every selection; never static.
 class _ContextSidebar extends StatelessWidget {
@@ -1080,19 +1014,22 @@ class _ContextSidebar extends StatelessWidget {
         Row(
           children: [
             IconButton(
-              icon: Icon(Icons.arrow_back, color: Colors.white),
+              icon: Icon(Icons.arrow_back, color: context.cerebrum.text.onDark),
               tooltip: "Back to Study Bubbles",
               onPressed: onBack,
             ),
-            Icon(Icons.bubble_chart, color: Colors.white.withValues(alpha: 0.7)),
+            Icon(
+              Icons.bubble_chart,
+              color: context.cerebrum.text.onDark.withValues(alpha: 0.7),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 bubble?['name'] ?? "No name",
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: context.cerebrum.text.onDark,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1103,22 +1040,29 @@ class _ContextSidebar extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           bubble?['description'] ?? "No description yet.",
-          style: const TextStyle(color: Colors.white, fontSize: 13),
+          style: TextStyle(color: context.cerebrum.text.onDark, fontSize: 13),
         ),
         const SizedBox(height: 20),
-        const Divider(color: Colors.white24),
+        Divider(color: context.cerebrum.text.onDarkFaint),
         const SizedBox(height: 12),
         if (selected == null)
-          const Expanded(
+          Expanded(
             child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.touch_app, color: Colors.white38, size: 40),
+                  Icon(
+                    Icons.touch_app,
+                    color: context.cerebrum.text.onDarkFaint,
+                    size: 40,
+                  ),
                   SizedBox(height: 8),
                   Text(
                     'Select a note to see its analysis',
-                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                    style: TextStyle(
+                      color: context.cerebrum.text.onDarkFaint,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -1173,8 +1117,8 @@ class _SelectedSummary extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.cerebrum.text.onDark,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -1186,7 +1130,7 @@ class _SelectedSummary extends StatelessWidget {
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
+                color: context.cerebrum.text.onDark.withValues(alpha: 0.6),
                 fontSize: 13,
               ),
             ),
@@ -1194,12 +1138,15 @@ class _SelectedSummary extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildStatusLine(),
+              _buildStatusLine(context),
               if (gapCount != null) ...[
                 const SizedBox(width: 4),
                 Text(
                   '· $gapCount ${gapCount == 1 ? 'gap' : 'gaps'}',
-                  style: const TextStyle(color: Colors.white60, fontSize: 13),
+                  style: TextStyle(
+                    color: context.cerebrum.text.onDarkFaint,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ],
@@ -1225,33 +1172,45 @@ class _SelectedSummary extends StatelessWidget {
                 icon: const Icon(Icons.delete_outline, size: 16),
                 label: const Text('Delete'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFB3261E),
+                  foregroundColor: context.cerebrum.status.danger,
                 ),
               ),
             ],
           ),
           const Spacer(),
-          const Text(
+          Text(
             'Tip: pick a note to see it here. Double-click a card opens it.',
-            style: TextStyle(color: Colors.white24, fontSize: 11),
+            style: TextStyle(
+              color: context.cerebrum.text.onDarkFaint,
+              fontSize: 11,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusLine() {
+  Widget _buildStatusLine(BuildContext context) {
     final (label, color) = switch (analysis) {
-      AnalysisDisplayStatus.current => ('Analyzed', const Color(0xFF81C784)),
-      AnalysisDisplayStatus.stale => ('Stale analysis', const Color(0xFFC9A24B)),
+      AnalysisDisplayStatus.current => (
+        'Analyzed',
+        context.cerebrum.status.successSoft,
+      ),
+      AnalysisDisplayStatus.stale => (
+        'Stale analysis',
+        context.cerebrum.brand.accent,
+      ),
       AnalysisDisplayStatus.needsAnalysis => (
         'Needs analysis',
-        const Color(0xFFEF9A9A),
+        context.cerebrum.status.dangerSoft,
       ),
-      AnalysisDisplayStatus.off => ('Analysis off', const Color(0xFFBDBDBD)),
+      AnalysisDisplayStatus.off => (
+        'Analysis off',
+        context.cerebrum.status.neutralStrong,
+      ),
       AnalysisDisplayStatus.unknown => (
         'Analysis unavailable offline',
-        const Color(0xFFBDBDBD),
+        context.cerebrum.status.neutralStrong,
       ),
     };
     return Text(label, style: TextStyle(color: color, fontSize: 13));

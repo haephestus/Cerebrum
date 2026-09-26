@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 
 /// A study-bubble card on the bubbles grid.
@@ -36,8 +37,6 @@ class CardView extends StatelessWidget {
     this.lastUpdated,
   });
 
-  static const _neutralColor = Color(0xFFB9B4CC);
-
   @override
   Widget build(BuildContext context) {
     final domains =
@@ -49,7 +48,7 @@ class CardView extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF1F1F23),
+          color: context.cerebrum.surface.cardSurface,
           borderRadius: BorderRadius.circular(18),
         ),
         clipBehavior: Clip.antiAlias,
@@ -59,7 +58,7 @@ class CardView extends StatelessWidget {
             // Attention rail: thin bar at the top of the card.
             Container(
               height: 4,
-              color: accentColor ?? _neutralColor,
+              color: accentColor ?? context.cerebrum.status.neutralSoft,
             ),
             Expanded(
               child: Padding(
@@ -72,9 +71,11 @@ class CardView extends StatelessWidget {
                       child: PopupMenuButton<String>(
                         icon: Icon(
                           Icons.more_vert,
-                          color: Colors.white.withValues(alpha: 0.7),
+                          color: context.cerebrum.text.onDark.withValues(
+                            alpha: 0.7,
+                          ),
                         ),
-                        color: const Color(0xFF2A2A30),
+                        color: context.cerebrum.surface.cardSurface,
                         onSelected: (value) {
                           if (value == 'edit' && onEdit != null) {
                             onEdit!();
@@ -82,23 +83,24 @@ class CardView extends StatelessWidget {
                             onDelete();
                           }
                         },
-                        itemBuilder: (context) => [
-                          if (onEdit != null)
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Text('Edit'),
-                            ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Delete'),
-                          ),
-                        ],
+                        itemBuilder:
+                            (context) => [
+                              if (onEdit != null)
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit'),
+                                ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
+                            ],
                       ),
                     ),
                     Text(
                       data["name"] ?? 'Untitled bubble',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: context.cerebrum.text.onDark,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
@@ -111,7 +113,9 @@ class CardView extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.6),
+                        color: context.cerebrum.text.onDark.withValues(
+                          alpha: 0.6,
+                        ),
                         fontSize: 12,
                       ),
                     ),
@@ -123,7 +127,8 @@ class CardView extends StatelessWidget {
                         if (noteCount != null)
                           _MetaChip(
                             icon: Icons.notes,
-                            label: '$noteCount ${noteCount == 1 ? 'note' : 'notes'}',
+                            label:
+                                '$noteCount ${noteCount == 1 ? 'note' : 'notes'}',
                           ),
                         for (final d in domains.take(2))
                           _MetaChip(icon: Icons.tag, label: d),
@@ -165,18 +170,22 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: context.cerebrum.text.onDark.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: Colors.white.withValues(alpha: 0.55)),
+          Icon(
+            icon,
+            size: 11,
+            color: context.cerebrum.text.onDark.withValues(alpha: 0.55),
+          ),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
+              color: context.cerebrum.text.onDark.withValues(alpha: 0.55),
               fontSize: 11,
             ),
           ),

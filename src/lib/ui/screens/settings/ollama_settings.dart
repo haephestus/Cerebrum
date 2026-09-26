@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/api/configs_api.dart';
 
@@ -259,7 +260,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
   ) async {
     return showDialog<String>(
       context: context,
-      barrierColor: Colors.black54,
+      barrierColor: context.cerebrum.text.muted,
       barrierDismissible: true, // Allow clicking outside to dismiss
       builder: (context) => _ModelDetailsDialog(modelName: modelName),
     );
@@ -301,8 +302,8 @@ class _OllamaSettingsState extends State<OllamaSettings> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            border: Border.all(color: Colors.grey.shade300),
+            color: context.cerebrum.surface.sunken,
+            border: Border.all(color: context.cerebrum.surface.outline),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Column(
@@ -318,28 +319,31 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                           ? Icons.keyboard_arrow_down
                           : Icons.keyboard_arrow_right,
                       size: 20,
-                      color: Colors.black87,
+                      color: context.cerebrum.text.strong,
                     ),
                     const SizedBox(width: 4),
-                    const Icon(
+                    Icon(
                       Icons.check_circle,
                       size: 16,
-                      color: Colors.green,
+                      color: context.cerebrum.status.success,
                     ),
                     const SizedBox(width: 6),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         "Installed Models",
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: context.cerebrum.text.strong,
                         ),
                       ),
                     ),
                     Text(
                       "(${installedModels.length})",
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.cerebrum.surface.outlineStrong,
+                      ),
                     ),
                   ],
                 ),
@@ -347,11 +351,14 @@ class _OllamaSettingsState extends State<OllamaSettings> {
               if (installedExpanded) ...[
                 const SizedBox(height: 6),
                 if (installedModels.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(left: 30, bottom: 8),
                     child: Text(
                       "No models installed",
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.cerebrum.surface.outlineStrong,
+                      ),
                     ),
                   )
                 else
@@ -367,13 +374,13 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                         decoration: BoxDecoration(
                           color:
                               selectedModel == model
-                                  ? Colors.blue.shade50
-                                  : Colors.white,
+                                  ? context.cerebrum.status.infoSurface
+                                  : context.cerebrum.surface.raised,
                           border: Border.all(
                             color:
                                 selectedModel == model
-                                    ? Colors.blue
-                                    : Colors.grey.shade300,
+                                    ? context.cerebrum.status.info
+                                    : context.cerebrum.surface.outline,
                           ),
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -390,8 +397,8 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                                           : FontWeight.normal,
                                   color:
                                       selectedModel == model
-                                          ? Colors.blue.shade900
-                                          : Colors.black87,
+                                          ? context.cerebrum.status.info
+                                          : context.cerebrum.text.strong,
                                 ),
                               ),
                             ),
@@ -399,7 +406,7 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                               Icon(
                                 Icons.check,
                                 size: 16,
-                                color: Colors.blue.shade700,
+                                color: context.cerebrum.status.info,
                               ),
                           ],
                         ),
@@ -420,28 +427,31 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                           ? Icons.keyboard_arrow_down
                           : Icons.keyboard_arrow_right,
                       size: 20,
-                      color: Colors.black87,
+                      color: context.cerebrum.text.strong,
                     ),
                     const SizedBox(width: 4),
-                    const Icon(
+                    Icon(
                       Icons.cloud_download,
                       size: 16,
-                      color: Colors.blue,
+                      color: context.cerebrum.status.info,
                     ),
                     const SizedBox(width: 6),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         "Models You Can Download",
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: context.cerebrum.text.strong,
                         ),
                       ),
                     ),
                     Text(
                       "(${onlineModels.length})",
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.cerebrum.surface.outlineStrong,
+                      ),
                     ),
                   ],
                 ),
@@ -466,22 +476,28 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                               )
                               : null,
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: context.cerebrum.surface.raised,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 8,
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: context.cerebrum.surface.outline,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(
+                          color: context.cerebrum.surface.outline,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
-                        borderSide: const BorderSide(color: Colors.blue),
+                        borderSide: BorderSide(
+                          color: context.cerebrum.status.info,
+                        ),
                       ),
                     ),
                     style: const TextStyle(fontSize: 13),
@@ -497,7 +513,10 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                       searchQuery.isEmpty
                           ? "No additional models available"
                           : "No models found for '$searchQuery'",
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.cerebrum.surface.outlineStrong,
+                      ),
                     ),
                   )
                 else
@@ -517,8 +536,10 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                             ),
                             margin: const EdgeInsets.only(left: 30, bottom: 4),
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: Colors.grey.shade300),
+                              color: context.cerebrum.surface.raised,
+                              border: Border.all(
+                                color: context.cerebrum.surface.outline,
+                              ),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Row(
@@ -526,16 +547,16 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                                 Expanded(
                                   child: Text(
                                     model,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.black87,
+                                      color: context.cerebrum.text.strong,
                                     ),
                                   ),
                                 ),
-                                const Icon(
+                                Icon(
                                   Icons.cloud_download,
                                   size: 14,
-                                  color: Colors.blue,
+                                  color: context.cerebrum.status.info,
                                 ),
                               ],
                             ),
@@ -554,7 +575,10 @@ class _OllamaSettingsState extends State<OllamaSettings> {
             padding: const EdgeInsets.only(left: 4),
             child: Text(
               "Current: $selectedModel",
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 12,
+                color: context.cerebrum.surface.outlineStrong,
+              ),
             ),
           ),
       ],
@@ -575,12 +599,14 @@ class _OllamaSettingsState extends State<OllamaSettings> {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color:
-                  ollamaRunning ? Colors.green.shade50 : Colors.orange.shade50,
+                  ollamaRunning
+                      ? context.cerebrum.status.successSurface
+                      : context.cerebrum.status.warningSurface,
               border: Border.all(
                 color:
                     ollamaRunning
-                        ? Colors.green.shade300
-                        : Colors.orange.shade300,
+                        ? context.cerebrum.status.successSoft
+                        : context.cerebrum.surface.outline,
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -588,7 +614,10 @@ class _OllamaSettingsState extends State<OllamaSettings> {
               children: [
                 Icon(
                   ollamaRunning ? Icons.check_circle : Icons.warning,
-                  color: ollamaRunning ? Colors.green : Colors.orange,
+                  color:
+                      ollamaRunning
+                          ? context.cerebrum.status.success
+                          : context.cerebrum.status.warning,
                   size: 20,
                 ),
                 const SizedBox(width: 8),
@@ -603,19 +632,25 @@ class _OllamaSettingsState extends State<OllamaSettings> {
                           fontWeight: FontWeight.w600,
                           color:
                               ollamaRunning
-                                  ? Colors.green.shade900
-                                  : Colors.orange.shade900,
+                                  ? context.cerebrum.status.success
+                                  : context.cerebrum.status.warningStrong,
                         ),
                       ),
                       if (!ollamaRunning && ollamaInstalled)
-                        const Text(
+                        Text(
                           "Please start Ollama to manage models",
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.cerebrum.text.muted,
+                          ),
                         ),
                       if (!ollamaInstalled)
-                        const Text(
+                        Text(
                           "Install Ollama from ollama.com/download",
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.cerebrum.text.muted,
+                          ),
                         ),
                     ],
                   ),
@@ -767,7 +802,10 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
               if (modelInfo!['description'] != null) ...[
                 Text(
                   modelInfo!['description'],
-                  style: const TextStyle(fontSize: 14, color: Colors.black87),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: context.cerebrum.text.strong,
+                  ),
                 ),
                 const SizedBox(height: 20),
               ],
@@ -781,9 +819,12 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
 
               if (modelInfo!['tags'] == null ||
                   (modelInfo!['tags'] as List).isEmpty)
-                const Text(
+                Text(
                   "No versions available",
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: context.cerebrum.surface.outlineStrong,
+                  ),
                 )
               else
                 Expanded(
@@ -807,12 +848,14 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                           margin: const EdgeInsets.only(bottom: 8),
                           decoration: BoxDecoration(
                             color:
-                                isSelected ? Colors.blue.shade50 : Colors.white,
+                                isSelected
+                                    ? context.cerebrum.status.infoSurface
+                                    : context.cerebrum.surface.raised,
                             border: Border.all(
                               color:
                                   isSelected
-                                      ? Colors.blue
-                                      : Colors.grey.shade300,
+                                      ? context.cerebrum.status.info
+                                      : context.cerebrum.surface.outline,
                               width: isSelected ? 2 : 1,
                             ),
                             borderRadius: BorderRadius.circular(8),
@@ -835,8 +878,14 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                                                     : FontWeight.w500,
                                             color:
                                                 isSelected
-                                                    ? Colors.blue.shade900
-                                                    : Colors.black87,
+                                                    ? context
+                                                        .cerebrum
+                                                        .status
+                                                        .info
+                                                    : context
+                                                        .cerebrum
+                                                        .text
+                                                        .strong,
                                           ),
                                         ),
                                         if (isLatest) ...[
@@ -848,16 +897,24 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                                             ),
                                             decoration: BoxDecoration(
                                               border: Border.all(
-                                                color: Colors.blue,
+                                                color:
+                                                    context
+                                                        .cerebrum
+                                                        .status
+                                                        .info,
                                               ),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
-                                            child: const Text(
+                                            child: Text(
                                               "latest",
                                               style: TextStyle(
                                                 fontSize: 11,
-                                                color: Colors.blue,
+                                                color:
+                                                    context
+                                                        .cerebrum
+                                                        .status
+                                                        .info,
                                                 fontWeight: FontWeight.w500,
                                               ),
                                             ),
@@ -871,7 +928,7 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                                         details,
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: Colors.grey.shade600,
+                                          color: context.cerebrum.text.muted,
                                         ),
                                       ),
                                     ],
@@ -881,7 +938,7 @@ class _ModelDetailsDialogState extends State<_ModelDetailsDialog> {
                               if (isSelected)
                                 Icon(
                                   Icons.check_circle,
-                                  color: Colors.blue.shade700,
+                                  color: context.cerebrum.status.info,
                                   size: 22,
                                 ),
                             ],

@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 
 /// Whether a note's analysis is up to date, stale, missing, turned off, or
@@ -37,9 +38,10 @@ class NoteCardView extends StatelessWidget {
     required this.onDelete,
   });
 
-  String get _title => (data['title'] as String?)?.trim().isNotEmpty == true
-      ? data['title'].toString().trim()
-      : 'Untitled';
+  String get _title =>
+      (data['title'] as String?)?.trim().isNotEmpty == true
+          ? data['title'].toString().trim()
+          : 'Untitled';
 
   String get _snippet => (data['snippet'] as String?)?.trim() ?? '';
 
@@ -61,11 +63,15 @@ class NoteCardView extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF26262C) : const Color(0xFF1F1F23),
+          color:
+              isSelected
+                  ? context.cerebrum.surface.sunken
+                  : context.cerebrum.surface.cardSurface,
           borderRadius: BorderRadius.circular(14),
-          border: isSelected
-              ? Border.all(color: const Color(0xFF6C4FCE), width: 2)
-              : null,
+          border:
+              isSelected
+                  ? Border.all(color: context.cerebrum.brand.primary, width: 2)
+                  : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -86,8 +92,8 @@ class NoteCardView extends StatelessWidget {
                           _title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.cerebrum.text.onDark,
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
@@ -99,7 +105,9 @@ class NoteCardView extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
+                              color: context.cerebrum.text.onDark.withValues(
+                                alpha: 0.6,
+                              ),
                               fontSize: 12,
                               height: 1.3,
                             ),
@@ -111,14 +119,16 @@ class NoteCardView extends StatelessWidget {
                           runSpacing: 6,
                           children: [
                             _AnalysisChip(status: analysis),
-                            if (_dirty) const _MetaChip(
-                              icon: Icons.cloud_upload_outlined,
-                              label: 'Unsynced',
-                            ),
+                            if (_dirty)
+                              const _MetaChip(
+                                icon: Icons.cloud_upload_outlined,
+                                label: 'Unsynced',
+                              ),
                             if (gapCount != null)
                               _MetaChip(
                                 icon: Icons.insights,
-                                label: '$gapCount ${gapCount == 1 ? 'gap' : 'gaps'}',
+                                label:
+                                    '$gapCount ${gapCount == 1 ? 'gap' : 'gaps'}',
                               ),
                             if (lastEdited != null)
                               () {
@@ -126,9 +136,9 @@ class NoteCardView extends StatelessWidget {
                                 return t == null
                                     ? const SizedBox.shrink()
                                     : _MetaChip(
-                                        icon: Icons.schedule,
-                                        label: _relativeTime(t),
-                                      );
+                                      icon: Icons.schedule,
+                                      label: _relativeTime(t),
+                                    );
                               }(),
                           ],
                         ),
@@ -136,17 +146,20 @@ class NoteCardView extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    icon: isOpening
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            Icons.open_in_new,
-                            color: Colors.white.withValues(alpha: 0.7),
-                            size: 18,
-                          ),
+                    icon:
+                        isOpening
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : Icon(
+                              Icons.open_in_new,
+                              color: context.cerebrum.text.onDark.withValues(
+                                alpha: 0.7,
+                              ),
+                              size: 18,
+                            ),
                     tooltip: 'Open note',
                     onPressed: isOpening ? null : onOpen,
                     visualDensity: VisualDensity.compact,
@@ -154,7 +167,9 @@ class NoteCardView extends StatelessWidget {
                   IconButton(
                     icon: Icon(
                       Icons.delete_outline,
-                      color: Colors.white.withValues(alpha: 0.5),
+                      color: context.cerebrum.text.onDark.withValues(
+                        alpha: 0.5,
+                      ),
                       size: 18,
                     ),
                     tooltip: 'Delete note',
@@ -179,11 +194,26 @@ class _AnalysisChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      AnalysisDisplayStatus.current => ('Analyzed', const Color(0xFF2E7D32)),
-      AnalysisDisplayStatus.stale => ('Stale analysis', const Color(0xFFC9A24B)),
-      AnalysisDisplayStatus.needsAnalysis => ('Needs analysis', const Color(0xFFB3261E)),
-      AnalysisDisplayStatus.off => ('Analysis off', const Color(0xFF757575)),
-      AnalysisDisplayStatus.unknown => ('Unknown', const Color(0xFF9E9E9E)),
+      AnalysisDisplayStatus.current => (
+        'Analyzed',
+        context.cerebrum.status.success,
+      ),
+      AnalysisDisplayStatus.stale => (
+        'Stale analysis',
+        context.cerebrum.brand.accent,
+      ),
+      AnalysisDisplayStatus.needsAnalysis => (
+        'Needs analysis',
+        context.cerebrum.status.danger,
+      ),
+      AnalysisDisplayStatus.off => (
+        'Analysis off',
+        context.cerebrum.status.neutral,
+      ),
+      AnalysisDisplayStatus.unknown => (
+        'Unknown',
+        context.cerebrum.status.neutral,
+      ),
     };
 
     return Container(
@@ -195,7 +225,11 @@ class _AnalysisChip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -212,18 +246,22 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: context.cerebrum.text.onDark.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: Colors.white.withValues(alpha: 0.55)),
+          Icon(
+            icon,
+            size: 11,
+            color: context.cerebrum.text.onDark.withValues(alpha: 0.55),
+          ),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
+              color: context.cerebrum.text.onDark.withValues(alpha: 0.55),
               fontSize: 11,
             ),
           ),

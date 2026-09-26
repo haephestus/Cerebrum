@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:introduction_screen/introduction_screen.dart';
 
@@ -8,7 +9,8 @@ class OnboardingScreen extends StatelessWidget {
   final VoidCallback onDone;
   const OnboardingScreen({super.key, required this.onDone});
 
-  Widget _page({
+  Widget _page(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String body,
@@ -19,7 +21,7 @@ class OnboardingScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 120, color: Colors.black87),
+            Icon(icon, size: 120, color: context.cerebrum.text.strong),
             const SizedBox(height: 32),
             Text(
               title,
@@ -30,7 +32,10 @@ class OnboardingScreen extends StatelessWidget {
             Text(
               body,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.black54),
+              style: TextStyle(
+                fontSize: 16,
+                color: context.cerebrum.text.muted,
+              ),
             ),
           ],
         ),
@@ -41,11 +46,12 @@ class OnboardingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IntroductionScreen(
-      globalBackgroundColor: Colors.white,
+      globalBackgroundColor: context.cerebrum.surface.canvas,
       pages: [
         PageViewModel(
           title: '',
           bodyWidget: _page(
+            context,
             icon: Icons.bubble_chart,
             title: 'Welcome to Cerebrum',
             body:
@@ -55,6 +61,7 @@ class OnboardingScreen extends StatelessWidget {
         PageViewModel(
           title: '',
           bodyWidget: _page(
+            context,
             icon: Icons.folder,
             title: 'Your Learning Center',
             body:
@@ -64,6 +71,7 @@ class OnboardingScreen extends StatelessWidget {
         PageViewModel(
           title: '',
           bodyWidget: _page(
+            context,
             icon: Icons.rocket_launch,
             title: 'Ready to start?',
             body: 'Create your account and jump straight into studying.',
@@ -79,9 +87,9 @@ class OnboardingScreen extends StatelessWidget {
       ),
       onDone: onDone,
       onSkip: onDone,
-      dotsDecorator: const DotsDecorator(
-        activeColor: Colors.black,
-        color: Colors.black26,
+      dotsDecorator: DotsDecorator(
+        activeColor: context.cerebrum.text.strong,
+        color: context.cerebrum.text.disabled,
       ),
     );
   }

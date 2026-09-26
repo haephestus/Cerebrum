@@ -79,7 +79,8 @@ class GapEvidence {
   final num? analysisVersion; // the analysis's cached_version
   final bool isCurrent;
   final String? excerpt; // trimmed chunk excerpt (fallback-sourced gaps only)
-  final List<String> blockIds; // stable block ids this gap's source chunk covers
+  final List<String>
+  blockIds; // stable block ids this gap's source chunk covers
   final String? pageId; // page the source chunk lives on
 
   const GapEvidence({
@@ -93,6 +94,7 @@ class GapEvidence {
     this.pageId,
   });
 }
+
 class GapItem {
   final GapKind kind;
 
@@ -128,8 +130,7 @@ class GapItem {
           'noteId': e.noteId,
           'noteTitle': e.noteTitle,
           if (e.bubbleId != null) 'bubbleId': e.bubbleId,
-          if (e.analysisVersion != null)
-            'analysisVersion': e.analysisVersion,
+          if (e.analysisVersion != null) 'analysisVersion': e.analysisVersion,
           'isCurrent': e.isCurrent,
           if (e.excerpt != null) 'excerpt': e.excerpt,
           if (e.blockIds.isNotEmpty) 'blockIds': e.blockIds,
@@ -187,10 +188,9 @@ class BubbleGapSummary {
     required this.bubbleName,
     required this.items,
   });
-bool get isEmpty => items.isEmpty;
+  bool get isEmpty => items.isEmpty;
 
-  int countOf(GapKind kind) =>
-      items.where((i) => i.kind == kind).length;
+  int countOf(GapKind kind) => items.where((i) => i.kind == kind).length;
 
   /// Scales daemon severity into an ordering rank. Overview gaps carry no
   /// daemon severity (null) and rank as medium so they never silently
@@ -204,7 +204,8 @@ bool get isEmpty => items.isEmpty;
 
   /// Cross-bubble attention: bubble sections are ordered by this, so the
   /// bubbles with the most severe gaps lead the hero.
-  int get attention => items.fold(0, (sum, i) => sum + severityRank(i.severity));
+  int get attention =>
+      items.fold(0, (sum, i) => sum + severityRank(i.severity));
 
   /// The single most severe gap WITH a real daemon severity, or null when no
   /// item carries one (do not invent a priority lead from overview gaps).

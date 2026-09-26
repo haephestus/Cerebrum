@@ -1,8 +1,9 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:cerebrum/ui/screens/home/d_homescreen_page.dart';
 import 'package:cerebrum/ui/screens/learning_center/d_learning_center_page.dart';
 import 'package:cerebrum/ui/screens/settings/settings.dart';
 import 'package:flutter/material.dart';
-import 'package:cerebrum/ui/widgets/sidebar_button.dart';
+import 'package:cerebrum/ui/widgets/shell/sidebar_button.dart';
 import 'package:cerebrum/ui/screens/study_bubble/d_study_bubble_page.dart';
 import 'package:cerebrum/ui/screens/study_bubble/d_study_bubble_home.dart';
 import 'package:cerebrum/services/user_session.dart';
@@ -69,7 +70,6 @@ class _DesktopUIState extends State<DesktopUI> {
       return SettingPage();
     } else if (selectedPage == 4) {
       return DStudyBubblePage(
-        addMode: false,
         bubble: payload,
         onBack: () {
           setState(() {
@@ -79,75 +79,82 @@ class _DesktopUIState extends State<DesktopUI> {
         },
       );
     }
-
     return Center(child: Text('Unknown Page'));
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: Padding(
-          padding: const EdgeInsets.only(left: 2),
-          child: Row(
-            children: [
-              // Left side: buttons
-              Container(
-                padding: EdgeInsetsGeometry.only(top: 24, bottom: 24),
-                height: 900,
-                color: Colors.black,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    IconButton(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          barrierDismissible: true,
-                          barrierColor: Colors.black54,
-                          builder: (_) => const SettingPage(),
-                        );
-                      },
-                      icon: Icon(
-                        Icons.settings,
-                        color: selectedPage == 3 ? Colors.blue : Colors.white,
-                        size: 45,
-                      ),
-                    ),
-                    SizedBox(height: 300),
-                    SidebarButton(
-                      icon: Icons.home,
-                      label: 'Home',
-                      selected: selectedPage == 0,
-                      onPressed: () => changePage(0),
-                    ),
-                    SidebarButton(
-                      icon: Icons.bubble_chart,
-                      label: 'Study Bubble',
-                      selected: selectedPage == 1,
-                      onPressed: () => changePage(1),
-                    ),
-                    SidebarButton(
-                      icon: Icons.folder,
-                      label: 'Learning Center',
-                      selected: selectedPage == 2,
-                      onPressed: () => changePage(2),
-                    ),
-                  ],
-                ),
+    final colorScheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      body: Padding(
+        padding: const EdgeInsets.only(left: 6),
+        child: Row(
+          children: [
+            // Left side: buttons
+            Container(
+              padding: EdgeInsetsGeometry.only(top: 24, bottom: 24, right: 6),
+              decoration: BoxDecoration(
+                color: colorScheme.onSurface,
+                borderRadius: BorderRadiusGeometry.circular(12),
               ),
-              SizedBox(width: 12), // spacing between buttons and window
-              // Right side: main window
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(color: Colors.white),
-                  child: Container(child: _buildPage()),
-                ),
+              height: 900,
+              width: 70,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  SidebarButton(
+                    icon: Icons.home,
+                    label: 'Home',
+                    selected: selectedPage == 0,
+                    onPressed: () => changePage(0),
+                  ),
+                  SidebarButton(
+                    icon: Icons.bubble_chart,
+                    label: 'Study Bubble',
+                    selected: selectedPage == 1,
+                    onPressed: () => changePage(1),
+                  ),
+                  SidebarButton(
+                    icon: Icons.book,
+                    label: 'Learning Center',
+                    selected: selectedPage == 2,
+                    onPressed: () => changePage(2),
+                  ),
+                  SizedBox(height: 550),
+                  IconButton(
+                    color: context.cerebrum.surface.canvas,
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: true,
+                        barrierColor: context.cerebrum.text.muted.withAlpha(
+                          100,
+                        ),
+                        builder: (_) => const SettingPage(),
+                      );
+                    },
+                    icon: Icon(
+                      Icons.settings,
+                      color:
+                          selectedPage == 3
+                              ? context.cerebrum.text.onDark
+                              : context.cerebrum.surface.canvas,
+                      size: 38,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            SizedBox(width: 12), // spacing between buttons and window
+            // Right side: main window
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(color: colorScheme.surface),
+                child: Container(child: _buildPage()),
+              ),
+            ),
+          ],
         ),
       ),
     );

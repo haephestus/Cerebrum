@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/gestures.dart' show EagerGestureRecognizer;
+import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/ui/themes/tokens/feature_colors.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:scribble/scribble.dart';
 
@@ -145,9 +148,9 @@ class _PartialEraserState extends State<_PartialEraser> {
       gestures: <Type, GestureRecognizerFactory>{
         EagerGestureRecognizer:
             GestureRecognizerFactoryWithHandlers<EagerGestureRecognizer>(
-          EagerGestureRecognizer.new,
-          (_) {},
-        ),
+              EagerGestureRecognizer.new,
+              (_) {},
+            ),
       },
       child: Listener(
         onPointerDown: (e) => _begin(e.localPosition),
@@ -155,7 +158,11 @@ class _PartialEraserState extends State<_PartialEraser> {
         onPointerUp: (_) => _end(),
         onPointerCancel: (_) => _end(),
         child: CustomPaint(
-          painter: _EraserCursorPainter(center: _cursor, radius: _radius),
+          painter: _EraserCursorPainter(
+            center: _cursor,
+            radius: _radius,
+            tokens: context.cerebrum.editor,
+          ),
         ),
       ),
     );
@@ -199,27 +206,32 @@ Sketch splitErase(Sketch sketch, Offset eraser, double radius) {
 /// A soft ring showing where the eraser is while dragging. IgnorePointer-free
 /// (it's inside the Listener) and cheap — repaints only when the cursor moves.
 class _EraserCursorPainter extends CustomPainter {
-  _EraserCursorPainter({required this.center, required this.radius});
+  _EraserCursorPainter({
+    required this.center,
+    required this.radius,
+    required this.tokens,
+  });
 
   final Offset? center;
   final double radius;
+  final EditorColors tokens;
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = center;
     if (c == null) return;
-    canvas.drawCircle(c, radius, Paint()..color = Colors.black12);
+    canvas.drawCircle(c, radius, Paint()..color = tokens.eraserFill);
     canvas.drawCircle(
       c,
       radius,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5
-        ..color = Colors.black45,
+        ..color = tokens.eraserStroke,
     );
   }
 
   @override
   bool shouldRepaint(covariant _EraserCursorPainter old) =>
-      old.center != center || old.radius != radius;
+      old.center != center || old.radius != radius || old.tokens != tokens;
 }

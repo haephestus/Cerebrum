@@ -218,6 +218,16 @@ class LearningCenterApi {
     String? bubbleId,
     String? noteId,
     String? state,
+    // Daemon-owned list filters, mirroring the `state` param. The daemon is
+    // authoritative on both: `cognitive_level` (int) matches the engram's
+    // `target_cognitive_level` (its scheduler's cognitive-level promotion is
+    // daemon-side), and `severity` matches the daemon's severity vocabulary
+    // (`high`/`medium`/`low`; see gap_models.dart severityRank). Server-side
+    // filtering is what makes a severity filter honest — severity on a
+    // short-question engram lives per question item, so the daemon owns the
+    // definition there, never a client approximation.
+    int? cognitiveLevel,
+    String? severity,
     // Fetch answer-bearing fields (correct_option / expected_answer /
     // mark_scheme) so they can be cached for offline self-comparison. The client
     // reveals them only AFTER the student submits (client-gated reveal).
@@ -232,6 +242,10 @@ class LearningCenterApi {
     //   role-gates include_answers, offline compare/MCQ-grade break.
     // • Scoping mirrors the daemon: none→all, bubble_id→bubble, bubble_id+note_id
     //   →note. Query nulls MUST be omitted (not sent empty) — see the note below.
+    // • `cognitive_level`/`severity` further narrow the response (daemon-side).
+    //   Filtered responses cache as per-row upserts in EngramStore, so the full
+    //   offline cache survives a filtered fetch (rows are never deleted); the
+    //   offline fallback returns the whole cache unfiltered.
     // • EngramStore caches the raw payload here; offline reads rebuild via
     //   Engram.fromJson, so the cached JSON shape must stay fromJson-compatible.
     // ════════════════════════════════════════════════════════════════════════
@@ -251,6 +265,8 @@ class LearningCenterApi {
         if (bubbleId != null) 'bubble_id': bubbleId,
         if (noteId != null) 'note_id': noteId,
         if (state != null) 'state': state,
+        if (cognitiveLevel != null) 'cognitive_level': '$cognitiveLevel',
+        if (severity != null) 'severity': severity,
         if (includeAnswers) 'include_answers': 'true',
       },
     );

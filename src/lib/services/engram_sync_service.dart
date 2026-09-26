@@ -146,7 +146,9 @@ class EngramSyncService {
 
       return true;
     } catch (e) {
-      debugPrint('[EngramSync] attempt ${a.attemptId} (${a.type}) deferred: $e');
+      debugPrint(
+        '[EngramSync] attempt ${a.attemptId} (${a.type}) deferred: $e',
+      );
       return false; // offline / hub down — retry on the next drain
     }
   }

@@ -1,5 +1,5 @@
 import 'package:cerebrum/ui/screens/home/gap_card.dart';
-import 'package:cerebrum/ui/screens/home/gap_models.dart';
+import 'package:cerebrum/models/gap_models.dart';
 import 'package:cerebrum/ui/screens/home/gap_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

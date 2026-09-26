@@ -50,8 +50,8 @@ class _TableColState extends State<TableCol> {
           tableNode: widget.tableNode,
           editorState: widget.editorState,
           colIdx: widget.colIdx,
-          borderColor: widget.tableStyle.borderColor,
-          borderHoverColor: widget.tableStyle.borderHoverColor,
+          borderColor: widget.tableStyle.border(context),
+          borderHoverColor: widget.tableStyle.borderHover(context),
         ),
       );
     }
@@ -87,8 +87,8 @@ class _TableColState extends State<TableCol> {
         tableNode: widget.tableNode,
         editorState: widget.editorState,
         colIdx: widget.colIdx,
-        borderColor: widget.tableStyle.borderColor,
-        borderHoverColor: widget.tableStyle.borderHoverColor,
+        borderColor: widget.tableStyle.border(context),
+        borderHoverColor: widget.tableStyle.borderHover(context),
       ),
     ]);
 
@@ -100,7 +100,7 @@ class _TableColState extends State<TableCol> {
     final List<Widget> cells = [];
     final Widget cellBorder = Container(
       height: widget.tableNode.config.borderWidth,
-      color: widget.tableStyle.borderColor,
+      color: widget.tableStyle.border(context),
     );
 
     for (var i = 0; i < rowsLen; i++) {
@@ -110,18 +110,12 @@ class _TableColState extends State<TableCol> {
       addListener(node.children.first, i);
 
       cells.addAll([
-        widget.editorState.renderer.build(
-          context,
-          node,
-        ),
+        widget.editorState.renderer.build(context, node),
         cellBorder,
       ]);
     }
 
-    return [
-      cellBorder,
-      ...cells,
-    ];
+    return [cellBorder, ...cells];
   }
 
   void addListener(Node node, int row) {

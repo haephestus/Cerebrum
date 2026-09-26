@@ -108,13 +108,14 @@ void _addCol(Node tableNode, int position, EditorState editorState) {
     );
     node.insert(paragraphNode());
     final firstCellInRow = getCellNode(tableNode, 0, i);
-    if (firstCellInRow?.attributes
-            .containsKey(CerebrumTableCellKeys.rowBackgroundColor) ??
+    if (firstCellInRow?.attributes.containsKey(
+          CerebrumTableCellKeys.rowBackgroundColor,
+        ) ??
         false) {
       node.updateAttributes({
         CerebrumTableCellKeys.rowBackgroundColor:
-            firstCellInRow!.attributes[
-                CerebrumTableCellKeys.rowBackgroundColor],
+            firstCellInRow!.attributes[CerebrumTableCellKeys
+                .rowBackgroundColor],
       });
     }
 
@@ -188,12 +189,9 @@ void _addRow(Node tableNode, int position, EditorState editorState) async {
           error = true;
           break;
         }
-        transaction.updateNode(
-          cellNode,
-          {
-            CerebrumTableCellKeys.rowPosition: j + 1,
-          },
-        );
+        transaction.updateNode(cellNode, {
+          CerebrumTableCellKeys.rowPosition: j + 1,
+        });
       }
     }
 
@@ -302,7 +300,9 @@ void _duplicateCol(Node tableNode, int col, EditorState editorState) {
 
   _updateCellPositions(tableNode, editorState, col + 1, 0, 1, 0);
 
-  transaction.updateNode(tableNode, {CerebrumTableBlockKeys.colsLen: colsLen + 1});
+  transaction.updateNode(tableNode, {
+    CerebrumTableBlockKeys.colsLen: colsLen + 1,
+  });
 
   editorState.apply(transaction, withUpdateSelection: false);
 }
@@ -331,7 +331,9 @@ void _duplicateRow(Node tableNode, int row, EditorState editorState) async {
   }
 
   transaction = editorState.transaction;
-  transaction.updateNode(tableNode, {CerebrumTableBlockKeys.rowsLen: rowsLen + 1});
+  transaction.updateNode(tableNode, {
+    CerebrumTableBlockKeys.rowsLen: rowsLen + 1,
+  });
   editorState.apply(transaction, withUpdateSelection: false);
 }
 
@@ -346,10 +348,9 @@ void _setColBgColor(
   final rowslen = tableNode.attributes[CerebrumTableBlockKeys.rowsLen];
   for (var i = 0; i < rowslen; i++) {
     final node = getCellNode(tableNode, col, i)!;
-    transaction.updateNode(
-      node,
-      {CerebrumTableCellKeys.colBackgroundColor: color},
-    );
+    transaction.updateNode(node, {
+      CerebrumTableCellKeys.colBackgroundColor: color,
+    });
   }
 
   editorState.apply(transaction, withUpdateSelection: false);
@@ -366,48 +367,33 @@ void _setRowBgColor(
   final colsLen = tableNode.attributes[CerebrumTableBlockKeys.colsLen];
   for (var i = 0; i < colsLen; i++) {
     final node = getCellNode(tableNode, i, row)!;
-    transaction.updateNode(
-      node,
-      {CerebrumTableCellKeys.rowBackgroundColor: color},
-    );
+    transaction.updateNode(node, {
+      CerebrumTableCellKeys.rowBackgroundColor: color,
+    });
   }
 
   editorState.apply(transaction, withUpdateSelection: false);
 }
 
-void _clearCol(
-  Node tableNode,
-  int col,
-  EditorState editorState,
-) {
+void _clearCol(Node tableNode, int col, EditorState editorState) {
   final transaction = editorState.transaction;
 
   final rowsLen = tableNode.attributes[CerebrumTableBlockKeys.rowsLen];
   for (var i = 0; i < rowsLen; i++) {
     final node = getCellNode(tableNode, col, i)!;
-    transaction.insertNode(
-      node.children.first.path,
-      paragraphNode(text: ''),
-    );
+    transaction.insertNode(node.children.first.path, paragraphNode(text: ''));
   }
 
   editorState.apply(transaction, withUpdateSelection: false);
 }
 
-void _clearRow(
-  Node tableNode,
-  int row,
-  EditorState editorState,
-) {
+void _clearRow(Node tableNode, int row, EditorState editorState) {
   final transaction = editorState.transaction;
 
   final colsLen = tableNode.attributes[CerebrumTableBlockKeys.colsLen];
   for (var i = 0; i < colsLen; i++) {
     final node = getCellNode(tableNode, i, row)!;
-    transaction.insertNode(
-      node.children.first.path,
-      paragraphNode(text: ''),
-    );
+    transaction.insertNode(node.children.first.path, paragraphNode(text: ''));
   }
 
   editorState.apply(transaction, withUpdateSelection: false);
@@ -420,14 +406,19 @@ dynamic newCellNode(Node tableNode, n) {
   final int colsLen = tableNode.attributes[CerebrumTableBlockKeys.colsLen];
 
   if (!n.attributes.containsKey(CerebrumTableCellKeys.height)) {
-    double nodeHeight = double.tryParse(
-      tableNode.attributes[CerebrumTableBlockKeys.rowDefaultHeight].toString(),
-    )!;
+    double nodeHeight =
+        double.tryParse(
+          tableNode.attributes[CerebrumTableBlockKeys.rowDefaultHeight]
+              .toString(),
+        )!;
     if (row < rowsLen) {
-      nodeHeight = double.tryParse(
-            getCellNode(tableNode, 0, row)!
-                .attributes[CerebrumTableCellKeys.height]
-                .toString(),
+      nodeHeight =
+          double.tryParse(
+            getCellNode(
+              tableNode,
+              0,
+              row,
+            )!.attributes[CerebrumTableCellKeys.height].toString(),
           ) ??
           nodeHeight;
     }
@@ -435,14 +426,19 @@ dynamic newCellNode(Node tableNode, n) {
   }
 
   if (!n.attributes.containsKey(CerebrumTableCellKeys.width)) {
-    double nodeWidth = double.tryParse(
-      tableNode.attributes[CerebrumTableBlockKeys.colDefaultWidth].toString(),
-    )!;
+    double nodeWidth =
+        double.tryParse(
+          tableNode.attributes[CerebrumTableBlockKeys.colDefaultWidth]
+              .toString(),
+        )!;
     if (col < colsLen) {
-      nodeWidth = double.tryParse(
-            getCellNode(tableNode, col, 0)!
-                .attributes[CerebrumTableCellKeys.width]
-                .toString(),
+      nodeWidth =
+          double.tryParse(
+            getCellNode(
+              tableNode,
+              col,
+              0,
+            )!.attributes[CerebrumTableCellKeys.width].toString(),
           ) ??
           nodeWidth;
     }

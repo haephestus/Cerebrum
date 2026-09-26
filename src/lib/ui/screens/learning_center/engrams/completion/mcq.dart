@@ -1,3 +1,4 @@
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
@@ -71,8 +72,10 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
       Map<String, dynamic>? localResult;
       if (correctOption != null) {
         final correct = _selected == correctOption;
-        final mastery =
-            await OfflineMastery.applyMcq(widget.engram.id, correct);
+        final mastery = await OfflineMastery.applyMcq(
+          widget.engram.id,
+          correct,
+        );
         localResult = mastery.toResult(correct: correct);
       }
 
@@ -108,79 +111,94 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Multiple Choice')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    c.stem,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  ...c.options.entries.map((opt) {
-                    final isSelected = _selected == opt.key;
-                    // Reveal-after-answer: once locked, colour the correct option
-                    // green and a wrong pick red (needs correct_option, which
-                    // only arrives in the answers-included fetch).
-                    final correctOpt = c.correctOption;
-                    Color? tileColor;
-                    Widget? trailing;
-                    if (locked && correctOpt != null) {
-                      if (opt.key == correctOpt) {
-                        tileColor = Colors.green.shade50;
-                        trailing =
-                            Icon(Icons.check, color: Colors.green.shade700);
-                      } else if (isSelected) {
-                        tileColor = Colors.red.shade50;
-                        trailing = Icon(Icons.close, color: Colors.red.shade700);
-                      }
-                    } else if (isSelected) {
-                      tileColor = Colors.blue.shade50;
-                    }
-                    return Card(
-                      color: tileColor,
-                      child: ListTile(
-                        leading: CircleAvatar(child: Text(opt.key)),
-                        title: Text(opt.value),
-                        selected: isSelected,
-                        trailing: trailing,
-                        onTap: locked
-                            ? null
-                            : () => setState(() => _selected = opt.key),
+      body:
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      c.stem,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 20),
-                  if (_attempt == null && _result == null)
-                    ElevatedButton(
-                      onPressed:
-                          _selected == null || _submitting ? null : _submit,
-                      child: _submitting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Submit'),
-                    )
-                  else if (_result != null)
-                    _resultCard(_result!)
-                  else
-                    _pendingCard(),
-                ],
+                    ),
+                    const SizedBox(height: 20),
+                    ...c.options.entries.map((opt) {
+                      final isSelected = _selected == opt.key;
+                      // Reveal-after-answer: once locked, colour the correct option
+                      // green and a wrong pick red (needs correct_option, which
+                      // only arrives in the answers-included fetch).
+                      final correctOpt = c.correctOption;
+                      Color? tileColor;
+                      Widget? trailing;
+                      if (locked && correctOpt != null) {
+                        if (opt.key == correctOpt) {
+                          tileColor = context.cerebrum.status.successSurface;
+                          trailing = Icon(
+                            Icons.check,
+                            color: context.cerebrum.status.success,
+                          );
+                        } else if (isSelected) {
+                          tileColor = context.cerebrum.status.dangerSurface;
+                          trailing = Icon(
+                            Icons.close,
+                            color: context.cerebrum.status.dangerDeep,
+                          );
+                        }
+                      } else if (isSelected) {
+                        tileColor = context.cerebrum.status.infoSurface;
+                      }
+                      return Card(
+                        color: tileColor,
+                        child: ListTile(
+                          leading: CircleAvatar(child: Text(opt.key)),
+                          title: Text(opt.value),
+                          selected: isSelected,
+                          trailing: trailing,
+                          onTap:
+                              locked
+                                  ? null
+                                  : () => setState(() => _selected = opt.key),
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 20),
+                    if (_attempt == null && _result == null)
+                      ElevatedButton(
+                        onPressed:
+                            _selected == null || _submitting ? null : _submit,
+                        child:
+                            _submitting
+                                ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Text('Submit'),
+                      )
+                    else if (_result != null)
+                      _resultCard(_result!)
+                    else
+                      _pendingCard(),
+                  ],
+                ),
               ),
-            ),
     );
   }
 
   Widget _resultCard(Map<String, dynamic> r) {
     final correct = r['is_correct'] == true;
     return Card(
-      color: correct ? Colors.green.shade50 : Colors.red.shade50,
+      color:
+          correct
+              ? context.cerebrum.status.successSurface
+              : context.cerebrum.status.dangerSurface,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -195,8 +213,10 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
               Text('Mastery: ${r['mastery_state']}'),
             ],
             if (r['interval_days'] != null)
-              Text('Next review in ${r['interval_days']} '
-                  '${r['interval_days'] == 1 ? 'day' : 'days'}'),
+              Text(
+                'Next review in ${r['interval_days']} '
+                '${r['interval_days'] == 1 ? 'day' : 'days'}',
+              ),
             const SizedBox(height: 8),
             _syncStatus(),
             const SizedBox(height: 12),
@@ -212,7 +232,7 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
 
   Widget _pendingCard() {
     return Card(
-      color: Colors.amber.shade50,
+      color: context.cerebrum.status.warningSurface,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -220,16 +240,22 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.cloud_off, size: 20, color: Colors.amber.shade800),
+                Icon(
+                  Icons.cloud_off,
+                  size: 20,
+                  color: context.cerebrum.status.warningStrong,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
-                  child: Text('Saved — will submit when online',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Saved — will submit when online',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Your answer is stored on this device and will be scored once '
               "you're back online.",
             ),
@@ -250,13 +276,20 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(synced ? Icons.check : Icons.cloud_off,
-            size: 16,
-            color: synced ? Colors.green.shade700 : Colors.amber.shade800),
+        Icon(
+          synced ? Icons.check : Icons.cloud_off,
+          size: 16,
+          color:
+              synced
+                  ? context.cerebrum.status.success
+                  : context.cerebrum.status.warningStrong,
+        ),
         const SizedBox(width: 4),
         Flexible(
-          child: Text(synced ? 'Synced' : 'Saved — will sync when online',
-              style: const TextStyle(color: Colors.black54)),
+          child: Text(
+            synced ? 'Synced' : 'Saved — will sync when online',
+            style: TextStyle(color: context.cerebrum.text.muted),
+          ),
         ),
       ],
     );

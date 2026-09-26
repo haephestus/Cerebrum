@@ -20,7 +20,9 @@ class LoggingNotificationSink implements NotificationSink {
     required String body,
     String? payload,
   }) async {
-    debugPrint('[Notification] $title — $body${payload == null ? '' : ' ($payload)'}');
+    debugPrint(
+      '[Notification] $title — $body${payload == null ? '' : ' ($payload)'}',
+    );
   }
 }
 

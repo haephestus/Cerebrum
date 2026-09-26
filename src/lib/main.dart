@@ -1,4 +1,6 @@
+import 'package:cerebrum/ui/themes/theme_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 // import './responsive_layout.dart';
 import 'package:cerebrum/api/api_config.dart';
 import 'package:cerebrum/services/sync_service.dart';
@@ -8,6 +10,8 @@ import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final themeProvider = ThemeProvider();
+  await themeProvider.load();
 
   // 1. Initialize the window manager plugin
   await windowManager.ensureInitialized();
@@ -24,9 +28,9 @@ Future<void> main() async {
   EngramSyncService.refreshBadge();
 
   // 2. Configure window options to hide the GTK frame
-  WindowOptions windowOptions = const WindowOptions(
-    size: Size(1024, 768), // Set your preferred default window size
-    center: true,
+  const windowOptions = WindowOptions(
+    // size: Size(1024, 768), // Set your preferred default window size
+    // center: true,
     titleBarStyle: TitleBarStyle.hidden, // This strips the GTK bar
   );
 
@@ -36,11 +40,13 @@ Future<void> main() async {
     await windowManager.focus();
   });
 
-  runApp(const CerebrumApp());
+  runApp(CerebrumApp(themeProvider: themeProvider));
 }
 
 class CerebrumApp extends StatefulWidget {
-  const CerebrumApp({super.key});
+  final ThemeProvider themeProvider;
+
+  const CerebrumApp({required this.themeProvider, super.key});
 
   @override
   State<CerebrumApp> createState() => _CerebrumAppState();
@@ -73,10 +79,18 @@ class _CerebrumAppState extends State<CerebrumApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: const AppEntryPoint(),
-      // TODO: tablet: const TabletUI()
+    return MultiProvider(
+      providers: [ChangeNotifierProvider.value(value: widget.themeProvider)],
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: themeProvider.theme,
+            home: const AppEntryPoint(),
+            // TODO: tablet: const TabletUI()
+          );
+        },
+      ),
     );
   }
 }

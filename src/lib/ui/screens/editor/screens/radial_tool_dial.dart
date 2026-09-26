@@ -7,6 +7,10 @@ import 'package:flutter/rendering.dart' show BoxHitTestResult, RenderProxyBox;
 import 'package:scribble/scribble.dart';
 
 import '../../../../services/editor_settings_store.dart';
+import 'package:cerebrum/ui/themes/extensions.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/ui/themes/tokens/default_palette.dart';
+import 'package:cerebrum/ui/themes/tokens/feature_colors.dart';
 
 /// Concentric "tool wheel", inspired by the Concepts app's *Color Wheels*.
 ///
@@ -164,7 +168,8 @@ class _ToolDialHubState extends State<ToolDialHub> {
   Offset _resolvedAnchor = Offset.zero; // last resolved anchor (for handlers)
 
   _Tool _tool = _Tool.pen;
-  Color _penColor = Colors.black;
+  Color _penColor = cerebrumLightTokens.editor.penDefault;
+  bool _penColorSeeded = false;
   String? _penColorName;
   final Map<_Tool, double> _toolWidths = {
     _Tool.pen: 4,
@@ -209,6 +214,17 @@ class _ToolDialHubState extends State<ToolDialHub> {
   void initState() {
     super.initState();
     _loadPersisted();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The default nib colour is theme chrome, so seed it from the palette the
+    // first time a context is available. An explicit pick still wins.
+    if (!_penColorSeeded) {
+      _penColorSeeded = true;
+      _penColor = context.cerebrum.code.textDefault;
+    }
   }
 
   Future<void> _loadPersisted() async {
@@ -614,8 +630,8 @@ class _ToolDialHubState extends State<ToolDialHub> {
                               : Icons.radio_button_unchecked,
                           color:
                               t.name == _activeTheme.name
-                                  ? const Color(0xFF2E7BF6)
-                                  : Colors.black45,
+                                  ? context.cerebrum.dial.accent
+                                  : context.cerebrum.dial.labelMuted,
                         ),
                         title: Text(t.name),
                         subtitle: _themeStrip(t),
@@ -733,6 +749,7 @@ class _ToolDialHubState extends State<ToolDialHub> {
                       child: CustomPaint(
                         size: Size.infinite,
                         painter: _WheelPainter(
+                          tokens: context.cerebrum,
                           anchor: _resolvedAnchor,
                           centerR: _centerR,
                           ringR: _ringR,
@@ -799,9 +816,9 @@ class _HexToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFF2E7BF6);
+    final dial = context.cerebrum.dial;
     return Material(
-      color: Colors.white,
+      color: context.cerebrum.surface.pill,
       elevation: 2,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
@@ -815,7 +832,7 @@ class _HexToggle extends StatelessWidget {
               Icon(
                 value ? Icons.tag : Icons.tag_outlined,
                 size: 16,
-                color: value ? accent : Colors.black54,
+                color: value ? dial.accent : dial.chipIdleIcon,
               ),
               const SizedBox(width: 6),
               Text(
@@ -891,6 +908,7 @@ TextPainter _cachedGlyph(String key, TextSpan span) {
 
 class _WheelPainter extends CustomPainter {
   _WheelPainter({
+    required this.tokens,
     required this.anchor,
     required this.centerR,
     required this.ringR,
@@ -911,6 +929,10 @@ class _WheelPainter extends CustomPainter {
     required this.sectors,
   });
 
+  /// Theme tokens, captured at construction: [CustomPainter.paint] has no
+  /// [BuildContext], so the dial's furniture has to be handed in.
+  final CerebrumColors tokens;
+
   final Offset anchor;
   final double centerR;
   final double ringR;
@@ -928,9 +950,12 @@ class _WheelPainter extends CustomPainter {
   final double? activeWidth;
   final double? widthFraction;
   final bool showHex;
-  final List<List<int>> sectors; // active theme's arranged palette
+  final List<List<int>> sectors; // active WheelTheme's arranged palette
 
-  static const Color _accent = Color(0xFF2E7BF6);
+  /// The wheel's colour *palette* is user data (see [WheelTheme] and
+  /// EditorSettingsStore), not app theming, so it is deliberately not a
+  /// token. Only the dial's own furniture is themed.
+  DialColors get _dial => tokens.dial;
 
   IconData _iconForTool(_Tool t) =>
       t == _Tool.eraser
@@ -995,7 +1020,7 @@ class _WheelPainter extends CustomPainter {
         c + const Offset(0, -(_kWheelInnerR + _kCustomOuterR) / 2),
         'tap  +  to save colours',
         size: 9,
-        color: Colors.black45,
+        color: _dial.labelMuted,
       );
     }
 
@@ -1037,14 +1062,14 @@ class _WheelPainter extends CustomPainter {
 
   void _paintHub(Canvas canvas, Offset c) {
     // Soft backing so the hub reads over the wheel / page.
-    canvas.drawCircle(c, _hubBackingR, Paint()..color = Colors.white);
+    canvas.drawCircle(c, _hubBackingR, Paint()..color = _dial.hubFill);
     canvas.drawCircle(
       c,
       _hubBackingR,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = Colors.black12,
+        ..color = _dial.hubStroke,
     );
 
     // Tool + "+" chips.
@@ -1062,9 +1087,7 @@ class _WheelPainter extends CustomPainter {
       canvas.drawCircle(
         at,
         chipR,
-        Paint()
-          ..color =
-              selected ? _accent.withValues(alpha: 0.18) : Colors.grey.shade100,
+        Paint()..color = selected ? _dial.selectedWash : _dial.chipIdle,
       );
       final icon =
           _ctlTool[ctl] == _Tool.eraser
@@ -1075,7 +1098,7 @@ class _WheelPainter extends CustomPainter {
         at,
         icon,
         size: chipR * 1.1,
-        color: selected ? _accent : Colors.black54,
+        color: selected ? _dial.accent : _dial.chipIdleIcon,
       );
     }
 
@@ -1094,21 +1117,21 @@ class _WheelPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = sizeRingStroke
           ..strokeCap = StrokeCap.round
-          ..color = _accent,
+          ..color = _dial.accent,
       );
       // Knob at the arc end (bearing 0 = up, clockwise — matches hit-test).
       final knobAng = frac * 2 * math.pi;
       final knobAt =
           c + Offset(math.sin(knobAng), -math.cos(knobAng)) * sizeRingR;
       final knobR = sizeRingStroke * 0.95;
-      canvas.drawCircle(knobAt, knobR, Paint()..color = Colors.white);
+      canvas.drawCircle(knobAt, knobR, Paint()..color = _dial.knobFill);
       canvas.drawCircle(
         knobAt,
         knobR,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2
-          ..color = _accent,
+          ..color = _dial.accent,
       );
     }
 
@@ -1129,7 +1152,7 @@ class _WheelPainter extends CustomPainter {
     );
 
     // Center disc: current colour + tool.
-    final centreColor = tool == _Tool.eraser ? Colors.grey.shade300 : penColor;
+    final centreColor = tool == _Tool.eraser ? _dial.eraserCenter : penColor;
     canvas.drawCircle(c, centerR, Paint()..color = centreColor);
     canvas.drawCircle(
       c,
@@ -1137,7 +1160,7 @@ class _WheelPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5
-        ..color = Colors.black26,
+        ..color = _dial.centerStroke,
     );
     _drawIcon(
       canvas,
@@ -1155,7 +1178,7 @@ class _WheelPainter extends CustomPainter {
     Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
-      ..color = Colors.white,
+      ..color = _dial.swatchOutline,
   );
 
   Path _annularSector(
@@ -1223,13 +1246,14 @@ class _WheelPainter extends CustomPainter {
     Color? bg,
     Color? fg,
   }) {
+    final textColor = fg ?? _dial.previewFg;
     final tp = _cachedGlyph(
-      'P|$text|$fontSize|${(fg ?? Colors.black87).toARGB32()}',
+      'P|$text|$fontSize|${textColor.toARGB32()}',
       TextSpan(
         text: text,
         style: TextStyle(
           fontSize: fontSize,
-          color: fg ?? Colors.black87,
+          color: textColor,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -1243,13 +1267,13 @@ class _WheelPainter extends CustomPainter {
       rect,
       Radius.circular(rect.height / 2),
     );
-    canvas.drawRRect(rrect, Paint()..color = bg ?? Colors.white);
+    canvas.drawRRect(rrect, Paint()..color = bg ?? _dial.previewBg);
     canvas.drawRRect(
       rrect,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = Colors.black12,
+        ..color = _dial.hubStroke,
     );
     tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
   }
@@ -1260,11 +1284,14 @@ class _WheelPainter extends CustomPainter {
     return withHash ? '#$h' : h;
   }
 
+  /// Swatch labels sit on arbitrary user colours, so the foreground has to be
+  /// derived from the swatch rather than read from the theme.
   Color _readableOn(Color bg) =>
-      bg.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
+      bg.computeLuminance() > 0.5 ? _dial.previewFg : _dial.swatchOutline;
 
   @override
   bool shouldRepaint(covariant _WheelPainter old) =>
+      old.tokens != tokens ||
       old.anchor != anchor ||
       old.centerR != centerR ||
       old.ringR != ringR ||
@@ -1325,7 +1352,7 @@ class _CustomColorDialogState extends State<_CustomColorDialog> {
               decoration: BoxDecoration(
                 color: _color,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.black26),
+                border: Border.all(color: context.cerebrum.dial.handleIdle),
               ),
               alignment: Alignment.center,
               child: Text(
@@ -1333,8 +1360,8 @@ class _CustomColorDialogState extends State<_CustomColorDialog> {
                 style: TextStyle(
                   color:
                       _color.computeLuminance() > 0.5
-                          ? Colors.black87
-                          : Colors.white,
+                          ? context.cerebrum.dial.previewFg
+                          : context.cerebrum.dial.swatchOutline,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1485,9 +1512,12 @@ class _ThemeEditorDialogState extends State<_ThemeEditorDialog> {
             ),
             const SizedBox(height: 12),
             if (_colors.isEmpty)
-              const Text(
+              Text(
                 'Add at least two colours.',
-                style: TextStyle(color: Colors.black45, fontSize: 12),
+                style: TextStyle(
+                  color: context.cerebrum.dial.labelMuted,
+                  fontSize: 12,
+                ),
               )
             else
               Wrap(
@@ -1503,12 +1533,14 @@ class _ThemeEditorDialogState extends State<_ThemeEditorDialog> {
                         decoration: BoxDecoration(
                           color: Color(0xFF000000 | _colors[i]),
                           borderRadius: BorderRadius.circular(5),
-                          border: Border.all(color: Colors.black26),
+                          border: Border.all(
+                            color: context.cerebrum.dial.handleIdle,
+                          ),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.close,
                           size: 12,
-                          color: Colors.white70,
+                          color: context.cerebrum.text.onDarkIcon,
                         ),
                       ),
                     ),

@@ -18,13 +18,16 @@ part 'app_database.g.dart';
 class EngramAttempts extends Table {
   TextColumn get attemptId => text()();
   TextColumn get engramId => text()();
-  TextColumn get type => text()(); // mcq | flashcard | short_question | long_question
+  TextColumn get type =>
+      text()(); // mcq | flashcard | short_question | long_question
   TextColumn get userId => text()();
   TextColumn get payloadJson => text()();
   IntColumn get targetCognitiveLevel =>
       integer().withDefault(const Constant(1))();
   TextColumn get status =>
-      text().withDefault(const Constant('queued'))(); // queued|submitted|graded|failed
+      text().withDefault(
+        const Constant('queued'),
+      )(); // queued|submitted|graded|failed
   TextColumn get jobId => text().nullable()();
   TextColumn get resultJson => text().nullable()();
   TextColumn get error => text().nullable()();
@@ -95,8 +98,8 @@ class AppDatabase extends _$AppDatabase {
       into(engramAttempts).insertOnConflictUpdate(row);
 
   Future<EngramAttemptRow?> attempt(String attemptId) =>
-      (select(engramAttempts)..where((t) => t.attemptId.equals(attemptId)))
-          .getSingleOrNull();
+      (select(engramAttempts)
+        ..where((t) => t.attemptId.equals(attemptId))).getSingleOrNull();
 
   /// Pending (queued/submitted) attempts, oldest first.
   Future<List<EngramAttemptRow>> pendingAttempts() =>
@@ -110,21 +113,22 @@ class AppDatabase extends _$AppDatabase {
             ..where((t) => t.engramId.equals(engramId))
             ..orderBy([
               (t) => OrderingTerm(
-                    expression: t.createdAt,
-                    mode: OrderingMode.desc,
-                  ),
+                expression: t.createdAt,
+                mode: OrderingMode.desc,
+              ),
             ])
             ..limit(1))
           .getSingleOrNull();
 
   Future<int> unseenGradedCount() async {
     final count = engramAttempts.attemptId.count();
-    final q = selectOnly(engramAttempts)
-      ..addColumns([count])
-      ..where(
-        engramAttempts.status.equals('graded') &
-            engramAttempts.seen.equals(false),
-      );
+    final q =
+        selectOnly(engramAttempts)
+          ..addColumns([count])
+          ..where(
+            engramAttempts.status.equals('graded') &
+                engramAttempts.seen.equals(false),
+          );
     final row = await q.getSingle();
     return row.read(count) ?? 0;
   }
@@ -132,8 +136,8 @@ class AppDatabase extends _$AppDatabase {
   // -- mastery -----------------------------------------------------------
 
   Future<EngramMasteryRow?> mastery(String engramId) =>
-      (select(engramMasteryRows)..where((t) => t.engramId.equals(engramId)))
-          .getSingleOrNull();
+      (select(engramMasteryRows)
+        ..where((t) => t.engramId.equals(engramId))).getSingleOrNull();
 
   Future<void> upsertMastery(EngramMasteryRowsCompanion row) =>
       into(engramMasteryRows).insertOnConflictUpdate(row);
@@ -158,10 +162,8 @@ class AppDatabase extends _$AppDatabase {
             return cond;
           })
           ..orderBy([
-            (t) => OrderingTerm(
-                  expression: t.updatedAt,
-                  mode: OrderingMode.desc,
-                ),
+            (t) =>
+                OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc),
           ]))
         .get();
   }

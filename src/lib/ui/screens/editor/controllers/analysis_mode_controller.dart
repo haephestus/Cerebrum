@@ -60,11 +60,14 @@ class AnalysisModeController extends ChangeNotifier {
   void setChunks(List<AnalysisChunkRef> chunks) {
     final priorId = current?.chunkId;
     _chunks = List.unmodifiable(chunks);
-    _index = _chunks.isEmpty
-        ? -1
-        : (priorId == null
-            ? 0
-            : _chunks.indexWhere((c) => c.chunkId == priorId).clamp(0, _chunks.length - 1));
+    _index =
+        _chunks.isEmpty
+            ? -1
+            : (priorId == null
+                ? 0
+                : _chunks
+                    .indexWhere((c) => c.chunkId == priorId)
+                    .clamp(0, _chunks.length - 1));
     notifyListeners();
     _emitFocus();
   }

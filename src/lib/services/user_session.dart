@@ -30,6 +30,9 @@ class UserSession {
   static const _keyDaemonKey = 'daemon_api_key';
   static const _secure = FlutterSecureStorage();
 
+  //  The ollama key is per-account if online and per device if it is offline
+  static const _keyOllamaKey = 'ollama_key';
+
   /// In-memory mirror of secure-storage values. On Linux the plugin talks to
   /// the system Secret Service (libsecret); on minimal desktops there often is
   /// none, and every read/write throws a PlatformException. Credentials are
@@ -123,6 +126,15 @@ class UserSession {
   /// The bearer token, or null if not logged in. Read by [ApiConfig.headers].
   static Future<String?> getToken() async {
     return _secureRead(_keyToken);
+  }
+
+  /// Get ollama key
+  static Future<void> saveOllamaKey(String ollamaKey) async {
+    await _secureWrite(_keyOllamaKey, ollamaKey.isEmpty ? null : ollamaKey);
+  }
+
+  static Future<String?> getOllamaKey() async {
+    return _secureRead(_keyOllamaKey);
   }
 
   /// The local-mode daemon key. Read by [ApiConfig.headers], set in the
