@@ -61,6 +61,7 @@ Map<String, dynamic> chunkDiagnostics({
           'gap_explanation': 'The student compresses the definition.',
         },
       ],
+      'context_refs': const [],
     },
   ],
 };

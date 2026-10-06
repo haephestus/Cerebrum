@@ -137,6 +137,7 @@ class _DHomescreenState extends State<DHomescreen> {
         backgroundColor: colorScheme.surface,
         title: Text(
           _username == null ? 'Welcome back' : 'Welcome back, $_username',
+          style: TextStyle(color: context.cerebrum.text.strong),
         ),
       ),
       body: SafeArea(
@@ -176,7 +177,7 @@ class _DHomescreenState extends State<DHomescreen> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: context.cerebrum.text.onModeBadge,
+                                color: context.cerebrum.text.faint,
                               ),
                             ),
                             TextButton(

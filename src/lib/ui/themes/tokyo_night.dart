@@ -1,7 +1,7 @@
 import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:cerebrum/models/theme_family.dart';
 import 'package:cerebrum/ui/themes/extensions.dart';
-import 'package:cerebrum/ui/themes/tokens/tokyo_night.dart';
+import 'package:cerebrum/ui/themes/tokens/tokyo_night_palette.dart';
 import 'package:flutter/material.dart';
 
 /// The Tokyo Night theme family.

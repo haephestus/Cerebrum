@@ -29,6 +29,9 @@ class FloatingModal extends StatelessWidget {
   final double heightFactor;
   final VoidCallback? onClose;
   final bool showCloseButton;
+  final bool showIcon;
+  final VoidCallback? onPressed;
+  final String? toolTip;
 
   const FloatingModal({
     super.key,
@@ -38,7 +41,10 @@ class FloatingModal extends StatelessWidget {
     this.widthFactor = 0.8,
     this.heightFactor = 0.8,
     this.onClose,
+    this.onPressed,
+    this.toolTip,
     this.showCloseButton = true,
+    this.showIcon = false,
   });
 
   @override
@@ -72,6 +78,15 @@ class FloatingModal extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    if (showIcon)
+                      Tooltip(
+                        message: toolTip,
+                        preferBelow: false,
+                        child: IconButton(
+                          onPressed: onPressed,
+                          icon: Icon(Icons.add),
+                        ),
+                      ),
                     const Spacer(),
                     if (showCloseButton)
                       IconButton(

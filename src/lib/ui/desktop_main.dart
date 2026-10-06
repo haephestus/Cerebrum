@@ -20,13 +20,18 @@ class _DesktopUIState extends State<DesktopUI> {
   Map<String, dynamic>? payload;
   String? _userId;
 
+  /// When true, the sidebar stays fully expanded regardless of hover.
+  bool _pinned = false;
+
+  /// Whether the mouse is currently hovering the sidebar area.
+  bool _hovering = false;
+
+  /// The sidebar is expanded if it's pinned OR the user is hovering.
+  bool get _sidebarOpen => _pinned || _hovering;
+
   @override
   void initState() {
     super.initState();
-    // AppEntryPoint already confirmed we're logged in before mounting
-    // DesktopUI at all, so this should always resolve to a real id --
-    // but we still load it async rather than assuming a sync value,
-    // since UserSession reads from SharedPreferences.
     UserSession.getUserId().then((id) {
       if (mounted) setState(() => _userId = id);
     });
@@ -63,8 +68,6 @@ class _DesktopUIState extends State<DesktopUI> {
         },
       );
     } else if (selectedPage == 2) {
-      // Global dashboard: no specific bubble/note, so DLearningCenterPage
-      // shows every active study plan + every engram across the user.
       return DLearningCenterPage(userId: _userId!);
     } else if (selectedPage == 3) {
       return SettingPage();
@@ -79,83 +82,126 @@ class _DesktopUIState extends State<DesktopUI> {
         },
       );
     }
-    return Center(child: Text('Unknown Page'));
+    return const Center(child: Text('Unknown Page'));
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    const double expandedWidth = 70;
+    const double collapsedWidth = 24; // icon-only width
+    const double railInset = 6;
+    const double topInset = 24;
+
+    final double railWidth = _sidebarOpen ? expandedWidth : collapsedWidth;
+
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      body: Padding(
-        padding: const EdgeInsets.only(left: 6),
-        child: Row(
-          children: [
-            // Left side: buttons
-            Container(
-              padding: EdgeInsetsGeometry.only(top: 24, bottom: 24, right: 6),
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface,
-                borderRadius: BorderRadiusGeometry.circular(12),
-              ),
-              height: 900,
-              width: 70,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  SidebarButton(
-                    icon: Icons.home,
-                    label: 'Home',
-                    selected: selectedPage == 0,
-                    onPressed: () => changePage(0),
+      body: Stack(
+        children: [
+          // Main content — padding tracks the rail's current width so
+          // content never overlaps it, but the rail itself never moves
+          // or disappears, so icons stay fixed vertically.
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            padding: EdgeInsets.only(left: railWidth + railInset + 6),
+            child: _buildPage(),
+          ),
+
+          // Persistent icon rail. Only its width and background pill
+          // animate; the icons themselves never slide off-screen.
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _hovering = true),
+              onExit: (_) => setState(() => _hovering = false),
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  left: railInset,
+                  top: topInset,
+                  bottom: topInset,
+                ),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  width: railWidth,
+                  decoration: BoxDecoration(
+                    color:
+                        _sidebarOpen
+                            ? colorScheme.onSurface.withAlpha(0)
+                            : colorScheme.onSurface.withAlpha(0),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  SidebarButton(
-                    icon: Icons.bubble_chart,
-                    label: 'Study Bubble',
-                    selected: selectedPage == 1,
-                    onPressed: () => changePage(1),
-                  ),
-                  SidebarButton(
-                    icon: Icons.book,
-                    label: 'Learning Center',
-                    selected: selectedPage == 2,
-                    onPressed: () => changePage(2),
-                  ),
-                  SizedBox(height: 550),
-                  IconButton(
-                    color: context.cerebrum.surface.canvas,
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        barrierDismissible: true,
-                        barrierColor: context.cerebrum.text.muted.withAlpha(
-                          100,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 24),
+                      // Pin/unpin toggle — reserves its height even when
+                      // hidden so Home/Study Bubble/Learning Center below
+                      // it never shift position.
+                      Visibility(
+                        visible: _sidebarOpen,
+                        maintainSize: true,
+                        maintainAnimation: true,
+                        maintainState: true,
+                        child: SidebarButton(
+                          icon: _pinned ? Icons.menu_open : Icons.menu,
+                          label: _pinned ? 'Unpin' : 'Pin',
+                          selected: _pinned,
+                          collapsed: !_sidebarOpen,
+                          onPressed: () {
+                            setState(() => _pinned = !_pinned);
+                          },
                         ),
-                        builder: (_) => const SettingPage(),
-                      );
-                    },
-                    icon: Icon(
-                      Icons.settings,
-                      color:
-                          selectedPage == 3
-                              ? context.cerebrum.text.onDark
-                              : context.cerebrum.surface.canvas,
-                      size: 38,
-                    ),
+                      ),
+                      SidebarButton(
+                        icon: Icons.home,
+                        label: 'Home',
+                        selected: selectedPage == 0,
+                        collapsed: !_sidebarOpen,
+                        onPressed: () => changePage(0),
+                      ),
+                      SidebarButton(
+                        icon: Icons.bubble_chart,
+                        label: 'Study Bubble',
+                        selected: selectedPage == 1,
+                        collapsed: !_sidebarOpen,
+                        onPressed: () => changePage(1),
+                      ),
+                      SidebarButton(
+                        icon: Icons.book,
+                        label: 'Learning Center',
+                        selected: selectedPage == 2,
+                        collapsed: !_sidebarOpen,
+                        onPressed: () => changePage(2),
+                      ),
+                      const Spacer(),
+                      SidebarButton(
+                        icon: Icons.settings,
+                        label: 'Settings',
+                        collapsed: !_sidebarOpen,
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: true,
+                            barrierColor: context.cerebrum.text.muted.withAlpha(
+                              100,
+                            ),
+                            builder: (_) => const SettingPage(),
+                          );
+                        },
+                      ),
+                      SizedBox(height: 50),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-            SizedBox(width: 12), // spacing between buttons and window
-            // Right side: main window
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(color: colorScheme.surface),
-                child: Container(child: _buildPage()),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

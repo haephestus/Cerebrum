@@ -1,31 +1,37 @@
 import 'package:flutter/painting.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scribble/scribble.dart';
-import 'package:cerebrum/ui/screens/editor/screens/drawing_layer.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
 
 /// Verifies the partial (split) eraser: it removes points under the eraser and
 /// splits the surviving points into sub-strokes, leaving untouched strokes and
 /// dots intact. See NoteDrawingLayer.
 SketchLine _line(List<List<double>> pts) => SketchLine(
-      points: [for (final p in pts) Point(p[0], p[1])],
-      color: 0xFF000000,
-      width: 3,
-    );
+  points: [for (final p in pts) Point(p[0], p[1])],
+  color: 0xFF000000,
+  width: 3,
+);
 
 void main() {
-  final sketch = Sketch(lines: [
-    _line([
-      [0, 0], [2, 0], [4, 0], [6, 0], [8, 0], [10, 0], // horizontal stroke
-    ]),
-    _line([
-      [100, 100], // a single-point dot
-    ]),
-  ]);
+  final sketch = Sketch(
+    lines: [
+      _line([
+        [0, 0], [2, 0], [4, 0], [6, 0], [8, 0], [10, 0], // horizontal stroke
+      ]),
+      _line([
+        [100, 100], // a single-point dot
+      ]),
+    ],
+  );
 
   test('eraser far away changes nothing', () {
     final out = splitErase(sketch, const Offset(500, 500), 5);
     expect(out.lines.length, 2);
-    expect(out.lines.any((l) => l.points.length == 1), isTrue, reason: 'dot kept');
+    expect(
+      out.lines.any((l) => l.points.length == 1),
+      isTrue,
+      reason: 'dot kept',
+    );
   });
 
   test('erasing the middle splits the stroke into two pieces', () {
@@ -38,7 +44,11 @@ void main() {
     final rightXs = pieces[1].points.map((p) => p.x.toInt()).toList();
     expect(leftXs, [0, 2]);
     expect(rightXs, [8, 10]);
-    expect(out.lines.any((l) => l.points.length == 1), isTrue, reason: 'dot untouched');
+    expect(
+      out.lines.any((l) => l.points.length == 1),
+      isTrue,
+      reason: 'dot untouched',
+    );
   });
 
   test('erasing an endpoint shortens the stroke (still one piece)', () {

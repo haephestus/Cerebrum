@@ -1,10 +1,12 @@
+import 'package:cerebrum/ui/screens/readings/reader.dart';
 import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'dart:io';
-
+import 'package:cerebrum/api/knowledgebase_api.dart';
 import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/services/storage_paths.dart';
 import 'package:cerebrum/ui/screens/editor/editor_scaffold.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/gap_models.dart';
 import 'gap_repository.dart';
@@ -172,17 +174,63 @@ class _QuickviewState extends State<Quickview> with WidgetsBindingObserver {
     _load();
   }
 
-  /// TODO: wire this to the Syncfusion PDF viewer once it is in the
-  /// project. Until then, be honest about not being able to open it.
-  void _openReading() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          "Opening reading material isn't wired up yet — "
-          'needs the PDF viewer integration.',
+  /// Opens a suggested reading. Uses the source link from the evidence
+  /// (link_or_citation from note_overview.suggested_sources) if available,
+  /// otherwise falls back to the file fingerprint for KB-stored readings.
+  Future<void> _openReading(_ReadingSuggestion suggestion) async {
+    final link = suggestion.evidence.sourceLink?.trim();
+
+    if (link == null || link.isEmpty) {
+      _snack('No reading source available');
+      return;
+    }
+
+    // 1. Web URL
+    if (link.startsWith('http://') || link.startsWith('https://')) {
+      await launchUrl(Uri.parse(link));
+      return;
+    }
+
+    // 2. Already a KB fingerprint (64 hex chars)
+    if (RegExp(r'^[0-9a-f]{64}$').hasMatch(link)) {
+      _openReader(link);
+      return;
+    }
+
+    // 3. Citation text like "CLRS": try to match an uploaded file by name
+    try {
+      final files = await KnowledgebaseApi.showFiles();
+      final needle = link.toLowerCase();
+      final match = files.cast<Map<String, dynamic>?>().firstWhere(
+        (f) => (f?['original_name']?.toString().toLowerCase() ?? '').contains(
+          needle,
         ),
-      ),
+        orElse: () => null,
+      );
+      final fingerprint = match?['file_fingerprint']?.toString();
+      if (fingerprint != null && fingerprint.isNotEmpty) {
+        _openReader(fingerprint);
+        return;
+      }
+    } catch (e) {
+      debugPrint('Reading lookup failed: $e');
+    }
+
+    _snack('"$link" isn\'t in your knowledge base');
+  }
+
+  void _openReader(String fingerprint) {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => Reader(fileFingerprint: fingerprint)),
     );
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   static String _timeAgo(DateTime updatedAt) {
@@ -278,7 +326,7 @@ class _QuickviewState extends State<Quickview> with WidgetsBindingObserver {
           ],
 
           if (reading != null)
-            _ReadingCard(reading: reading, onTap: _openReading),
+            _ReadingCard(reading: reading, onTap: () => _openReading(reading)),
         ],
       ),
     );

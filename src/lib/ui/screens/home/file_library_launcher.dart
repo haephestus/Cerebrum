@@ -53,31 +53,10 @@ class _FileLibraryLauncherState extends State<FileLibraryLauncher> {
       context: context,
       builder:
           (dialogContext) => Dialog(
-            insetPadding: const EdgeInsets.all(32),
-            child: SizedBox(
-              width: 640,
-              height: 560,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                        ),
-                      ],
-                    ),
-                    const Expanded(child: FileLibrary()),
-                  ],
-                ),
-              ),
-            ),
+            // TODO: make this responsive
+            child: SizedBox(width: 800, height: 800, child: FileLibrary()),
           ),
-    ).then((_) => _loadCount()); // registry may have changed while open.
+    );
   }
 
   @override

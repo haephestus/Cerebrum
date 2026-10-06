@@ -13,8 +13,8 @@ import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart
 import 'package:cerebrum/ui/screens/editor/controllers/paged_note_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/text_editing_driver.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum/ui/screens/editor/screens/paged_editor.dart';
-import 'package:cerebrum/ui/screens/editor/screens/radial_tool_dial.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/radial_tool_dial.dart';
 import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
@@ -1453,6 +1453,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
             if (_showAnalysisPanel && _hasAttemptedLoad)
               Positioned(
                 right: 16,
+                // Editor_settings pop up
                 child: Material(
                   elevation: 8,
                   borderRadius: BorderRadius.circular(12),
@@ -1482,7 +1483,12 @@ class _EditorScaffoldState extends State<EditorScaffold> {
 
                             Row(
                               children: [
-                                FilledButton.icon(
+                                TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
                                   onPressed:
                                       (_isGeneratingAnalysis ||
                                               !_analysisEnabled)
@@ -1500,8 +1506,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                                           : const Icon(Icons.auto_awesome),
                                   label: Text(
                                     _isGeneratingAnalysis
-                                        ? 'Generating...'
-                                        : 'Regenerate',
+                                        ? 'Analysing...'
+                                        : 'Re-analyse',
                                   ),
                                 ),
 

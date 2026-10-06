@@ -17,6 +17,7 @@
 | Drift migration | DONE | Phase 0 | [[features/drift-migration]] |
 | Tool Wheel (Concepts-style) | DONE | Phase 1-4 | [[features/tool-wheel]] |
 | Study bubbles grid | DONE | Phase 2 | [[features/study-bubbles-grid]] |
+| Study plan week-level detail | DONE | Phase 2 | [[features/study-plan-week-detail]] |
 
 ## Candidates
 
@@ -32,5 +33,4 @@
 
 See [[roadmap]] for phase details, [[cross-repo/contracts]] for dependency information.
 | Study plan annual/portfolio view | Discussion (Learning Center) | Phase 2 | [[features/study-plan-annual-view]] |
-| Study plan week-level detail | Discussion (detail page depth) | Phase 2 | [[features/study-plan-week-detail]] |
 | Study plan draft review/approval | Observation (drafts stuck in Learning Center) | Phase 2 | [[features/study-plan-draft-review]] |

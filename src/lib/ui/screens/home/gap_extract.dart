@@ -84,7 +84,7 @@ NoteGapData extractNoteGaps({
   int maxChunkGaps = 3,
 }) {
   final items = <GapItem>[];
-  final evidence = GapEvidence(
+  final baseEvidence = GapEvidence(
     noteId: noteId,
     noteTitle: noteTitle,
     bubbleId: bubbleId,
@@ -102,7 +102,7 @@ NoteGapData extractNoteGaps({
             GapItem(
               kind: GapKind.weakArea,
               title: raw.toString().trim(),
-              evidence: [evidence],
+              evidence: [baseEvidence],
             ),
           );
         }
@@ -118,7 +118,7 @@ NoteGapData extractNoteGaps({
             kind: GapKind.confusion,
             title: '$a vs $b',
             detail: _isFill(description) ? null : description,
-            evidence: [evidence],
+            evidence: [baseEvidence],
           ),
         );
       }
@@ -129,7 +129,7 @@ NoteGapData extractNoteGaps({
           GapItem(
             kind: GapKind.knowledgeGap,
             title: raw.toString().trim(),
-            evidence: [evidence],
+            evidence: [baseEvidence],
           ),
         );
       }
@@ -139,12 +139,22 @@ NoteGapData extractNoteGaps({
       final title = raw['title']?.toString().trim();
       if (_isFill(title)) continue;
       final reason = raw['reason']?.toString().trim();
+      final sourceLink = raw['link_or_citation']?.toString().trim();
       items.add(
         GapItem(
           kind: GapKind.suggestedReading,
           title: title!,
           detail: _isFill(reason) ? null : reason,
-          evidence: [evidence],
+          evidence: [
+            GapEvidence(
+              noteId: baseEvidence.noteId,
+              noteTitle: baseEvidence.noteTitle,
+              bubbleId: baseEvidence.bubbleId,
+              analysisVersion: baseEvidence.analysisVersion,
+              isCurrent: baseEvidence.isCurrent,
+              sourceLink: _isFill(sourceLink) ? null : sourceLink,
+            ),
+          ],
         ),
       );
     }
@@ -246,11 +256,11 @@ NoteGapData extractNoteGaps({
           severity: f.severity,
           evidence: [
             GapEvidence(
-              noteId: evidence.noteId,
-              noteTitle: evidence.noteTitle,
-              bubbleId: evidence.bubbleId,
-              analysisVersion: evidence.analysisVersion,
-              isCurrent: evidence.isCurrent,
+              noteId: baseEvidence.noteId,
+              noteTitle: baseEvidence.noteTitle,
+              bubbleId: baseEvidence.bubbleId,
+              analysisVersion: baseEvidence.analysisVersion,
+              isCurrent: baseEvidence.isCurrent,
               excerpt: _crop(f.excerpt, 240),
               blockIds: f.blockIds,
               pageId: f.pageId,

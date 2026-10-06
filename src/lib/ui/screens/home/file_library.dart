@@ -1,6 +1,8 @@
 import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/ui/widgets/floating_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/api/knowledgebase_api.dart';
+import 'package:cerebrum/ui/screens/readings/reader.dart';
 
 class FileLibrary extends StatefulWidget {
   const FileLibrary({super.key});
@@ -20,6 +22,13 @@ class _FileLibraryState extends State<FileLibrary> {
   void initState() {
     super.initState();
     loadRegistry();
+  }
+
+  void _openReader(String fingerprint) {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => Reader(fileFingerprint: fingerprint)),
+    );
   }
 
   Future<void> loadRegistry() async {
@@ -79,28 +88,14 @@ class _FileLibraryState extends State<FileLibrary> {
   Widget build(BuildContext context) {
     // Removed the tiny hardcoded height/width.
     // It will now safely fill the 400px height given by DHomescreen.
-    return Container(
-      decoration: const BoxDecoration(color: Colors.transparent),
+    return FloatingModal(
+      title: "File Library",
+      showIcon: true,
+      toolTip: "Upload file",
+      onPressed: _handleUpload,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fixed: Replaced illegal Positioned widget with a standard action row
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "File Library",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.upload_file),
-                  onPressed: _uploading ? null : _handleUpload,
-                ),
-              ],
-            ),
-          ),
           if (_status != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -143,6 +138,7 @@ class _FileLibraryState extends State<FileLibrary> {
 
           return Card(
             child: ListTile(
+              onTap: () => _openReader(file["file_fingerprint"]),
               leading: const Icon(Icons.picture_as_pdf),
               title: Text(
                 (file['original_name'] ?? 'Unnamed file').toString(),

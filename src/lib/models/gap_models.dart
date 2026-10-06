@@ -72,6 +72,7 @@ enum GapKind {
 
 /// Where a gap was found: the note, the analysis version that found it, and
 /// for chunk-sourced fallbacks the excerpt + blocks the finding covers.
+/// For suggestedReading gaps, also carries the source link/citation.
 class GapEvidence {
   final String noteId;
   final String noteTitle;
@@ -82,6 +83,7 @@ class GapEvidence {
   final List<String>
   blockIds; // stable block ids this gap's source chunk covers
   final String? pageId; // page the source chunk lives on
+  final String? sourceLink; // for suggestedReading: the link_or_citation from note_overview
 
   const GapEvidence({
     required this.noteId,
@@ -92,6 +94,7 @@ class GapEvidence {
     this.excerpt,
     this.blockIds = const [],
     this.pageId,
+    this.sourceLink,
   });
 }
 
@@ -135,6 +138,7 @@ class GapItem {
           if (e.excerpt != null) 'excerpt': e.excerpt,
           if (e.blockIds.isNotEmpty) 'blockIds': e.blockIds,
           if (e.pageId != null) 'pageId': e.pageId,
+          if (e.sourceLink != null) 'sourceLink': e.sourceLink,
         },
     ],
   };
@@ -155,6 +159,7 @@ class GapItem {
           excerpt: e['excerpt'] as String?,
           blockIds: (e['blockIds'] as List?)?.cast<String>() ?? const [],
           pageId: e['pageId'] as String?,
+          sourceLink: e['sourceLink'] as String?,
         ),
     ],
   );

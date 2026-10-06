@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  pdfrx: ^2.2.24
   introduction_screen: ^4.0.0
   flutter_secure_storage: ^10.0.0
   flutter:
@@ -41,13 +42,13 @@ dependencies:
   super_editor: ^0.2.7
   super_clipboard: ^0.9.1
   scribble: ^0.10.0+1
-  syncfusion_flutter_pdfviewer: ^31.1.21
   gpt_markdown: ^1.1.6
   appflowy_editor: ^6.0.0
   table_calendar: ^3.0.9
   cupertino_icons: ^1.0.8
   http: ^1.6.0
   file_picker: ^8.3.7
+  url_launcher: ^6.3.0
   path_provider: ^2.1.5
   crypto: ^3.0.6
   # Records/queues backend (engram attempts + mastery). Codegen must run with

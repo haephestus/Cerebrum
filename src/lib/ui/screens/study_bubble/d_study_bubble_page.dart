@@ -20,6 +20,7 @@ class _NoteCardData {
   final String? filename;
   final String title;
   final String snippet;
+  final NotePreview preview;
   final bool dirty; // local unsynced edits
   final String? lastEdited; // ISO or null when unknown (chip hidden)
   final AnalysisDisplayStatus
@@ -31,6 +32,7 @@ class _NoteCardData {
     required this.filename,
     required this.title,
     required this.snippet,
+    required this.preview,
     required this.dirty,
     required this.lastEdited,
     required this.analysis,
@@ -161,8 +163,52 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
     }
   }
 
+  /// Classifies a page's document into the richest preview it supports:
+  /// an image block near the top (most visual), else a checklist if the page
+  /// has todo items, else falls back to flattened text. Never guesses content
+  /// that isn't actually there.
+  NotePreview _buildPreview(Map<String, dynamic> doc) {
+    final children = (doc['children'] as List?) ?? const [];
+
+    // Image block anywhere near the top → treat the note as an image note.
+    for (final child in children.take(3)) {
+      if (child is! Map) continue;
+      if (child['type'] == 'image') {
+        final url = (child['data'] as Map?)?['url'] as String?;
+        if (url != null && url.isNotEmpty) {
+          return NotePreview.image(url);
+        }
+      }
+    }
+
+    // Todo/checklist blocks → structured checklist preview.
+    final checklistItems = <NoteChecklistItem>[];
+    for (final child in children) {
+      if (child is! Map) continue;
+      if (child['type'] != 'todo_list') continue;
+      final data = child['data'] as Map?;
+      final delta = data?['delta'] as List?;
+      final text =
+          delta
+              ?.whereType<Map>()
+              .map((op) => op['insert']?.toString() ?? '')
+              .join() ??
+          '';
+      if (text.trim().isEmpty) continue;
+      checklistItems.add(
+        NoteChecklistItem(text: text.trim(), checked: data?['checked'] == true),
+      );
+    }
+    if (checklistItems.isNotEmpty) {
+      return NotePreview.checklist(checklistItems);
+    }
+
+    // Fallback: flattened text snippet (existing behavior).
+    return NotePreview.text(NoteStore.documentSnippet(doc));
+  }
+
   /// Enrich the note list into card data using ONLY local facts + cached
-  /// daemon state (gap rollup). Snippet comes from each note's pages when the
+  /// daemon state (gap rollup). Preview comes from each note's pages when the
   /// payload carries them (daemon list), else a cheap local first-page read.
   Map<String, _NoteCardData> _buildCardData(List<Map<String, dynamic>> source) {
     final out = <String, _NoteCardData>{};
@@ -184,15 +230,19 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
               : null) ??
           (n['last_modified'] as String?);
 
-      // Server list payloads carry the first page's document → snippet is free.
+      // Server list payloads carry the first page's document → preview is
+      // free (except drawing thumbnails — ink is excluded from the list
+      // response, see the NOTE on loadNotes above).
       String snippet = '';
+      NotePreview preview = const NotePreview.text('');
       final pages = (n['pages'] as List?) ?? const [];
       if (pages.isNotEmpty && pages.first is Map) {
-        snippet = NoteStore.documentSnippet(
-          Map<String, dynamic>.from(
-            (pages.first as Map)['document'] as Map? ?? const {},
-          ),
+        final doc = Map<String, dynamic>.from(
+          (pages.first as Map)['document'] as Map? ?? const {},
         );
+        preview = _buildPreview(doc);
+        snippet =
+            preview.kind == NotePreviewKind.text ? (preview.text ?? '') : '';
       }
 
       AnalysisDisplayStatus analysis = AnalysisDisplayStatus.unknown;
@@ -220,6 +270,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
         filename: filename,
         title: title,
         snippet: snippet,
+        preview: preview,
         dirty: localDirty,
         lastEdited: lastEdited,
         analysis: analysis,
@@ -272,6 +323,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
             filename: v.filename,
             title: v.title,
             snippet: v.snippet,
+            preview: v.preview,
             dirty: v.dirty,
             lastEdited: v.lastEdited,
             analysis: next,
@@ -307,6 +359,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
           filename: v.filename,
           title: v.title,
           snippet: v.snippet,
+          preview: v.preview,
           dirty: v.dirty,
           lastEdited: v.lastEdited,
           analysis: v.analysis,
@@ -340,6 +393,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
             filename: old.filename,
             title: old.title,
             snippet: snippet,
+            preview: NotePreview.text(snippet),
             dirty: old.dirty,
             lastEdited: old.lastEdited,
             analysis: old.analysis,
@@ -551,6 +605,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
           filename: null,
           title: 'Untitled Note',
           snippet: '',
+          preview: const NotePreview.text(''),
           dirty: true,
           lastEdited: DateTime.now().toUtc().toIso8601String(),
           analysis: AnalysisDisplayStatus.needsAnalysis,
@@ -643,61 +698,83 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   Widget build(BuildContext context) {
     final cards = _sortedCards;
     final selected = _selectedKey == null ? null : _cardData[_selectedKey];
+    final colorScheme = Theme.of(context).colorScheme;
 
     // Desktop view
     return Scaffold(
-      backgroundColor: context.cerebrum.text.strong,
+      backgroundColor: colorScheme.surface,
       body: Row(
         children: [
           // CENTER: notes list
           Expanded(
             flex: 2,
             child: Container(
-              color: context.cerebrum.text.onDark,
+              color: colorScheme.surface,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // show in mobile mode?? we will see
-                  //_buildHeader(),
+                  _buildHeader(),
+                  SizedBox(height: 32),
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
-                      // Always at least the add-note tile; the empty state
-                      // rides below it so "no notes yet" never hides the
+                    child: GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 12, 20),
+                      // Responsive column count: as many columns as fit at ~280px each,
+                      // rather than a hardcoded crossAxisCount — matches how Samsung Notes
+                      // reflows on different screen widths instead of a fixed 2/3-column grid.
+                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 270,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        // AGENT TODO: cards have variable content height (checklist items,
+                        // table rows, snippet length all differ), but GridView tiles must
+                        // share one height per row. 230 is a rough fit for the current
+                        // preview caps (2-line title, 3 checklist rows / 3 table rows,
+                        // 3 meta chips). If previews grow (e.g. bigger checklistOverflow
+                        // caps) or cards look cramped/empty on real devices, tune this or
+                        // switch to a masonry layout (flutter_staggered_grid_view package)
+                        // for content-driven heights instead of a fixed mainAxisExtent.
+                        mainAxisExtent: 290,
+                      ),
+                      // Always at least the add-note tile; the empty state rides below it
+                      // (as its own full-width-ish tile) so "no notes yet" never hides the
                       // way to create one.
-                      itemCount: 1 + (notes.isEmpty ? 1 : cards.length),
+                      itemCount: (notes.isEmpty ? 1 : cards.length),
                       itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return _AddNoteTile(onTap: addNote);
-                        }
                         if (notes.isEmpty) {
                           return const _EmptyNotes();
                         }
-                        final data = cards[index - 1];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: NoteCardView(
-                            data: {
-                              'title': data.title,
-                              'snippet': data.snippet,
-                            },
-                            accentColor: _ringColor(data),
-                            analysis: data.analysis,
-                            gapCount: data.gapCount,
-                            lastEdited: data.lastEdited,
-                            isSelected: data.key == _selectedKey,
-                            isOpening: _openingFilename == data.key,
-                            onTap: () => _selectNote(data.key),
-                            onOpen: () {
-                              final note = notes.firstWhere(
-                                (n) =>
-                                    (n['filename'] ?? n['note_id']) == data.key,
-                                orElse: () => const {},
-                              );
-                              if (note.isNotEmpty) _openNote(note);
-                            },
-                            onDelete: () => _confirmDelete(data),
-                          ),
+                        final data = cards[index];
+                        return NoteCardView(
+                          data: {
+                            'title': data.title,
+                            'snippet': data.snippet,
+                            'dirty': data.dirty,
+                          },
+                          preview: data.preview,
+                          accentColor: _ringColor(data),
+                          analysis: data.analysis,
+                          gapCount: data.gapCount,
+                          lastEdited: data.lastEdited,
+                          isSelected: data.key == _selectedKey,
+                          isOpening: _openingFilename == data.key,
+                          onTap: () => _selectNote(data.key),
+                          onDoubleTap: () {
+                            final note = notes.firstWhere(
+                              (n) =>
+                                  (n['filename'] ?? n['note_id']) == data.key,
+                              orElse: () => const {},
+                            );
+                            if (note.isNotEmpty) _openNote(note);
+                          },
+                          onOpen: () {
+                            final note = notes.firstWhere(
+                              (n) =>
+                                  (n['filename'] ?? n['note_id']) == data.key,
+                              orElse: () => const {},
+                            );
+                            if (note.isNotEmpty) _openNote(note);
+                          },
+                          onDelete: () => _confirmDelete(data),
                         );
                       },
                     ),
@@ -708,38 +785,44 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
           ),
 
           // RIGHT: context sidebar — updates on selection.
-          Container(
-            width: 400,
-            color: context.cerebrum.text.strong,
-            padding: const EdgeInsets.all(16),
-            child: _ContextSidebar(
-              bubble: widget.bubble,
-              selected: selected,
-              bubbleId: bubbleId,
-              onOpen:
-                  selected == null
-                      ? null
-                      : () {
-                        final note = notes.firstWhere(
-                          (n) =>
-                              (n['filename'] ?? n['note_id']) == selected.key,
-                          orElse: () => const {},
-                        );
-                        if (note.isNotEmpty) _openNote(note);
-                      },
-              onDelete:
-                  selected == null ? null : () => _confirmDelete(selected),
-              onRunAnalysis:
-                  selected == null || selected.filename == null
-                      ? null
-                      : () => _runAnalysis(selected),
-              onBack: () {
-                if (widget.onBack != null) {
-                  widget.onBack!();
-                } else {
-                  Navigator.pop(context);
-                }
-              },
+          Padding(
+            padding: EdgeInsetsGeometry.fromLTRB(12, 8, 8, 8),
+            child: Container(
+              width: 500,
+              padding: EdgeInsetsGeometry.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: context.cerebrum.surface.raised,
+              ),
+              child: _ContextSidebar(
+                bubble: widget.bubble,
+                selected: selected,
+                bubbleId: bubbleId,
+                onOpen:
+                    selected == null
+                        ? null
+                        : () {
+                          final note = notes.firstWhere(
+                            (n) =>
+                                (n['filename'] ?? n['note_id']) == selected.key,
+                            orElse: () => const {},
+                          );
+                          if (note.isNotEmpty) _openNote(note);
+                        },
+                onDelete:
+                    selected == null ? null : () => _confirmDelete(selected),
+                onRunAnalysis:
+                    selected == null || selected.filename == null
+                        ? null
+                        : () => _runAnalysis(selected),
+                onBack: () {
+                  if (widget.onBack != null) {
+                    widget.onBack!();
+                  } else {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
             ),
           ),
         ],
@@ -750,32 +833,25 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: context.cerebrum.surface.outline),
-        ),
-      ),
+      decoration: BoxDecoration(),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              widget.bubble?['name'] ?? "No name",
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+          Text(
+            '${widget.bubble!['name']}',
+            style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800),
           ),
+          Spacer(),
           _SyncIndicator(pending: _pendingSync, loaded: _syncIndicatorLoaded),
+          SizedBox(width: 6),
           IconButton(
-            icon: const Icon(Icons.arrow_back),
-            tooltip: "Back to Study Bubbles",
-            onPressed: () {
-              if (widget.onBack != null) {
-                widget.onBack!();
-              } else {
-                Navigator.pop(context);
-              }
-            },
+            icon: const Icon(Icons.add_rounded),
+            tooltip: "Add note",
+            onPressed: () {},
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter),
+            tooltip: "Filter",
+            onPressed: () {},
           ),
         ],
       ),
@@ -876,32 +952,29 @@ class _AddNoteTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: context.cerebrum.surface.canvas,
+    return Material(
+      color: context.cerebrum.surface.canvas,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.add_circle_outline,
+        child: Padding(
+          padding: EdgeInsetsGeometry.only(left: 14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.add_circle_outline,
+                color: context.cerebrum.status.info,
+              ),
+              SizedBox(width: 12),
+              Text(
+                "Add New Note",
+                style: TextStyle(
                   color: context.cerebrum.status.info,
+                  fontWeight: FontWeight.bold,
                 ),
-                SizedBox(width: 10),
-                Text(
-                  "Add New Note",
-                  style: TextStyle(
-                    color: context.cerebrum.status.info,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1013,23 +1086,13 @@ class _ContextSidebar extends StatelessWidget {
       children: [
         Row(
           children: [
-            IconButton(
-              icon: Icon(Icons.arrow_back, color: context.cerebrum.text.onDark),
-              tooltip: "Back to Study Bubbles",
-              onPressed: onBack,
-            ),
-            Icon(
-              Icons.bubble_chart,
-              color: context.cerebrum.text.onDark.withValues(alpha: 0.7),
-            ),
-            const SizedBox(width: 8),
             Expanded(
               child: Text(
-                bubble?['name'] ?? "No name",
+                "About this bubble",
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: context.cerebrum.text.onDark,
+                  color: context.cerebrum.text.strong,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1040,10 +1103,10 @@ class _ContextSidebar extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           bubble?['description'] ?? "No description yet.",
-          style: TextStyle(color: context.cerebrum.text.onDark, fontSize: 13),
+          style: TextStyle(color: context.cerebrum.text.strong, fontSize: 13),
         ),
         const SizedBox(height: 20),
-        Divider(color: context.cerebrum.text.onDarkFaint),
+        Divider(color: context.cerebrum.text.strong),
         const SizedBox(height: 12),
         if (selected == null)
           Expanded(
@@ -1053,14 +1116,14 @@ class _ContextSidebar extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.touch_app,
-                    color: context.cerebrum.text.onDarkFaint,
+                    color: context.cerebrum.text.strong,
                     size: 40,
                   ),
                   SizedBox(height: 8),
                   Text(
                     'Select a note to see its analysis',
                     style: TextStyle(
-                      color: context.cerebrum.text.onDarkFaint,
+                      color: context.cerebrum.text.strong,
                       fontSize: 13,
                     ),
                   ),
@@ -1118,7 +1181,7 @@ class _SelectedSummary extends StatelessWidget {
           Text(
             title,
             style: TextStyle(
-              color: context.cerebrum.text.onDark,
+              color: context.cerebrum.text.strong,
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -1130,7 +1193,7 @@ class _SelectedSummary extends StatelessWidget {
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: context.cerebrum.text.onDark.withValues(alpha: 0.6),
+                color: context.cerebrum.text.strong.withValues(alpha: 0.6),
                 fontSize: 13,
               ),
             ),
@@ -1144,7 +1207,7 @@ class _SelectedSummary extends StatelessWidget {
                 Text(
                   '· $gapCount ${gapCount == 1 ? 'gap' : 'gaps'}',
                   style: TextStyle(
-                    color: context.cerebrum.text.onDarkFaint,
+                    color: context.cerebrum.text.strong,
                     fontSize: 13,
                   ),
                 ),
@@ -1162,10 +1225,12 @@ class _SelectedSummary extends StatelessWidget {
                 label: const Text('Open'),
               ),
               if (showAnalyze && onRunAnalysis != null)
+                // on analysis running -> show loading indicator(Analysing...)
                 OutlinedButton.icon(
                   onPressed: onRunAnalysis,
+                  // convert the icon to a loading indicator
                   icon: const Icon(Icons.auto_awesome, size: 16),
-                  label: const Text('Run analysis'),
+                  label: const Text('Analyse'),
                 ),
               OutlinedButton.icon(
                 onPressed: onDelete,
@@ -1180,10 +1245,7 @@ class _SelectedSummary extends StatelessWidget {
           const Spacer(),
           Text(
             'Tip: pick a note to see it here. Double-click a card opens it.',
-            style: TextStyle(
-              color: context.cerebrum.text.onDarkFaint,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: context.cerebrum.text.strong, fontSize: 11),
           ),
         ],
       ),

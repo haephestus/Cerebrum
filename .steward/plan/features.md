@@ -23,5 +23,5 @@
   now. Full cross-bubble rollup and the real engram schedule wait on engram generation.
   See [[features/homepage-dashboard]].
 - [ ] Study plan annual/portfolio view — portfolio timeline: approved-plan gantt (predicted start) + upcoming drafts staging + engrams beneath (tabs collapsed) (see [[features/study-plan-annual-view]])
-- [ ] Study plan week-level detail — daemon weeks read-path fixes first, then client phase → weeks drill (see [[features/study-plan-week-detail]])
+- [x] Study plan week-level detail — daemon weeks read-path fixes first, then client phase → weeks drill (see [[features/study-plan-week-detail]])
 - [ ] Study plan draft review/approval — daemon status route + client Approve (see [[features/study-plan-draft-review]])

@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:cerebrum/ui/screens/editor/blocks/table/table_page_bounds.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
-import 'package:cerebrum/ui/screens/editor/screens/drawing_layer.dart';
-import 'package:cerebrum/ui/screens/editor/screens/paged_editor.dart'
+import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart'
     show BlockAnalysisLookup;
 
 /// One page of a note: a fixed-aspect "sheet" (A4 portrait) holding the text
@@ -335,13 +335,21 @@ class _PageSurfaceState extends State<PageSurface> {
     final blockRect = localTopLeft & sectionRect.size;
     final pageSize = stackBox.size;
 
-    const popoverWidth = 300.0;
     const gap = 6.0;
+    // floor so a tiny/narrow block doesn't produce an unreadable popover
+    const minPopoverWidth = 200.0;
+    final popoverWidth =
+        blockRect.width < minPopoverWidth ? minPopoverWidth : blockRect.width;
     // Prefer below the block; flip above if it would overflow the sheet bottom.
     final estPopoverHeight = 220.0;
     final belowSpace = pageSize.height - blockRect.bottom;
     final placeBelow =
         belowSpace >= estPopoverHeight || belowSpace >= blockRect.top;
+
+    // Since popoverWidth is now tied to blockRect.width, left can just be
+    // blockRect.left directly in the common case — but keep the clamp for
+    // the minPopoverWidth fallback, where popoverWidth might exceed the
+    // remaining page width if the block sits near the right edge.
     final left = blockRect.left.clamp(
       0.0,
       (pageSize.width - popoverWidth).clamp(0.0, double.infinity),
@@ -511,38 +519,20 @@ class _AnalysisPopover extends StatelessWidget {
 
     return Material(
       elevation: 8,
-      borderRadius: BorderRadius.circular(10),
-      color: context.cerebrum.surface.raised,
+      borderRadius: BorderRadius.circular(6),
+      color: context.cerebrum.surface.cardSurfaceSelected,
+      shadowColor: Colors.transparent,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
+          padding: const EdgeInsets.fromLTRB(12, 0, 8, 10),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.insights_rounded, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Block analysis',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: context.cerebrum.text.muted,
-                    ),
-                  ),
-                  const Spacer(),
-                  InkResponse(
-                    onTap: onClose,
-                    child: const Icon(Icons.close, size: 16),
-                  ),
-                ],
-              ),
               if (staleCount > 0)
                 Padding(
-                  padding: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.only(top: 0),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

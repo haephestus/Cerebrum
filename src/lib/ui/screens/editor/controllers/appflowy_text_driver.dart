@@ -691,6 +691,15 @@ class AppFlowyTextDriver extends ChangeNotifier
       // editor drop an editable caret. Passes through untouched in normal and
       // insert modes — see [_buildBlockWrapper].
       blockWrapper: _buildBlockWrapper,
+      editorStyle: EditorStyle.desktop(
+        // or .mobile(), depending on target
+        textStyleConfiguration: TextStyleConfiguration(
+          text: TextStyle(
+            color: context.cerebrum.text.strong, // wire to your theme token
+            fontSize: 16,
+          ),
+        ),
+      ),
     );
   }
 

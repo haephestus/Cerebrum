@@ -55,13 +55,38 @@ mastery deltas).
       DONE via real `UserSession` identity + daemon user-level scope (the
       dashboard is the global view; `list_engrams` supports "none → all").
 - [ ] **Real schedule, not synthesized hours.** Delete the `slotHour: 9 + i`
-      placeholder and show the daemon's real `scheduled_at`/`state`, grouped by
-      day, sorted by due. DONE client-side: `buildDaysFromEngrams` groups by
-      real due date, renders `local` time chips, "Overdue" after the due
-      instant, and an honest "Upcoming / no due time yet" bucket for engrams
-      the daemon has not scheduled — never a synthesized hour. Remaining
-      dependency: daemon must generate engrams and populate `scheduled_at`
-      ([[engram-generation]]); the contract allows absent schedule by design.
+      placeholder and render the daemon's real `scheduled_at`. DONE
+      (2026-09-14, revised 2026-09-15) as the **horizontal schedule rail** —
+      the section is a scrollable 24h gantt window, not a full-view timeline:
+      - the viewport is a fixed **6-hour window** — hour width is derived as
+        viewport/6, so the 24h day is exactly 4 viewports wide and the rest
+        is reached by drag OR mouse wheel (wheel is captured while the
+        pointer hovers the rail — the outer page only scrolls once the mouse
+        physically leaves the rail);
+      - items are GANTT BARS anchored at their real due instant, spanning
+        `duration` (nominal 30min review span; a daemon-side end time
+        replaces it when it exists) — the anchor is real data, the tail is
+        presentation so overlaps are visible;
+      - bars that start in the same hour STACK vertically: `layoutGantt`
+        (greedy interval partitioning) assigns overlapping bars to separate
+        rows, touching bars share a row, and the rail grows with the stack —
+        **capped at 3 visible rows**, above which the rail stops growing and
+        a "+N more" hint strips in beneath the last row;
+      - a fixed right-side **counters column** (mirror of the date column)
+        shows user-global overdue (red, tap → Learning Center) and
+        unscheduled counts, always visible regardless of pan position;
+      - dragging past 23:59 wraps to the next day, past 00:00 to the
+        previous (300ms cooldown prevents flip storms); explicit ‹ › day
+        arrows sit in the date column;
+      - a red now-cursor marks the current system time, only on today;
+      - tapping the date opens a mini calendar with per-day overdue badges
+        (custom dialog — `showDatePicker` can't decorate day cells);
+      - an overdue banner jumps to the Learning Center.
+      Today-only for now; the generic `ScheduleItem` model (id/title/due/
+      duration/type) is the extension point for future reviews/tasks on the
+      same rail. Remaining dependency: daemon must generate engrams and
+      populate `scheduled_at` ([[engram-generation]]); the contract allows
+      absent schedule by design.
 
 ### Supporting region: Study bubbles (entry to the gap surface)
 - [ ] **Mount `StudyBubblesSummaryCard` into DHomescreen.** It is implemented and
@@ -119,6 +144,35 @@ mastery deltas).
 | Phase 2 | Real schedule/due-dates + suggested-reading/gap contract + cross-bubble rollup |
 
 ## Notes / decisions
+- **Schedule rail design (2026-09-14 / revised 09-15 / revised 09-16):** three
+  earlier client designs were rejected in sequencing — first, a grouped-day
+  list with `IntrinsicHeight` inside the card caused an infinite layout loop
+  ("Cannot hit test a render box that has never been laid out",
+  `upcoming_engrams.dart` rewritten from scratch at HEAD); second, a rewrite
+  at HEAD was reverted wholesale; third, a narrow (~58px/hr) chip rail read as
+  "full view" with fixed 3-row stagger. The current rail is the fourth design
+  and the second to land: wide gantt bars + `layoutGantt` interval rows
+  (tested pure function), a **6-hour viewport window** (hourWidth =
+  viewport/6), right-side overdue/unscheduled counters, hover-scoped wheel
+  pan, dynamic height capped at 3 rows + "+N more" hint, day arrows.
+  `ScheduleRail` widget tests prove filled/empty/today/other-day render with
+  zero layout exceptions, same-hour bars stack vertically (and cap), counters
+  render, and the timeline is a ~4-viewport scroll window with hover-scoped
+  wheel capture.
+  Edge-wrapped day flips live in the rail's drag handler only — calendar
+  taps snap to a day without wrapping.
+- **Rail overflow proofing (2026-09-15, live bug from DevTools):** the date
+  column overflowed in the running app even though Ahem-font widget tests
+  passed. Root cause was NOT the rail height: at display text scales ≥ ~1.25,
+  a month like "SEP" is wider than the 64px date column and wraps glyph-by-
+  glyph into 3 lines ("S"/"E"/"P") — one Text line at a time, each ~40px →
+  the Column overflowed by dozens of px. Fixes: (1) day/month numerals are
+  `FittedBox(scaleDown)` + `softWrap: false` — one line at natural width,
+  scaled down, never wrapped; (2) the bottom block (day arrows + TODAY) sits
+  in an `OverflowBox` so it clips instead of throwing. The rail is now
+  overflow-proof at any font scale; a textScaleFactor=1.5 (and 2.0) widget
+  test guards it — constant-bumping `_minBodyHeight` to chase font metrics
+  is explicitly the WRONG fix (it only ever moves the threshold).
 - **The daemon gap data already exists** — `editor_scaffold._formatOverviewMarkdown`
   renders `weak_areas`, `confused_links`, `knowledge_gaps_summary`, and
   `suggested_sources` today. The hero region is a *rollup + presentation* problem
