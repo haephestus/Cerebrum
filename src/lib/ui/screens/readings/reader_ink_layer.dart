@@ -20,13 +20,17 @@
 //     model is a pure divide by the canvas size.
 //
 // Pointer routing: this layer only takes pointers while store.drawing is true
-// (wrapped in IgnorePointer otherwise). While drawing, scribble's GestureCatcher
-// claims ONLY the pointer kinds in store.pointerMode (stylus/mouse by default),
-// so touch pointers fall through to the viewer's pan/zoom — the viewer itself
-// never locks pan/zoom (see reader.dart).
+// (wrapped in IgnorePointer otherwise), and HitTestPassThrough keeps the hit
+// test running PAST this overlay so pdfrx's InteractiveViewer underneath still
+// takes part while drawing is armed — otherwise the Stack would stop here and
+// wheel/trackpad scrolling over a page would go dead (see HitTestPassThrough).
+// Scribble's GestureCatcher claims ONLY the pointer kinds in store.pointerMode
+// (stylus/mouse by default), so the gesture arena hands touch pointers to the
+// viewer's pan/zoom — the viewer itself never locks pan/zoom (see reader.dart).
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
 import 'package:cerebrum/ui/screens/readings/annotations.dart';
@@ -63,24 +67,26 @@ class ReaderInkPage extends StatelessWidget {
       listenable: store,
       builder: (context, _) {
         final drawing = store.drawing;
-        return Listener(
-          // deferToChild: the canvas decides what is hittable underneath; we
-          // only observe when something on this page was actually touched.
-          behavior: HitTestBehavior.deferToChild,
-          onPointerDown: (_) => store.setActivePage(page.pageNumber),
-          child: IgnorePointer(
-            ignoring: !drawing,
-            child: FittedBox(
-              fit: BoxFit.fill,
-              alignment: Alignment.topLeft,
-              clipBehavior: Clip.none,
-              child: SizedBox(
-                width: size.width,
-                height: size.height,
-                child: NoteDrawingLayer(
-                  notifier: notifier,
-                  partialEraser: store.partialEraser,
-                  eraserWidth: store.eraserWidth,
+        return HitTestPassThrough(
+          child: Listener(
+            // deferToChild: the canvas decides what is hittable underneath; we
+            // only observe when something on this page was actually touched.
+            behavior: HitTestBehavior.deferToChild,
+            onPointerDown: (_) => store.setActivePage(page.pageNumber),
+            child: IgnorePointer(
+              ignoring: !drawing,
+              child: FittedBox(
+                fit: BoxFit.fill,
+                alignment: Alignment.topLeft,
+                clipBehavior: Clip.none,
+                child: SizedBox(
+                  width: size.width,
+                  height: size.height,
+                  child: NoteDrawingLayer(
+                    notifier: notifier,
+                    partialEraser: store.partialEraser,
+                    eraserWidth: store.eraserWidth,
+                  ),
                 ),
               ),
             ),
@@ -88,5 +94,47 @@ class ReaderInkPage extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// Records this subtree in the pointer's hit path WITHOUT ending the hit test,
+/// so whatever is painted underneath is hit-tested too.
+///
+/// pdfrx builds one Stack whose children, in order, are its InteractiveViewer,
+/// the link overlay and then the pageOverlaysBuilder overlays (pdfrx
+/// pdf_viewer.dart). A Stack hit-tests from its LAST child backwards and stops
+/// at the first hit — so once the ink overlay above a page is armed it becomes
+/// the hit test's endpoint and the InteractiveViewer beneath never enters the
+/// path. Its wheel Listener then gets no signal events at all: wheel and
+/// trackpad scrolling over a page silently die while drawing, and touch could
+/// not pan either.
+///
+/// This wrapper reports a miss after letting its children register, so the
+/// parent Stack keeps testing the viewer below. Ownership is left entirely to
+/// the gesture arena and the pointer-signal resolver, exactly as in the
+/// margins around a page:
+///
+///  * scribble's GestureCatcher claims stylus/mouse (draw);
+///  * touch reaches the viewer's pan/zoom recognizer (scroll);
+///  * over the page itself the viewer's Listener is the only signal handler, so
+///    wheel, trackpad and ctrl-wheel zoom run pdfrx's own code — no scroll math
+///    is duplicated here. (Inside the tool dial's hub circle the dial still
+///    takes the wheel first, which is its resize gesture.)
+class HitTestPassThrough extends SingleChildRenderObjectWidget {
+  const HitTestPassThrough({super.key, required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderPassThroughHit();
+}
+
+class _RenderPassThroughHit extends RenderProxyBox {
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    // Children that are hit are added to [result] and keep receiving every
+    // event for this pointer; returning false only tells the parent Stack to
+    // keep looking behind us, which is the whole point of this widget.
+    hitTestChildren(result, position: position);
+    return false;
   }
 }
