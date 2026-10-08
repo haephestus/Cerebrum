@@ -1,50 +1,59 @@
 // =============================================================================
 // READER: STATUS + TODO (for a coding agent)
 //
-// Rewritten from syncfusion_flutter_pdfviewer to pdfrx so we own the annotation
-// layer (Syncfusion's Flutter viewer has no ink support, and its xml ^7
-// requirement conflicts with appflowy_editor). Remove
-// `syncfusion_flutter_pdfviewer` from pubspec.yaml. See annotations.dart for
-// the full annotation roadmap.
+// pdfrx viewer with scribble-backed annotations. The annotation layer and its
+// decision notes live in annotations.dart; the per-page canonical-canvas
+// wrapper is in reader_ink_layer.dart. syncfusion_flutter_pdfviewer is removed
+// from pubspec.yaml.
 //
-// Not compiled or tested yet. Run `flutter analyze` first.
+// Resolved since the syncfusion port:
+//  - SCRIBBLE ADOPTED (annotations.dart DECISION): one ScribbleNotifier per
+//    page inside a canonical-canvas FittedBox, so strokes never drift under
+//    zoom/resize (gate b verified from Flutter's RenderFittedBox source + the
+//    installed pdfrx/pdfrx_engine). Pen, highlighter (translucent — plain-alpha
+//    fallback, annotations.dart item 8) and eraser (partial/whole) all flow
+//    through the editor's existing NoteDrawingLayer; the custom
+//    Listener/CustomPainter input path is deleted.
+//  - PAN/ZOOM LOCK REMOVED: while drawing mode is on, scribble's
+//    GestureCatcher claims only stylus/mouse pointers (store.pointerMode), so
+//    touch still scrolls and pinches (annotations.dart item 2; gate a verified
+//    from scribble's pan_gesture_catcher.dart supportedDevices).
+//  - TOOLBAR = the editor's ToolDialHub, shown ONLY while drawing (same
+//    coupling as EditorScaffold's drawingEnabled): the AppBar's Annotate
+//    button enters drawing mode, Done leaves it, and the dial appears with it
+//    — no separate "show the wheel" state, so the first tap on a chip always
+//    lands on an armed canvas. The dial is re-pointed at the active page's
+//    notifier by a store listener (a captured one would undo the wrong page).
+//    Undo/redo in the AppBar follow the active page's ScribbleNotifier
+//    directly: the store no longer broadcasts per-sketch changes (see
+//    annotations.dart item 9), so the buttons must listen where the state
+//    actually changes.
+//  - ERROR HANDLING: pdfrx banners wired (errorBannerBuilder /
+//    loadingBannerBuilder) — replaces Syncfusion's onDocumentLoadFailed snack.
+//  - PAGE JUMP: KnowledgebaseApi.readFile is called with page: null so the
+//    `#page=N` fragment never enters pdfrx's cache key (each fragment caused a
+//    separate full download); initialPageNumber covers the jump.
 //
-// TODO:
-//  - API CHECKED against pdfrx docs: PdfViewer.uri(headers:, initialPageNumber:),
-//    PdfViewerParams.textSelectionParams (PdfTextSelectionParams.enabled),
-//    panEnabled/scaleEnabled, pageOverlaysBuilder. PdfViewerController is a
-//    plain ValueListenable<Matrix4>, so it is not disposed here.
-//  - STILL UNVERIFIED (runtime behaviour): that pageOverlaysBuilder's widgets
-//    are laid out at page size and scale with zoom (the ink layer relies on
-//    this), and that `widget.page` lands on the right page.
-//  - ERROR HANDLING: Syncfusion had onDocumentLoadFailed -> SnackBar. Add the
-//    pdfrx equivalent (e.g. loading/error banner builders in PdfViewerParams).
-//  - COORDINATES: see the COORDINATE MODEL note in annotations.dart (overlay
-//    sizing assumption, page rotation/crop box, PDF-space conversion, and what
-//    `fileFingerprint` means for annotation identity). Test alignment with
-//    zoom, resize, and rotated/cropped PDFs before building more on top.
-//  - SCRIBBLE: see the SCRIBBLE note in annotations.dart; evaluating it may
-//    change how input is wired here (it may remove the need for the lock below).
-//  - PAN/ZOOM LOCK: while a tool is active, panEnabled/scaleEnabled are false so
-//    strokes don't fight the viewer. Replace with stylus-only drawing so touch
-//    can still scroll/zoom (annotations.dart header item 2). Also consider a
-//    visible "drawing mode" indicator and an easy way out.
+// Still TODO (see annotations.dart for details):
+//  - Device-verify that pageOverlaysBuilder widgets are laid out at page size
+//    and scale with zoom (items a/b), that stylus doesn't also pan the viewer,
+//    and rotated/cropped PDFs align.
 //  - TEXT SELECTION: enabled only when no tool is active. Wire selection into
-//    text-snapped highlight/underline once that API is verified (header item 4).
-//  - TOOLBAR UX: currently icon buttons in the AppBar, which will overflow on
-//    narrow screens. Move to a collapsible bottom/side toolbar; add clear-page,
-//    stroke width preview, and persist the last used tool/color/width.
-//  - EXPORT / SHARE: add an "export annotated copy" action (annotations.dart
-//    header item 6).
+//    text-snapped highlight/underline — the model is in place
+//    (HighlightAnnotation), the pdfrx hook is item 4 in annotations.dart.
+//  - STICKY NOTES UI (model ready: NoteAnnotation) / EXPORT / SYNC / drift
+//    persistence (items 1, 5, 6, 7).
 //  - Anything else that used SfPdfViewer / PdfViewerController from Syncfusion
-//    elsewhere in the app (search, thumbnails, jump-to-page callers) must be
-//    ported too; grep for `syncfusion_flutter_pdfviewer`.
+//    elsewhere in the app must be ported too; grep for
+//    `syncfusion_flutter_pdfviewer`.
 // =============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:cerebrum/api/knowledgebase_api.dart';
-import 'annotations.dart'; // adjust path to wherever you put it
+import 'package:cerebrum/ui/screens/editor/widgets/radial_tool_dial.dart';
+import 'package:cerebrum/ui/screens/readings/annotations.dart';
+import 'package:cerebrum/ui/screens/readings/reader_ink_layer.dart';
 
 class Reader extends StatefulWidget {
   final String fileFingerprint;
@@ -61,22 +70,11 @@ class _ReaderState extends State<Reader> {
   late final AnnotationStore _store;
   late Future<AuthenticatedPdfData> _pdfDataFuture;
 
-  static const _palette = [
-    Color(0xFF1565C0), // blue
-    Color(0xFFC62828), // red
-    Color(0xFF2E7D32), // green
-    Color(0xFFF9A825), // yellow
-    Color(0xFF212121), // black
-  ];
-
   @override
   void initState() {
     super.initState();
     _store = AnnotationStore(widget.fileFingerprint)..load();
-    _pdfDataFuture = KnowledgebaseApi.readFile(
-      widget.fileFingerprint,
-      widget.page,
-    );
+    _pdfDataFuture = KnowledgebaseApi.readFile(widget.fileFingerprint, null);
   }
 
   @override
@@ -86,60 +84,115 @@ class _ReaderState extends State<Reader> {
   }
 
   List<Widget> _toolbar() => [
+    // Two listeners, deliberately: the OUTER one follows the store (active
+    // page / drawing mode / tool broadcast — rare events), the INNER one
+    // follows that page's ScribbleNotifier for undo/redo availability. The
+    // store does NOT broadcast per-sketch changes any more (it used to rebuild
+    // the whole viewer on every pointer move, annotations.dart item 9), so
+    // reading canUndo/canRedo off the store would go stale after each stroke.
     ListenableBuilder(
       listenable: _store,
       builder: (context, _) {
-        Widget tool(IconData icon, String tip, AnnotationTool t) => IconButton(
-          tooltip: tip,
-          icon: Icon(icon),
-          isSelected: _store.tool == t,
-          onPressed: () => _store.setTool(t),
-        );
+        final notifier = _store.activeNotifier;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            tool(Icons.edit, 'Pen', AnnotationTool.pen),
-            tool(Icons.highlight, 'Highlighter', AnnotationTool.highlighter),
-            tool(Icons.cleaning_services, 'Eraser', AnnotationTool.eraser),
-            PopupMenuButton<Color>(
-              tooltip: 'Color',
-              icon: Icon(Icons.circle, color: _store.color),
-              onSelected: _store.setColor,
-              itemBuilder:
-                  (_) => [
-                    for (final c in _palette)
-                      PopupMenuItem(
-                        value: c,
-                        child: Icon(Icons.circle, color: c),
-                      ),
-                  ],
+            ListenableBuilder(
+              listenable: notifier,
+              builder:
+                  (context, _) => IconButton(
+                    tooltip: 'Undo',
+                    icon: const Icon(Icons.undo),
+                    onPressed: notifier.canUndo ? _store.undo : null,
+                  ),
             ),
-            PopupMenuButton<double>(
-              tooltip: 'Pen width',
-              icon: const Icon(Icons.line_weight),
-              onSelected: _store.setPenWidth,
-              itemBuilder:
-                  (_) => const [
-                    PopupMenuItem(value: 0.0015, child: Text('Fine')),
-                    PopupMenuItem(value: 0.003, child: Text('Medium')),
-                    PopupMenuItem(value: 0.006, child: Text('Thick')),
-                  ],
+            ListenableBuilder(
+              listenable: notifier,
+              builder:
+                  (context, _) => IconButton(
+                    tooltip: 'Redo',
+                    icon: const Icon(Icons.redo),
+                    onPressed: notifier.canRedo ? _store.redo : null,
+                  ),
             ),
             IconButton(
-              tooltip: 'Undo',
-              icon: const Icon(Icons.undo),
-              onPressed: _store.canUndo ? _store.undo : null,
-            ),
-            IconButton(
-              tooltip: 'Redo',
-              icon: const Icon(Icons.redo),
-              onPressed: _store.canRedo ? _store.redo : null,
+              tooltip: _store.drawing ? 'Done — stop drawing' : 'Annotate',
+              icon: Icon(_store.drawing ? Icons.check : Icons.draw),
+              onPressed: _store.toggleDrawingMode,
             ),
           ],
         );
       },
     ),
   ];
+
+  Widget _errorBanner(
+    BuildContext context,
+    Object error,
+    StackTrace? stackTrace,
+    PdfDocumentRef documentRef,
+  ) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 40,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Failed to load this document. The knowledge-base daemon may '
+                'be offline, or the file may no longer be available.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '$error',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _loadingBanner(
+    BuildContext context,
+    int bytesDownloaded,
+    int? totalBytes,
+  ) {
+    final progress =
+        totalBytes == null || totalBytes <= 0
+            ? null
+            : (bytesDownloaded / totalBytes).clamp(0.0, 1.0);
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (progress == null)
+                const CircularProgressIndicator()
+              else
+                CircularProgressIndicator(value: progress),
+              const SizedBox(height: 12),
+              const Text('Loading document…'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -159,35 +212,71 @@ class _ReaderState extends State<Reader> {
               child: Text('Error preparing reader: ${snapshot.error}'),
             ),
             _ => SafeArea(
-              // Rebuild params when the tool changes so pan/zoom lock while drawing.
-              child: ListenableBuilder(
-                listenable: _store,
-                builder:
-                    (context, _) => PdfViewer.uri(
-                      Uri.parse(pdfData!.url),
-                      headers: pdfData.headers,
-                      controller: _controller,
-                      initialPageNumber: widget.page ?? 1,
-                      params: PdfViewerParams(
-                        // TODO(input): temporary lock, see header notes.
-                        // TODO(errors): add loading/error banners (replaces
-                        // Syncfusion's onDocumentLoadFailed snackbar).
-                        panEnabled: !_store.drawing,
-                        scaleEnabled: !_store.drawing,
-                        // pdfrx 2.x: text selection is configured here, not via
-                        // an enableTextSelection flag.
-                        textSelectionParams: PdfTextSelectionParams(
-                          enabled: !_store.drawing,
+              child: Stack(
+                children: [
+                  // Rebuilds params on the store's rare broadcasts — drawing
+                  // mode on/off (the overlays' IgnorePointer and text
+                  // selection both follow it) and active-page changes. Sketch
+                  // edits do NOT reach here any more: the store only debounces
+                  // a save on them (annotations.dart item 9), so drawing at
+                  // speed no longer rebuilds this subtree per pointer move.
+                  ListenableBuilder(
+                    listenable: _store,
+                    builder:
+                        (context, _) => PdfViewer.uri(
+                          Uri.parse(pdfData!.url),
+                          headers: pdfData.headers,
+                          controller: _controller,
+                          initialPageNumber: widget.page ?? 1,
+                          params: PdfViewerParams(
+                            // No pan/zoom lock: scribble's pointer-kind filter
+                            // (store.pointerMode) claims only stylus/mouse
+                            // while drawing, so touch scrolls/zooms.
+                            textSelectionParams: PdfTextSelectionParams(
+                              enabled: !_store.drawing,
+                            ),
+                            onPageChanged: (pageNumber) {
+                              if (pageNumber != null) {
+                                _store.setActivePage(pageNumber);
+                              }
+                            },
+                            errorBannerBuilder: _errorBanner,
+                            loadingBannerBuilder: _loadingBanner,
+                            pageOverlaysBuilder:
+                                (context, pageRect, page) => [
+                                  ReaderInkPage(store: _store, page: page),
+                                ],
+                          ),
                         ),
-                        pageOverlaysBuilder:
-                            (context, pageRect, page) => [
-                              InkPageLayer(
-                                store: _store,
-                                pageNumber: page.pageNumber,
-                              ),
-                            ],
-                      ),
+                  ),
+                  // Mirrors EditorScaffold: the dial exists only IN drawing
+                  // mode (Annotate enters it; Done leaves), and the store
+                  // listener re-points it at the ACTIVE page's notifier — a
+                  // captured notifier would keep sending undo/redo to the page
+                  // that was active when the dial opened. Positioned must stay
+                  // the direct Stack child (nesting it in the builder would
+                  // break parent-data); an empty box while not drawing is
+                  // zero-sized, so it can't swallow pointers.
+                  Positioned.fill(
+                    child: ListenableBuilder(
+                      listenable: _store,
+                      builder:
+                          (context, _) =>
+                              _store.drawing
+                                  ? ToolDialHub(
+                                    notifier: _store.activeNotifier,
+                                    // Tool/colour/size selections follow across
+                                    // pages (same broadcast pattern as
+                                    // PagedNoteController.applyDrawingTool);
+                                    // undo/redo stay page-local.
+                                    onSelectTool: _store.applyDrawingTool,
+                                    partialEraser: _store.partialEraser,
+                                    eraserWidth: _store.eraserWidth,
+                                  )
+                                  : const SizedBox.shrink(),
                     ),
+                  ),
+                ],
               ),
             ),
           },
