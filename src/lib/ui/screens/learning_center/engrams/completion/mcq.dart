@@ -1,4 +1,5 @@
 import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/ui/widgets/floating_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
@@ -108,10 +109,11 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
   Widget build(BuildContext context) {
     final c = _content;
     final locked = _attempt != null || _result != null;
+    Size size = MediaQuery.sizeOf(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Multiple Choice')),
-      body:
+    return FloatingModal(
+      title: 'Multiple Choice',
+      child:
           _loading
               ? const Center(child: CircularProgressIndicator())
               : Padding(
@@ -168,6 +170,7 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
                     }),
                     const SizedBox(height: 20),
                     if (_attempt == null && _result == null)
+                      // This is the submit button
                       ElevatedButton(
                         onPressed:
                             _selected == null || _submitting ? null : _submit,
@@ -186,6 +189,7 @@ class _McqCompletionPageState extends State<McqCompletionPage> {
                       _resultCard(_result!)
                     else
                       _pendingCard(),
+                    Text("$size"),
                   ],
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/ui/widgets/floating_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
@@ -88,9 +89,9 @@ class _LongQuestionCompletionPageState
   Widget build(BuildContext context) {
     final c = widget.engram.content as LongQuestionContent;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Long Question')),
-      body: ListView(
+    return FloatingModal(
+      title: 'Long Question',
+      child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           Text(

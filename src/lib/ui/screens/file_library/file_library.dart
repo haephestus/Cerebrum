@@ -5,7 +5,14 @@ import 'package:cerebrum/api/knowledgebase_api.dart';
 import 'package:cerebrum/ui/screens/readings/reader.dart';
 
 class FileLibrary extends StatefulWidget {
-  const FileLibrary({super.key});
+  const FileLibrary({super.key, this.onClose});
+
+  /// What the FloatingModal close button does. Inside a showDialog host
+  /// this can stay null (the default Navigator.pop closes the route).
+  /// When the widget is embedded as a sidebar page there is no route to
+  /// pop, so the embedding page passes an explicit callback (see
+  /// FloatingModal's header doc on embedded usage).
+  final VoidCallback? onClose;
 
   @override
   State<FileLibrary> createState() => _FileLibraryState();
@@ -90,6 +97,7 @@ class _FileLibraryState extends State<FileLibrary> {
     // It will now safely fill the 400px height given by DHomescreen.
     return FloatingModal(
       title: "File Library",
+      onClose: widget.onClose,
       showIcon: true,
       toolTip: "Upload file",
       onPressed: _handleUpload,

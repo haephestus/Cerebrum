@@ -1,23 +1,34 @@
 // =============================================================================
 // READER INK PAGE: canonical-canvas scribble overlay for one PDF page.
 //
-// pdfrx's pageOverlaysBuilder wraps each returned widget in a Positioned of the
-// page's CURRENT zoom-scaled rect, so the overlay's layout size changes on
-// every zoom/pan frame. Scribble records points in its own widget's local
-// pixels, so a canvas that fills the overlay would drift the moment the page is
-// zoomed. The fix is a FIXED logical canvas inside a FittedBox:
+// pdfrx's pageOverlaysBuilder passes the page's CURRENT zoom-scaled rect
+// ([pageRect]) but does NOT hand the returned widget tight constraints of that
+// size, so the overlay cannot rely on its parent to size it. Scribble records
+// points in its own widget's local pixels, so a canvas that simply filled the
+// overlay would drift the moment the page is zoomed. The fix is a FIXED logical
+// canvas scaled onto the page:
 //
 //   * the canvas is sized to the page's PDF-point dimensions (PdfPage.width x
 //     PdfPage.height — already rotated, see pdfrx_engine's PdfPage);
-//   * FittedBox(fit: fill) maps that canvas onto the overlay rect through its
-//     paint AND hit-test transforms. RenderFittedBox lays its child out with
-//     UNBOUNDED constraints (packages/flutter/.../proxy_box.dart) so the
-//     fixed-size canvas keeps its own size, and its hit test maps the pointer
-//     through the same transform — `Listener` localPositions (strokes AND the
-//     partial eraser) are therefore always in canonical page space;
+//   * an OverflowBox forces TIGHT constraints equal to [pageRect], so the
+//     FittedBox below always fills the page. Without it the FittedBox sizes
+//     itself to the child's natural size and nothing scales: the canvas shows
+//     up as a 612x792 box in the page's top-left corner, and scribble's hover
+//     dot, drawing and hit-testing only work inside that box (outside it the
+//     default cursor returns and drags pan the viewer);
+//   * FittedBox(fit: fill) maps the canvas onto that rect through its paint AND
+//     hit-test transforms. RenderFittedBox lays its child out with UNBOUNDED
+//     constraints (packages/flutter/.../proxy_box.dart) so the fixed-size
+//     canvas keeps its own size, and its hit test maps the pointer through the
+//     same transform — `Listener` localPositions (strokes AND the partial
+//     eraser) are therefore always in canonical page space;
 //   * strokes are glued to the page content at any zoom, pen width scales with
 //     the page (correct annotation semantics), and the normalized persistence
 //     model is a pure divide by the canvas size.
+//
+// Identity: the reader keys each overlay with ValueKey(page.pageNumber) so
+// Flutter never reuses one page's element (and its scribble canvas state) for a
+// different page while pdfrx rebuilds the overlay list on scroll/zoom.
 //
 // Pointer routing: this layer only takes pointers while store.drawing is true
 // (wrapped in IgnorePointer otherwise), and HitTestPassThrough keeps the hit
@@ -27,6 +38,11 @@
 // Scribble's GestureCatcher claims ONLY the pointer kinds in store.pointerMode
 // (stylus/mouse by default), so the gesture arena hands touch pointers to the
 // viewer's pan/zoom — the viewer itself never locks pan/zoom (see reader.dart).
+//
+// Rebuild discipline: pointer-down reports the touched page through
+// store.setActivePage, which updates a ValueNotifier only. It must never
+// rebuild the PdfViewer (that used to happen mid-gesture, via the store's
+// notifyListeners). This overlay follows store.drawingListenable only.
 // =============================================================================
 
 import 'package:flutter/material.dart';
@@ -42,17 +58,26 @@ import 'package:cerebrum/ui/screens/readings/annotations.dart';
 /// so the store can materialize/save normalized strokes at the right scale, and
 /// reports pointer-downs so undo/redo and the tool dial target the page the
 /// user last touched.
+///
+/// [pageRect] is the page's current zoom-scaled rect from pdfrx's
+/// pageOverlaysBuilder; the canvas is forced to exactly this size.
 class ReaderInkPage extends StatelessWidget {
-  const ReaderInkPage({super.key, required this.store, required this.page});
+  const ReaderInkPage({
+    super.key,
+    required this.store,
+    required this.page,
+    required this.pageRect,
+  });
 
   final AnnotationStore store;
   final PdfPage page;
+  final Rect pageRect;
 
   @override
   Widget build(BuildContext context) {
     // Clamp against degenerate (unloaded) sizes so the FittedBox never divides
-    // by zero; pdfrx uses the same values for the overlay rect, so a fixed
-    // canvas of this aspect maps onto the page 1:1.
+    // by zero. The canvas has the page's aspect ratio, so mapping it onto
+    // [pageRect] is a uniform scale.
     final size = Size(
       page.width > 0 ? page.width : 1,
       page.height > 0 ? page.height : 1,
@@ -60,13 +85,12 @@ class ReaderInkPage extends StatelessWidget {
     store.setPageSize(page.pageNumber, size);
     final notifier = store.notifierFor(page.pageNumber);
 
-    return ListenableBuilder(
-      // Rebuilds this overlay when `drawing` toggles (tool picked / exited).
-      // Per-pointer moves repaint only the scribble canvas beneath via its own
-      // notifier; the store's notify is coalesced by the save debounce.
-      listenable: store,
-      builder: (context, _) {
-        final drawing = store.drawing;
+    return ValueListenableBuilder<bool>(
+      // Rebuilds this overlay when `drawing` toggles. Per-pointer moves repaint
+      // only the scribble canvas beneath via its own notifier; the save is
+      // debounced in the store.
+      valueListenable: store.drawingListenable,
+      builder: (context, drawing, _) {
         return HitTestPassThrough(
           child: Listener(
             // deferToChild: the canvas decides what is hittable underneath; we
@@ -75,17 +99,26 @@ class ReaderInkPage extends StatelessWidget {
             onPointerDown: (_) => store.setActivePage(page.pageNumber),
             child: IgnorePointer(
               ignoring: !drawing,
-              child: FittedBox(
-                fit: BoxFit.fill,
+              child: OverflowBox(
+                // Force tight constraints = the zoomed page rect, whatever the
+                // parent passes (see the header comment).
                 alignment: Alignment.topLeft,
-                clipBehavior: Clip.none,
-                child: SizedBox(
-                  width: size.width,
-                  height: size.height,
-                  child: NoteDrawingLayer(
-                    notifier: notifier,
-                    partialEraser: store.partialEraser,
-                    eraserWidth: store.eraserWidth,
+                minWidth: pageRect.width,
+                maxWidth: pageRect.width,
+                minHeight: pageRect.height,
+                maxHeight: pageRect.height,
+                child: FittedBox(
+                  fit: BoxFit.fill,
+                  alignment: Alignment.topLeft,
+                  clipBehavior: Clip.none,
+                  child: SizedBox(
+                    width: size.width,
+                    height: size.height,
+                    child: NoteDrawingLayer(
+                      notifier: notifier,
+                      partialEraser: store.partialEraser,
+                      eraserWidth: store.eraserWidth,
+                    ),
                   ),
                 ),
               ),

@@ -29,6 +29,212 @@ import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart'
 /// Every handler here still bails out with [KeyEventResult.ignored] when
 /// the editor isn't in normal mode, so nothing here can eat a keystroke
 /// while the user is typing.
+
+// ---- VISUAL MODE (`v`) ----
+//
+// Model: the FIXED end (anchor) is stored on the VimModeController when
+// visual mode is entered; the MOVING end (head) is just whichever side of
+// the current selection the cursor sits on. AppFlowy Selections may point
+// start>end (its own docs model `isBackward`), and `deleteSelection`
+// normalizes before deleting, so we keep the raw anchor/head ordering and
+// let the package normalize where it cares.
+
+/// Head-derivation shared by [_visualHead], [_exitVisualMode] and
+/// [_handleVisualSwapEnds] — see [_visualHead] for why this compares
+/// against the anchor instead of [Selection.isBackward].
+///
+/// Path equality MUST go through the appflowy extension (`Path.equals`),
+/// NOT `==`: `Path` is a `List<int>` typedef and `==` on Dart lists is
+/// identity, so two identical-content paths compare unequal almost every
+/// time here (the anchor came through the controller, the selection
+/// through the document).
+VisualAnchor _headOfSelection(VisualAnchor? anchor, Selection selection) {
+  final start = (path: selection.start.path, offset: selection.start.offset);
+  final end = (path: selection.end.path, offset: selection.end.offset);
+  if (anchor != null &&
+      start.path.equals(anchor.path) &&
+      start.offset == anchor.offset) {
+    return end;
+  }
+  if (anchor != null &&
+      end.path.equals(anchor.path) &&
+      end.offset == anchor.offset) {
+    return start;
+  }
+  // No/displaced anchor: prefer the later boundary (the reading-order end
+  // is where a forward caret would sit).
+  return end;
+}
+
+/// The head (moving end) of the current visual selection — the point the
+/// next motion steps FROM and TO. Null when visual mode isn't actually
+/// engaged (no anchor) or the editor has no selection.
+///
+/// Identified by comparing against the stored anchor rather than
+/// [Selection.isBackward]: that flag's name is about the reading-order
+/// direction INSIDE the selection, not about which boundary the cursor
+/// sits on, and trusting it here would flip the head on every keystroke.
+/// The head is simply the end that ISN'T the anchor; when both ends have
+/// collapsed onto it the answer is the end either way.
+VisualAnchor? _visualHead(VimModeController mode, EditorState editorState) {
+  final anchor = mode.visualAnchor;
+  if (anchor == null) return null;
+
+  final selection = editorState.selection;
+  if (selection == null) return null;
+
+  return _headOfSelection(anchor, selection);
+}
+
+/// Rebuilds the visual selection with its head relocated to [head].
+/// No-op when [head] is null (boundary reached — same at-edge no-op the
+/// collapsed motions use) — the key was still swallowed by the caller.
+///
+/// Written in reading order (start before end) so AppFlowy renders the
+/// highlight sanely; [_visualHead] identifies the head by anchor
+/// comparison, not by which start/end slot it landed in.
+void _extendVisual(
+  VimModeController mode,
+  EditorState editorState,
+  VisualAnchor? head,
+) {
+  final anchor = mode.visualAnchor;
+  if (anchor == null || head == null) return;
+
+  // True when the anchor is not AFTER the head in reading order — i.e.
+  // the head extends forward past the anchor (or sits on it, collapsed).
+  // Path equality via .equals — `==` on the List<_> typedef is identity
+  // (see _headOfSelection).
+  final anchorFirst =
+      anchor.path < head.path ||
+      (anchor.path.equals(head.path) && anchor.offset <= head.offset);
+
+  final a = Position(path: anchor.path, offset: anchor.offset);
+  final h = Position(path: head.path, offset: head.offset);
+  editorState.updateSelectionWithReason(
+    Selection(start: anchorFirst ? a : h, end: anchorFirst ? h : a),
+    reason: SelectionUpdateReason.uiEvent,
+  );
+}
+
+/// Leaves visual mode, collapsing the selection to the head (vim: the
+/// cursor survives as a normal caret; the highlight dies). Shared by `v`
+/// again, `d`/`x`, and any other exit.
+void _exitVisualMode(VimModeController mode, EditorState editorState) {
+  final selection = editorState.selection;
+
+  // Capture the head BEFORE flipping: enterNormalMode clears the anchor,
+  // which is an input to the head derivation. Flip first, then collapse so
+  // the caret lands on the surviving head, not wherever the anchor was.
+  final head =
+      selection == null ? null : _headOfSelection(mode.visualAnchor, selection);
+  mode.enterNormalMode();
+
+  if (head == null) return;
+  editorState.updateSelectionWithReason(
+    Selection.collapsed(Position(path: head.path, offset: head.offset)),
+    reason: SelectionUpdateReason.uiEvent,
+  );
+}
+
+/// `v` — enter visual mode (anchor pinned at the caret), leave it again
+/// (collapsed to the head) if already in visual mode, swallowed no-op in
+/// analysis mode, and typed normally in insert mode.
+Future<bool> _handleVisualToggle(
+  VimModeController mode,
+  EditorState editorState,
+) async {
+  if (mode.isVisual) {
+    _exitVisualMode(mode, editorState);
+    return true;
+  }
+  if (mode.isNormal) {
+    final selection = editorState.selection;
+    if (selection != null) {
+      // Normal-mode selections are always collapsed, so anchor = caret.
+      mode.enterVisualMode(
+        anchor: (path: selection.start.path, offset: selection.start.offset),
+      );
+    }
+    return true;
+  }
+  if (mode.isAnalysis) return true; // read-only: swallow, no selection
+  return false; // insert mode: 'v' is just a letter
+}
+
+/// `d` / `x` in visual mode — vim's delete-selection: delete everything
+/// the visual selection covers, then drop back to normal mode (like
+/// vim, the mode exits after the operator runs). Swallow-only when the
+/// selection is somehow collapsed (defensive; can't happen while the
+/// anchor is set and nothing has modified the document).
+///
+/// Cross-block deletion goes through [EditorState.deleteSelection], which
+/// normalizes the (possibly backward) selection and merges the surviving
+/// edge nodes itself.
+Future<bool> _handleVisualDelete(
+  VimModeController mode,
+  EditorState editorState,
+) async {
+  final selection = editorState.selection;
+
+  // Capture BEFORE the delete: after it the selected paths are stale and
+  // the caret reference must survive (same trap the 'dd' handler
+  // documents — deleteSelection/deleteNode leave the selection null).
+  final anchorPath = selection?.start.path;
+  final deletedIndex =
+      anchorPath != null && anchorPath.isNotEmpty ? anchorPath.first : 0;
+
+  if (mode.visualAnchor != null &&
+      selection != null &&
+      !selection.isCollapsed) {
+    await editorState.deleteSelection(selection);
+  }
+
+  // Same caret-restoration contract as 'dd': AppFlowy doesn't reposition
+  // after deletes, and a null caret makes every vim motion dead until a
+  // click. Rest on the block that shifted into the deleted range's place
+  // (same index, clamped), and keep the document non-empty when the
+  // selection covered everything (vim leaves one empty line behind).
+  final children = editorState.document.root.children;
+  if (children.isEmpty) {
+    final tx = editorState.transaction;
+    tx.insertNode([0], paragraphNode(text: ''));
+    editorState.apply(tx);
+  }
+  if (editorState.selection == null) {
+    final i = deletedIndex.clamp(
+      0,
+      editorState.document.root.children.length - 1,
+    );
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: [i], offset: 0)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+  }
+
+  _exitVisualMode(mode, editorState);
+  return true;
+}
+
+/// `o`/`O` in visual mode — vim's endpoint swap: the cursor jumps to the
+/// other end of the selection (O does the same for the character-wise
+/// mode; line-wise subtleties aren't modeled here). The selection itself
+/// is unchanged — only the controller's anchor moves under it.
+Future<bool> _handleVisualSwapEnds(
+  VimModeController mode,
+  EditorState editorState,
+) async {
+  final selection = editorState.selection;
+  if (selection != null) {
+    final head = _headOfSelection(mode.visualAnchor, selection);
+    mode.enterVisualMode(
+      anchor: (path: head.path, offset: head.offset),
+      force: true, // re-pin the anchor of the in-flight selection
+    );
+  }
+  return true;
+}
+
 class EditorShortcuts {
   static List<CommandShortcutEvent> getCustomShortcuts(VimModeController mode) {
     return [
@@ -86,6 +292,18 @@ class EditorShortcuts {
     EditorState editorState,
     VimModeController mode,
   ) {
+    // Visual mode: G extends the selection to the end of the document
+    // (vim: selection reaches the last line's end).
+    if (mode.isVisual) {
+      final lastNode = editorState.document.last;
+      if (lastNode == null) return KeyEventResult.handled;
+      _extendVisual(mode, editorState, (
+        path: lastNode.path,
+        offset: lastNode.delta?.length ?? 0,
+      ));
+      return KeyEventResult.handled;
+    }
+
     if (!mode.isNormal && !mode.isAnalysis) return KeyEventResult.ignored;
 
     final lastNode = editorState.document.last;
@@ -122,12 +340,22 @@ class EditorShortcuts {
       key: 'Escape to normal mode',
       getDescription: () => 'Exit insert mode',
       command: 'escape',
-      handler: (editorState) => _escapeHandler(mode),
+      handler: (editorState) => _escapeHandler(mode, editorState),
     );
   }
 
-  static KeyEventResult _escapeHandler(VimModeController mode) {
-    mode.enterNormalMode();
+  static KeyEventResult _escapeHandler(
+    VimModeController mode,
+    EditorState editorState,
+  ) {
+    // Visual mode: Escape leaves the selection AND collapses to the head —
+    // a live non-collapsed selection left in normal mode would make the
+    // next insertion replace it wholesale.
+    if (mode.isVisual) {
+      _exitVisualMode(mode, editorState);
+    } else {
+      mode.enterNormalMode();
+    }
     return KeyEventResult.handled;
   }
 
@@ -152,10 +380,13 @@ class EditorShortcuts {
       key: 'Swallow Enter in analysis mode',
       getDescription:
           () =>
-              'Prevent Enter from editing the document in analysis review mode',
+              'Prevent Enter from editing the document in analysis/visual mode',
       command: 'enter',
       handler: (editorState) {
-        if (!mode.isAnalysis) return KeyEventResult.ignored;
+        // Visual mode included: Enter with a live selection would delete
+        // it and split the block (standard enter semantics). Swallow until
+        // a visual-Enter behavior is wanted, mirroring the '\n' char event.
+        if (!mode.isAnalysis && !mode.isVisual) return KeyEventResult.ignored;
         return KeyEventResult.handled;
       },
     );
@@ -224,6 +455,10 @@ class VimCharacterShortcuts {
     'n',
     'N',
     'o',
+    'O',
+    'q',
+    'v',
+    'x',
   };
 
   static const _allPrintable =
@@ -301,6 +536,14 @@ class VimCharacterShortcuts {
           // Analysis review is block-scope + highlight-only; word motion would
           // drop a typing caret. Swallow instead.
           if (mode.isAnalysis) return true;
+          // Visual mode: extend to the next word start. The caret is
+          // explicitly collapsed onto the head FIRST — AppFlowy's
+          // moveCursor collapses a non-collapsed selection instead of
+          // stepping it, so feeding it the visual range would just snap the
+          // caret to the selection's start without moving.
+          if (mode.isVisual) {
+            return _extendByWord(mode, editorState, forward: true);
+          }
           return _navOrType(
             mode,
             () => editorState.moveCursorForward(SelectionMoveRange.word),
@@ -312,6 +555,11 @@ class VimCharacterShortcuts {
         character: 'b',
         handler: (editorState) async {
           if (mode.isAnalysis) return true;
+          // Visual mode: same collapse-then-step dance, backwards (see the
+          // 'w' branch and moveCursorForward's package implementation).
+          if (mode.isVisual) {
+            return _extendByWord(mode, editorState, forward: false);
+          }
           return _navOrType(
             mode,
             () => editorState.moveCursorBackward(SelectionMoveRange.word),
@@ -332,6 +580,28 @@ class VimCharacterShortcuts {
         key: 'vim enter insert mode',
         character: 'i',
         handler: (editorState) => _handleEnterInsert(mode, editorState),
+      ),
+      // 'v' — character-wise visual select. Anchor pins at the caret; every
+      // motion then extends (see the VISUAL MODE block below), 'd'/'x'
+      // delete the selection, and 'v'/Escape return to normal mode.
+      CharacterShortcutEvent(
+        key: 'vim visual mode (v)',
+        character: 'v',
+        handler: (editorState) => _handleVisualToggle(mode, editorState),
+      ),
+      // 'x' — vim's delete-selection inside visual mode. Outside visual
+      // mode this keeps the legacy catch-all behavior (swallowed no-op in
+      // normal/analysis; vim's normal-mode delete-char is NOT implemented
+      // — that's a separate gap from the visual one).
+      CharacterShortcutEvent(
+        key: 'vim visual delete (x)',
+        character: 'x',
+        handler: (editorState) async {
+          if (mode.isVisual) {
+            return _handleVisualDelete(mode, editorState);
+          }
+          return mode.isNormal || mode.isAnalysis;
+        },
       ),
       CharacterShortcutEvent(
         key: 'vim enter analysis mode / next chunk',
@@ -358,8 +628,25 @@ class VimCharacterShortcuts {
             ),
       ),
       CharacterShortcutEvent(
-        key: 'vim toggle analysis panel',
+        key: 'vim open line below (o)',
         character: 'o',
+        handler:
+            (editorState) => _handleOpenLine(mode, editorState, above: false),
+      ),
+      // shift+o / 'O' — open a line ABOVE (vim's O).
+      CharacterShortcutEvent(
+        key: 'vim open line above (O)',
+        character: 'O',
+        handler:
+            (editorState) => _handleOpenLine(mode, editorState, above: true),
+      ),
+      // Panel toggle lives on 'q' in NORMAL mode as well as ANALYSIS mode.
+      // It previously lived on 'o', which conflicts with vim's open-line
+      // command; 'q' is otherwise unmapped (vim's macro-recording key,
+      // which this editor does not implement).
+      CharacterShortcutEvent(
+        key: 'vim toggle analysis panel (q)',
+        character: 'q',
         handler:
             (editorState) =>
                 _handleToggleAnalysisPanel(mode, onToggleAnalysisPanel),
@@ -374,7 +661,10 @@ class VimCharacterShortcuts {
       CharacterShortcutEvent(
         key: 'vim swallow newline in analysis mode',
         character: '\n',
-        handler: (editorState) async => mode.isAnalysis,
+        // Analysis mode: review is read-only. Visual mode: a live selection
+        // means Enter would delete the selection and split the block —
+        // swallow here too until a visual Enter behavior is wanted.
+        handler: (editorState) async => mode.isAnalysis || mode.isVisual,
       ),
       CharacterShortcutEvent(
         key: 'vim delete line (dd)',
@@ -396,7 +686,9 @@ class VimCharacterShortcuts {
         CharacterShortcutEvent(
           key: 'vim block unmapped key "$c" in normal mode',
           character: c,
-          handler: (editorState) async => mode.isNormal || mode.isAnalysis,
+          handler:
+              (editorState) async =>
+                  mode.isNormal || mode.isAnalysis || mode.isVisual,
         ),
     ];
   }
@@ -415,11 +707,19 @@ class VimCharacterShortcuts {
   /// Same as [_navOrType], but for an [action] that's itself async (needed
   /// because [_moveToSiblingLine] awaits nothing today but is written as
   /// async for symmetry / future-proofing against APIs that do).
+  ///
+  /// Unlike [_navOrType], the visual guard is INCLUDED here: this is the
+  /// h/j/k/l router and visual mode must reach [_navHorizontal]/
+  /// [_navVertical] to extend the selection. [_navOrType] keeps visual
+  /// EXCLUDED on purpose — only motions with an explicit visual branch
+  /// handle visual mode there, and a future motion that forgets its
+  /// branch should stay broken-loud (falls through to typing) instead of
+  /// silently doing a normal-mode caret move mid-selection.
   static Future<bool> _navOrTypeAsync(
     VimModeController mode,
     Future<void> Function() action,
   ) async {
-    if (!mode.isNormal && !mode.isAnalysis) return false;
+    if (!mode.isNormal && !mode.isAnalysis && !mode.isVisual) return false;
     await action();
     return true;
   }
@@ -469,17 +769,19 @@ class VimCharacterShortcuts {
         onStepAnalysisChunk: onStepAnalysisChunk,
         onEnterAnalysisMode: onEnterAnalysisMode,
       ),
-      _rawPanelToggleShortcut('o', mode, onToggleAnalysisPanel),
+      _rawPanelToggleShortcut('q', mode, onToggleAnalysisPanel),
+      _rawOpenLineShortcut('o', mode, above: false),
+      _rawOpenLineShortcut('shift+o', mode, above: true),
       // Arrow keys navigate BLOCKS in analysis mode. The table's own arrow
       // commands (tableCommands, in standardCommandShortcutEvents) return
       // `handled` at row/column edges even when they don't move — a collapsed
       // caret in a table cell can never leave the table with arrows. These
       // preempt that in review mode; normal/insert fall through untouched so
       // table editing keeps AppFlowy's native cell navigation.
-      _rawArrowShortcut('arrow up', mode, delta: -1),
-      _rawArrowShortcut('arrow down', mode, delta: 1),
-      _rawArrowShortcut('arrow left', mode, delta: -1),
-      _rawArrowShortcut('arrow right', mode, delta: 1),
+      _rawArrowShortcut('arrow up', mode, delta: -1, horizontal: false),
+      _rawArrowShortcut('arrow down', mode, delta: 1, horizontal: false),
+      _rawArrowShortcut('arrow left', mode, delta: -1, horizontal: true),
+      _rawArrowShortcut('arrow right', mode, delta: 1, horizontal: true),
     ];
   }
 
@@ -495,13 +797,16 @@ class VimCharacterShortcuts {
           () => '"$command" navigation that works without the IME attached',
       command: command,
       handler: (editorState) {
-        if (!mode.isNormal && !mode.isAnalysis) {
+        if (!mode.isNormal && !mode.isAnalysis && !mode.isVisual) {
           return KeyEventResult.ignored;
         }
-        if (mode.isAnalysis) {
-          _moveBlockInAnalysis(editorState, delta: delta);
+        // Reuse the char-path routers verbatim — they now own the analysis
+        // (block hop), visual (selection extension) and normal (caret move)
+        // branches, so the raw key can never drift from the mapped key.
+        if (horizontal) {
+          _navHorizontal(editorState, mode, delta: delta);
         } else {
-          _navInNormalMode(editorState, horizontal: horizontal, delta: delta);
+          _navVertical(editorState, mode, delta: delta);
         }
         return KeyEventResult.handled;
       },
@@ -521,6 +826,11 @@ class VimCharacterShortcuts {
           () => 'Enter analysis mode / step chunk without the IME attached',
       command: command,
       handler: (editorState) {
+        if (mode.isVisual) {
+          // 'n'/'N' aren't motions in visual mode; swallow (same rationale
+          // as the char path — typing through a selection would replace it).
+          return KeyEventResult.handled;
+        }
         if (!mode.isNormal && !mode.isAnalysis) {
           return KeyEventResult.ignored;
         }
@@ -551,6 +861,8 @@ class VimCharacterShortcuts {
           () => 'Toggle the analysis panel without the IME attached',
       command: command,
       handler: (editorState) {
+        // Visual mode: swallow, don't toggle (no hook in visual).
+        if (mode.isVisual) return KeyEventResult.handled;
         if (!mode.isNormal && !mode.isAnalysis) {
           return KeyEventResult.ignored;
         }
@@ -560,21 +872,67 @@ class VimCharacterShortcuts {
     );
   }
 
+  /// Raw-key open-line pair ('o' below, 'shift+o' above): the same open
+  /// line (and insert-mode flip + caret re-assert) as the character
+  /// shortcuts, but reachable when the IME isn't attached — e.g. a
+  /// whole-TABLE selection, where the caret node is a container and every
+  /// character shortcut silently dies (see the getRawKeyVimShortcuts
+  /// header). The mode flip/caret work runs through the same explicit
+  /// selection updates, so it needs no IME either.
+  ///
+  /// 'o'/'O'/'shift+o' follow the raw-key labeling convention already in
+  /// this list: modifier+named-key combos ('shift+n', 'shift+g') resolve
+  /// against AppFlowyEditor's `keyToCodeMapping` — a bare 'O' would work
+  /// as a key label too, but shift+o is the chord real keyboards send and
+  /// the convention this codebase already uses for case-shifted commands.
+  static CommandShortcutEvent _rawOpenLineShortcut(
+    String command,
+    VimModeController mode, {
+    required bool above,
+  }) {
+    return CommandShortcutEvent(
+      key: 'vim raw-key "$command"',
+      getDescription: () => '"$command" opens a line below without the IME',
+      command: command,
+      handler: (editorState) {
+        if (mode.isVisual) {
+          // 'o'/'shift+o' in visual mode: endpoint swap (vim semantics),
+          // not open-line — same branch the char path takes.
+          _handleVisualSwapEnds(mode, editorState);
+          return KeyEventResult.handled;
+        }
+        if (!mode.isNormal && !mode.isAnalysis) {
+          return KeyEventResult.ignored;
+        }
+        if (mode.isNormal) {
+          _openLine(editorState, mode, above: above);
+        }
+        return KeyEventResult.handled;
+      },
+    );
+  }
+
   static CommandShortcutEvent _rawArrowShortcut(
     String command,
     VimModeController mode, {
     required int delta,
+    required bool horizontal,
   }) {
     return CommandShortcutEvent(
       key: 'vim raw-key "$command"',
-      getDescription: () => '"$command" navigates blocks in analysis mode',
+      getDescription: () => '"$command" navigates in analysis/visual mode',
       command: command,
       handler: (editorState) {
         // Analysis mode only: arrows step between whole blocks so tables
-        // can't pin the caret at a cell edge. Any other mode returns ignored
-        // and AppFlowy's standard arrow/table commands handle the key.
-        if (!mode.isAnalysis) return KeyEventResult.ignored;
-        _moveBlockInAnalysis(editorState, delta: delta);
+        // can't pin the caret at a cell edge. Visual mode routes through
+        // [_navHorizontal]/[_navVertical] too (extension); normal/insert
+        // keep the standard arrow/table navigation untouched.
+        if (!mode.isAnalysis && !mode.isVisual) return KeyEventResult.ignored;
+        if (horizontal) {
+          _navHorizontal(editorState, mode, delta: delta);
+        } else {
+          _navVertical(editorState, mode, delta: delta);
+        }
         return KeyEventResult.handled;
       },
     );
@@ -590,6 +948,12 @@ class VimCharacterShortcuts {
   ///
   /// At the first/last line this is a no-op (still swallows the
   /// keystroke — nothing to fall through to in normal mode).
+  ///
+  /// The actual position math lives in [_siblingTarget] so the visual-mode
+  /// extension branch can reuse it against a base OTHER than
+  /// `selection.end` — in a backward (reversed) visual selection the head
+  /// is `selection.start`, and motions must step from the head, not the
+  /// selection's forward end.
   static Future<void> _moveToSiblingLine(
     EditorState editorState, {
     required int delta,
@@ -597,21 +961,43 @@ class VimCharacterShortcuts {
     final selection = editorState.selection;
     if (selection == null) return;
 
-    final path = selection.end.path;
-    if (path.isEmpty) return;
+    final target = _siblingTarget(
+      editorState,
+      fromPath: selection.end.path,
+      fromOffset: selection.end.offset,
+      delta: delta,
+    );
+    if (target == null) return; // already at the first/last line
 
-    final targetPath = [...path.sublist(0, path.length - 1), path.last + delta];
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: target.path, offset: target.offset)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+  }
+
+  /// Pure position math for j/k: where same-column movement by [delta]
+  /// step(s) on the adjacent sibling lands, starting at [fromOffset] on
+  /// line [fromPath]. Null = at the first/last line (no sibling there).
+  /// No selection mutation — callers decide whether the result moves a
+  /// collapsed caret (normal mode) or extends a selection (visual mode).
+  static ({List<int> path, int offset})? _siblingTarget(
+    EditorState editorState, {
+    required List<int> fromPath,
+    required int fromOffset,
+    required int delta,
+  }) {
+    if (fromPath.isEmpty) return null;
+
+    final targetPath = [
+      ...fromPath.sublist(0, fromPath.length - 1),
+      fromPath.last + delta,
+    ];
     final targetNode = editorState.getNodeAtPath(targetPath);
-    if (targetNode == null) return; // already at the first/last line
+    if (targetNode == null) return null; // already at the first/last line
 
     final targetDelta = targetNode.delta;
     final maxOffset = targetDelta?.length ?? 0;
-    final offset = selection.end.offset.clamp(0, maxOffset);
-
-    editorState.updateSelectionWithReason(
-      Selection.collapsed(Position(path: targetNode.path, offset: offset)),
-      reason: SelectionUpdateReason.uiEvent,
-    );
+    return (path: targetNode.path, offset: fromOffset.clamp(0, maxOffset));
   }
 
   /// Moves the collapsed cursor one character left ([delta] = -1) or
@@ -628,38 +1014,58 @@ class VimCharacterShortcuts {
     final selection = editorState.selection;
     if (selection == null) return;
 
-    final path = selection.end.path;
-    if (path.isEmpty) return;
+    final target = _characterTarget(
+      editorState,
+      fromPath: selection.end.path,
+      fromOffset: selection.end.offset,
+      delta: delta,
+    );
+    if (target == null) return; // already at document start/end
 
-    final node = editorState.getNodeAtPath(path);
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: target.path, offset: target.offset)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+  }
+
+  /// Pure position math for h/l: where one-character movement by [delta]
+  /// lands from [fromOffset] on text line [fromPath], wrapping across
+  /// node boundaries exactly like the collapsed version
+  /// ([_moveCharacter]). Null = already at document start/end.
+  ///
+  /// Split out of [_moveCharacter] for visual mode — same reasoning as
+  /// [_siblingTarget]: in a backward visual selection the head is
+  /// `selection.start` and motions must step from the head.
+  static ({List<int> path, int offset})? _characterTarget(
+    EditorState editorState, {
+    required List<int> fromPath,
+    required int fromOffset,
+    required int delta,
+  }) {
+    if (fromPath.isEmpty) return null;
+
+    final node = editorState.getNodeAtPath(fromPath);
     final currentLength = node?.delta?.length ?? 0;
-    final newOffset = selection.end.offset + delta;
+    final newOffset = fromOffset + delta;
 
     if (newOffset >= 0 && newOffset <= currentLength) {
       // Still within the current line — just shift the offset.
-      editorState.updateSelectionWithReason(
-        Selection.collapsed(Position(path: path, offset: newOffset)),
-        reason: SelectionUpdateReason.uiEvent,
-      );
-      return;
+      return (path: fromPath, offset: newOffset);
     }
 
     // Crossed a line boundary: step to the adjacent node, landing at its
     // far edge (end of the previous line for delta<0, start of the next
     // line for delta>0) — matching how h/l wrap across lines in vim.
-    final targetPath = [...path.sublist(0, path.length - 1), path.last + delta];
+    final targetPath = [
+      ...fromPath.sublist(0, fromPath.length - 1),
+      fromPath.last + delta,
+    ];
     final targetNode = editorState.getNodeAtPath(targetPath);
-    if (targetNode == null) return; // already at document start/end
+    if (targetNode == null) return null; // already at document start/end
 
     final targetLength = targetNode.delta?.length ?? 0;
     final targetOffset = delta < 0 ? targetLength : 0;
-
-    editorState.updateSelectionWithReason(
-      Selection.collapsed(
-        Position(path: targetNode.path, offset: targetOffset),
-      ),
-      reason: SelectionUpdateReason.uiEvent,
-    );
+    return (path: targetNode.path, offset: targetOffset);
   }
 
   /// ANALYSIS MODE: move the review cursor to the next/previous TOP-LEVEL block
@@ -696,7 +1102,10 @@ class VimCharacterShortcuts {
   }
 
   /// h/l: character motion in normal mode, block-scope review motion in
-  /// analysis mode (same direction: -1 = previous block, +1 = next).
+  /// analysis mode (same direction: -1 = previous block, +1 = next), and
+  /// selection-extension in visual mode (the HEAD moves, the anchor —
+  /// pinned at `v` time — stays; crossing the anchor reverses the
+  /// selection exactly like vim).
   static Future<void> _navHorizontal(
     EditorState editorState,
     VimModeController mode, {
@@ -704,13 +1113,15 @@ class VimCharacterShortcuts {
   }) async {
     if (mode.isAnalysis) {
       await _moveBlockInAnalysis(editorState, delta: delta);
+    } else if (mode.isVisual) {
+      await _extendByMotion(editorState, mode, horizontal: true, delta: delta);
     } else {
       await _navInNormalMode(editorState, horizontal: true, delta: delta);
     }
   }
 
   /// j/k: sibling-line motion in normal mode, block-scope review motion in
-  /// analysis mode.
+  /// analysis mode, selection-extension in visual mode.
   static Future<void> _navVertical(
     EditorState editorState,
     VimModeController mode, {
@@ -718,9 +1129,103 @@ class VimCharacterShortcuts {
   }) async {
     if (mode.isAnalysis) {
       await _moveBlockInAnalysis(editorState, delta: delta);
+    } else if (mode.isVisual) {
+      await _extendByMotion(editorState, mode, horizontal: false, delta: delta);
     } else {
       await _navInNormalMode(editorState, horizontal: false, delta: delta);
     }
+  }
+
+  /// Shared visual-mode motion: compute the head's next landing spot with
+  /// the normal-mode position math and extend the selection to it.
+  ///
+  /// Table cells are the one carve-out: head/anchor across cell boundaries
+  /// has no vim precedent worth emulating and the cell router below only
+  /// understands collapsed carets, so a visual selection whose head is in a
+  /// cell first collapses to the head and lets [_navInNormalMode] move it
+  /// like normal — the selection shrinks to the cursor instead of counting
+  /// column math. (Same table contract the rest of this file documents:
+  /// tables keep AppFlowy-native behavior; vim innovations stop at the
+  /// cell edge.)
+  static Future<void> _extendByMotion(
+    EditorState editorState,
+    VimModeController mode, {
+    required bool horizontal,
+    required int delta,
+  }) async {
+    final head = _visualHead(mode, editorState);
+    if (head == null) return; // swallowed by the caller; nothing to extend
+
+    // Recompute containment against a COLLAPSED head selection — when the
+    // head is inside a cell the anchor is usually outside it, so testing the
+    // live (non-collapsed) selection's end path isn't reliable either way.
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: head.path, offset: head.offset)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+    if (_selectionIsInTableCell(editorState)) {
+      await _navInNormalMode(editorState, horizontal: horizontal, delta: delta);
+      return;
+    }
+
+    final target =
+        horizontal
+            ? _characterTarget(
+              editorState,
+              fromPath: head.path,
+              fromOffset: head.offset,
+              delta: delta,
+            )
+            : _siblingTarget(
+              editorState,
+              fromPath: head.path,
+              fromOffset: head.offset,
+              delta: delta,
+            );
+    _extendVisual(mode, editorState, target);
+  }
+
+  /// `w`/`b` in visual mode: extend to the next/previous word boundary.
+  ///
+  /// The caret is collapsed onto the head FIRST, then stepped with the
+  /// package's `moveCursorForward`/`moveCursorBackward` (the same helpers
+  /// normal mode uses — after an explicit collapse they take the real
+  /// stepping path instead of the collapse-instead-of-move shortcut their
+  /// source documents), and the selection is rebuilt around wherever the
+  /// caret landed.
+  ///
+  /// Headless-testable only to the extent of "doesn't crash and keeps the
+  /// mode": stepping itself requires `node.selectable` (widget-backed, text
+  /// layout), so like normal-mode 'w'/'b' the actual word boundaries are
+  /// exercised in live runs, not headless tests.
+  static Future<bool> _extendByWord(
+    VimModeController mode,
+    EditorState editorState, {
+    required bool forward,
+  }) async {
+    final head = _visualHead(mode, editorState);
+    if (head == null) return true;
+
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: head.path, offset: head.offset)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+    // NOTE: moveCursorForward/Backward are `void` in this AppFlowy version —
+    // no await. The subsequent selection read is synchronous state anyway.
+    if (forward) {
+      editorState.moveCursorForward(SelectionMoveRange.word);
+    } else {
+      editorState.moveCursorBackward(SelectionMoveRange.word);
+    }
+
+    final landed = editorState.selection;
+    if (landed != null && landed.isCollapsed) {
+      _extendVisual(mode, editorState, (
+        path: landed.start.path,
+        offset: landed.start.offset,
+      ));
+    }
+    return true;
   }
 
   /// Normal-mode j/k/h/l routing shared by the mapped (IME-attached) and
@@ -874,6 +1379,14 @@ class VimCharacterShortcuts {
     // Analysis review is highlight-only: line-start motion would collapse to a
     // typing caret. Swallow the key; the block cursor already covers the block.
     if (mode.isAnalysis) return true;
+    // Visual mode: extend the selection to column 0 of the HEAD's line
+    // (vim's visual 0 — the anchor is untouched).
+    if (mode.isVisual) {
+      final head = _visualHead(mode, editorState);
+      if (head == null) return true;
+      _extendVisual(mode, editorState, (path: head.path, offset: 0));
+      return true;
+    }
     if (!mode.isNormal) return false;
 
     final selection = editorState.selection;
@@ -892,6 +1405,20 @@ class VimCharacterShortcuts {
   ) async {
     // Analysis review is highlight-only (see [_handleLineStart]).
     if (mode.isAnalysis) return true;
+    // Visual mode: extend to the end of the head's line. If the head's node
+    // isn't a text node (e.g. an image block), `0`/`$` have no meaning there —
+    // swallow, same as analysis.
+    if (mode.isVisual) {
+      final head = _visualHead(mode, editorState);
+      if (head == null) return true;
+      final node = editorState.getNodeAtPath(head.path);
+      if (node == null) return true;
+      _extendVisual(mode, editorState, (
+        path: head.path,
+        offset: node.delta?.length ?? 0,
+      ));
+      return true;
+    }
     if (!mode.isNormal) return false;
 
     final selection = editorState.selection;
@@ -928,21 +1455,43 @@ class VimCharacterShortcuts {
     VimModeController mode,
     EditorState editorState,
   ) async {
-    if (!mode.isNormal && !mode.isAnalysis) return false;
-    mode.enterInsertMode();
-    // Collapse to the selection START. Analysis navigation leaves WHOLE-BLOCK
-    // selections behind; typing with one selected would replace the entire
-    // block. In normal mode the selection is always collapsed already, so this
-    // is a no-op there.
-    final sel = editorState.selection;
-    if (sel != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Visual mode: vim's `i` abandons the selection and starts typing AT
+    // ITS START (the earlier boundary). Collapse there first — typing with
+    // a live visual selection would replace everything selected.
+    if (mode.isVisual) {
+      final selection = editorState.selection;
+      if (selection != null) {
+        final start = selection.normalized.start;
         editorState.updateSelectionWithReason(
-          Selection.collapsed(sel.start),
+          Selection.collapsed(start),
           reason: SelectionUpdateReason.uiEvent,
         );
-      });
+        // Reuse the post-frame re-assert so the caret survives the
+        // visual→insert rebuild (same first-keystroke race as normal mode).
+        _enterInsertWithCaretReassert(
+          editorState,
+          mode,
+          start.path,
+          start.offset,
+        );
+        return true;
+      }
+      mode.enterInsertMode();
+      return true;
     }
+
+    if (!mode.isNormal && !mode.isAnalysis) return false;
+
+    // Capture the collapse target BEFORE flipping. Analysis navigation leaves
+    // WHOLE-BLOCK selections behind; typing with one selected would replace the
+    // entire block. In normal mode the selection is always collapsed already, so
+    // this is a no-op there.
+    final start = editorState.selection?.start;
+    if (start == null) {
+      mode.enterInsertMode();
+      return true;
+    }
+    _enterInsertWithCaretReassert(editorState, mode, start.path, start.offset);
     return true;
   }
 
@@ -958,6 +1507,10 @@ class VimCharacterShortcuts {
     VoidCallback? onEnterAnalysisMode, {
     required int delta,
   }) async {
+    // Visual mode: 'n'/'N' are analysis-mode keys, not motions — swallow so
+    // the selection can't be replaced by a typed 'n'. (Real vim has search
+    // semantics on n; here it only drives analysis review.)
+    if (mode.isVisual) return true;
     if (!mode.isNormal && !mode.isAnalysis) return false;
 
     // In analysis mode, 'n'/'N' step chunks — but only if chunk stepping is
@@ -992,29 +1545,142 @@ class VimCharacterShortcuts {
     return true;
   }
 
-  /// 'o' — toggle the full analysis panel (overview tab) while in ANALYSIS
-  /// mode. This does NOT change the vim mode: 'n' still enters review mode,
-  /// 'o' just opens/closes the panel. In normal mode the key is swallowed
-  /// (it's a vim-mode key, not a typed character); in insert mode it types
-  /// normally.
+  /// 'o'/'O' — vim's open-line pair: insert an empty paragraph directly
+  /// BELOW ('o') or ABOVE ('O') the cursor's line and enter insert mode on
+  /// it. The split happens at the LINE boundary regardless of cursor
+  /// column, exactly like vim — the current line's text is never divided,
+  /// even when the caret sits mid-line.
+  ///
+  // Implementation notes shared by both entrances:
+  //
+  // The open-line pair. Both share [_openLine]; only the insertion side
+  // and the key label differ.
+  //
+  // ANALYSIS mode: review is read-only, so both keys are swallowed with no
+  // action (the old analysis-panel toggle that lived on 'o' moved to 'q').
+  // INSERT mode: both fall through and type normally ('o'/'O' are letters).
+  // VISUAL mode: both swap the cursor with the anchor (vim's endpoint swap)
+  // — opening a line while a selection exists would replace it.
+  //
+  // Selection handling mirrors [_handleEnterInsert]: the caret is placed
+  // on the new node immediately (used by the raw-key path too, where the
+  // mode flip must land on the new line), insert mode is entered, and a
+  // post-frame callback re-asserts the collapsed caret so the mode-change
+  // rebuild can't drop it (same first-keystroke race documented there).
+  static Future<bool> _handleOpenLine(
+    VimModeController mode,
+    EditorState editorState, {
+    required bool above,
+  }) async {
+    // Visual mode: 'o'/'O' do NOT open a line — vim moves the cursor to the
+    // other end of the visual selection and re-pins the anchor there.
+    if (mode.isVisual) return _handleVisualSwapEnds(mode, editorState);
+    if (mode.isAnalysis) return true;
+    if (!mode.isNormal) return false; // insert mode: 'o'/'O' is just a letter
+
+    _openLine(editorState, mode, above: above);
+    return true;
+  }
+
+  /// Shared open-line implementation for the character shortcuts and the
+  /// raw-key fallbacks ([_rawOpenLineShortcut]). [mode] must already be
+  /// normal mode.
+  static void _openLine(
+    EditorState editorState,
+    VimModeController mode, {
+    required bool above,
+  }) {
+    final selection = editorState.selection;
+    if (selection == null) return;
+
+    final node = editorState.getNodeAtPath(selection.end.path);
+    if (node == null) return;
+
+    // Above: insert at the caret node's OWN index — insertNode shifts the
+    // existing node (and everything after it) down one slot, which IS the
+    // open-above placement, and needs no special case on the first line
+    // (index 0 shifts the current first child to [1] the same way).
+    // Below: path.next = the sibling slot after the caret's line.
+    final newPath = above ? selection.end.path : selection.end.path.next;
+    final transaction = editorState.transaction;
+    transaction.insertNode(newPath, paragraphNode(text: ''));
+    editorState.apply(transaction);
+
+    // Rest the caret at the start of the new line. (Unlike insertText,
+    // insertNode does not reposition the selection — same gap the 'dd'
+    // handler documents for deleteNode.)
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: newPath, offset: 0)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+
+    _enterInsertWithCaretReassert(editorState, mode, newPath, 0);
+  }
+
+  /// Flips to insert mode and re-asserts the collapsed caret on a post-frame
+  /// callback — the shared caret-loss guard from [_handleEnterInsert]. An
+  /// edit-less mode flip does no text transaction, so AppFlowy never
+  /// re-engages its cursor overlay / text input for the new mode and the
+  /// first typed keystroke races the mode-change rebuild. Deferred to a
+  /// post-frame callback so it lands AFTER this key event's own rebuild.
+  ///
+  /// The caret position is explicit ([path]/[offset]) rather than derived
+  /// from the current selection, because callers like [_openLineBelow] have
+  /// already moved the caret to a node the current selection still needs to
+  /// survive across the rebuild.
+  static void _enterInsertWithCaretReassert(
+    EditorState editorState,
+    VimModeController mode,
+    List<int> path,
+    int offset,
+  ) {
+    mode.enterInsertMode();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      editorState.updateSelectionWithReason(
+        Selection.collapsed(Position(path: path, offset: offset)),
+        reason: SelectionUpdateReason.uiEvent,
+      );
+    });
+  }
+
+  /// 'q' — toggle the full analysis panel (overview tab) while in ANALYSIS
+  /// mode, or open it from NORMAL mode. This does NOT change the vim mode:
+  /// 'n' still enters review mode, 'q' just shows/hides the panel. In
+  /// normal mode the key is swallowed (it's a vim-mode key, not a typed
+  /// character); in insert mode it types normally.
+  ///
+  /// Rebound from 'o' (which is vim's open-line command — see
+  /// [_handleOpenLineBelow]).
   static Future<bool> _handleToggleAnalysisPanel(
     VimModeController mode,
     VoidCallback? onToggleAnalysisPanel,
   ) async {
-    if (mode.isAnalysis) {
+    if (mode.isVisual) {
+      // Visual mode: 'q' has no selection-compatible meaning — swallow.
+      return true;
+    }
+    if (mode.isNormal || mode.isAnalysis) {
+      // Optimistic hook — the analysis must already be loaded for chunks
+      // to exist (the panel itself lazy-loads, see EditorScaffold).
       onToggleAnalysisPanel?.call();
     }
-    // Swallow in normal AND analysis mode; fall through to typing in insert.
-    return mode.isNormal || mode.isAnalysis;
+    // Swallow in normal AND analysis AND visual mode; fall through to
+    // typing in insert.
+    return mode.isNormal || mode.isAnalysis || mode.isVisual;
   }
 
   /// 'dd' — delete current line. First 'd' in normal mode is always
   /// swallowed (it's a pending operator, same as real vim); the second
   /// 'd' within the sequence window performs the delete.
+  ///
+  /// In visual mode a single 'd' deletes the whole visual selection and
+  /// exits to normal mode — vim operators apply to the selection directly,
+  /// there is no pending state to enter.
   static Future<bool> _handleDeleteLine(
     VimModeController mode,
     EditorState editorState,
   ) async {
+    if (mode.isVisual) return _handleVisualDelete(mode, editorState);
     if (!mode.isNormal && !mode.isAnalysis) return false;
     if (!mode.matchSequence('d')) return true; // first 'd': just swallow it
 
@@ -1066,11 +1732,19 @@ class VimCharacterShortcuts {
   }
 
   /// 'gg' — move to document start. Same pending-sequence pattern as
-  /// 'dd' above.
+  /// 'dd' above. In visual mode the second 'g' EXTENDS the selection to
+  /// the document start instead of moving the caret.
   static Future<bool> _handleDocStart(
     VimModeController mode,
     EditorState editorState,
   ) async {
+    if (mode.isVisual) {
+      if (!mode.matchSequence('g')) return true; // first 'g': swallow
+      final firstNode = editorState.document.first;
+      if (firstNode == null) return true;
+      _extendVisual(mode, editorState, (path: firstNode.path, offset: 0));
+      return true;
+    }
     if (!mode.isNormal && !mode.isAnalysis) return false;
     if (!mode.matchSequence('g')) return true; // first 'g': just swallow it
 

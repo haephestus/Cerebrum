@@ -18,6 +18,7 @@ import 'package:cerebrum/ui/screens/editor/widgets/radial_tool_dial.dart';
 import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:flutter/services.dart';
 
 enum _TextEngine { appFlowy, superEditor }
 
@@ -241,8 +242,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     // available even before the side panel has ever been opened.
     _editorController.enterAnalysisMode = _enterAnalysisMode;
 
-    // 'o' in analysis mode (via the per-page vim driver) toggles the full
-    // analysis panel — the overview tab — without switching vim modes.
+    // 'q' in normal/analysis mode (via the per-page vim driver) toggles the
+    // full analysis panel — the overview tab — without switching vim modes.
     _editorController.toggleAnalysisPanel = _toggleAnalysisPanel;
 
     // Image uploads target this note's folder on the daemon. Reads filename
@@ -468,7 +469,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   /// [openPanel] false: the block analysis widgets — inline tints + per-block
   /// findings — are the default surface during n/N navigation, and the summary
   /// is opt-in. Every path that explicitly asks for the summary (the app-bar /
-  /// More-menu toggles, the bar's "Full analysis", 'o') leaves the default true.
+  /// More-menu toggles, the bar's "Full analysis", 'q') leaves the default true.
   Future<void> _loadAnalysis({bool openPanel = true}) async {
     final bubbleId = _bubbleId;
     final noteId = _noteIdFromFilename(widget.note['filename'] as String?);
@@ -976,9 +977,10 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     }
   }
 
-  /// 'o' in analysis mode: toggle the full analysis panel (the overview tab)
-  /// without changing the vim mode. First open lazily loads the analysis (same
-  /// as [_analysisMode.onOpenFullPanel]); pressing 'o' again closes the panel.
+  /// 'q' in normal/analysis mode: toggle the full analysis panel (the
+  /// overview tab) without changing the vim mode. First open lazily loads
+  /// the analysis (same as [_analysisMode.onOpenFullPanel]); pressing 'q'
+  /// again closes the panel.
   void _toggleAnalysisPanel() {
     if (_showAnalysisPanel) {
       setState(() => _showAnalysisPanel = false);
@@ -1127,6 +1129,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
               VimMode.normal => ('NORMAL', editor.modeBadgeNormal),
               VimMode.insert => ('INSERT', editor.modeBadgeInsert),
               VimMode.analysis => ('ANALYSIS', editor.modeBadgeAnalysis),
+              VimMode.visual => ('VISUAL', editor.modeBadgeVisual),
             };
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1196,460 +1199,488 @@ class _EditorScaffoldState extends State<EditorScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.note['title'] ?? 'Edit Note'),
-        actions: [
-          // Vim mode indicator, in the app bar (Center → vertically aligned).
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: _vimModeBadge(),
-            ),
-          ),
-          if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          if (_isGeneratingAnalysis)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: context.cerebrum.editor.analysisBadge,
+    return CallbackShortcuts(
+      // Ctrl+S / Cmd+S = save NOW, flushing past the 2-second autosave
+      // debounce. _save() carries its own guards (already-saving, no
+      // unsaved changes, missing bubble_id each bail quietly), so the
+      // binding needs none of those.
+      //
+      // WHY CallbackShortcuts and not an AppFlowy [CommandShortcutEvent]:
+      // (1) the shortcut lists handed to AppFlowyEditor are identity-stable
+      // by design (see appflowy_text_driver's caching rationale) — adding a
+      // save hook there means a driver-level callback plumbed across
+      // controller layers that never touch saving; (2) this binding is
+      // engine-agnostic — it keeps working if the super_editor driver is
+      // ever re-enabled; (3) binding precedence is safe: AppFlowyEditor's
+      // standard command/character shortcut lists hold no ctrl+s claim
+      // (verified against 6.0.0 source), so an unhandled ctrl+s IGNOREs
+      // through the editor's KeyboardServiceWidget focused node and lands
+      // here. This is at the SCAFFOLD level, so it fires everywhere in the
+      // editor — vim normal/insert/analysis, the analysis panel, empty
+      // pages — not only inside text blocks.
+      bindings: {
+        SingleActivator(LogicalKeyboardKey.keyS, control: true): () => _save(),
+        // macOS chord.
+        SingleActivator(LogicalKeyboardKey.keyS, meta: true): () => _save(),
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.note['title'] ?? 'Edit Note'),
+          actions: [
+            // Vim mode indicator, in the app bar (Center → vertically aligned).
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: _vimModeBadge(),
               ),
             ),
+            if (_isSaving)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            if (_isGeneratingAnalysis)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: context.cerebrum.editor.analysisBadge,
+                ),
+              ),
 
-          // The primary mode switch: which view of this note you're
-          // looking at. Replaces the old bare analytics IconButton — same
-          // load-on-first-open / toggle-after behavior, just legible.
-          //
-          // While vim mode is ENABLED the analysis UI belongs to the vim
-          // review flow (chunk pill → Full analysis), so this app-bar toggle
-          // is hidden rather than redundant. It only shows when vim is off,
-          // keeping analysis reachable for non-vim editing.
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: AnimatedBuilder(
-              animation: _editorController,
-              builder: (context, _) {
-                final driver = _editorController.activeController.driver;
-                if (driver is! VimModeAware) return _analysisViewToggle();
-                final vimMode = (driver as VimModeAware).vimMode;
-                return AnimatedBuilder(
-                  animation: vimMode,
-                  builder: (context, __) {
-                    if (vimMode.isEnabled) return const SizedBox.shrink();
-                    return _analysisViewToggle();
-                  },
-                );
-              },
-            ),
-          ),
-
-          AnimatedBuilder(
-            animation: _editorController,
-            builder: (context, _) {
-              final drawingEnabled = _editorController.drawingEnabled;
-              return IconButton(
-                icon: Icon(drawingEnabled ? Icons.brush : Icons.text_fields),
-                tooltip:
-                    drawingEnabled
-                        ? 'Switch to text mode'
-                        : 'Switch to drawing mode',
-                onPressed: () {
-                  _editorController.toggleDrawingMode();
-                  if (_editorController.drawingEnabled) {
-                    FocusScope.of(context).unfocus();
-                  }
-                },
-              );
-            },
-          ),
-
-          // Page layout: vertical scroll (default) ↔ horizontal slideshow.
-          AnimatedBuilder(
-            animation: _editorController,
-            builder: (context, _) {
-              final horizontal =
-                  _editorController.layout == PageLayoutMode.horizontal;
-              return IconButton(
-                icon: Icon(horizontal ? Icons.view_carousel : Icons.view_day),
-                tooltip:
-                    horizontal
-                        ? 'Pages: slideshow (tap for scroll)'
-                        : 'Pages: scroll (tap for slideshow)',
-                onPressed: _editorController.toggleLayout,
-              );
-            },
-          ),
-
-          // Secondary, settings-style actions that don't need to be
-          // permanently visible: whether analysis runs for this note at
-          // all (distinct from just viewing the panel above), and the
-          // editing-engine switch, which is a testing tool, not a
-          // day-to-day control.
-          PopupMenuButton<String>(
-            tooltip: 'More',
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              switch (value) {
-                case 'toggle_analysis_enabled':
-                  _toggleAnalysis(!_analysisEnabled);
-                  break;
-                case 'engine_appFlowy':
-                  _switchEngine(_TextEngine.appFlowy);
-                  break;
-                case 'engine_superEditor':
-                  _switchEngine(_TextEngine.superEditor);
-                  break;
-                case 'default_start_in_drawing_mode':
-                  setState(
-                    () =>
-                        _defaultStartInDrawingMode =
-                            !_defaultStartInDrawingMode,
-                  );
-                  break;
-                case 'toggle_vim_mode':
-                  setState(_toggleVimMode);
-                  break;
-                case 'enter_analysis_mode':
-                  _enterAnalysisMode();
-                  break;
-              }
-            },
-            itemBuilder:
-                (context) => [
-                  CheckedPopupMenuItem<String>(
-                    value: 'toggle_analysis_enabled',
-                    checked: _analysisEnabled,
-                    enabled: !_isTogglingAnalysis,
-                    child: const Text('Analysis enabled for this note'),
-                  ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem<String>(
-                    value: 'engine_appFlowy',
-                    child: Row(
-                      children: [
-                        Icon(
-                          _currentEngine == _TextEngine.appFlowy
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_unchecked,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text('Editing engine: AppFlowy'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'engine_superEditor',
-                    child: Row(
-                      children: [
-                        Icon(
-                          _currentEngine == _TextEngine.superEditor
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_unchecked,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        const Text('Editing engine: super_editor (testing)'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  CheckedPopupMenuItem<String>(
-                    value: 'default_start_in_drawing_mode',
-                    checked: _defaultStartInDrawingMode,
-                    child: const Text('Open new notes in drawing mode'),
-                  ),
-                  CheckedPopupMenuItem<String>(
-                    value: 'toggle_vim_mode',
-                    checked: _vimModeEnabled,
-                    enabled:
-                        _vimModeAvailable && !_editorController.drawingEnabled,
-                    child: Text(
-                      _vimModeAvailable
-                          ? 'Neovim keybindings'
-                          : 'Neovim keybindings (unsupported by this engine)',
-                    ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'enter_analysis_mode',
-                    enabled:
-                        _vimModeEnabled && !_editorController.drawingEnabled,
-                    child: const Text('Analysis review mode (vim)'),
-                  ),
-                ],
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              // Block analysis widgets (inline tint + findings popover) show
-              // whenever analysis is loaded AND (the summary panel is open OR
-              // the ACTIVE page is in analysis review mode). The outer builder
-              // re-resolves the active page's driver on page switches; the
-              // inner one reacts to that page's vim-mode flips — so pressing
-              // n/N shows the widgets BY DEFAULT without the summary being open.
+            // The primary mode switch: which view of this note you're
+            // looking at. Replaces the old bare analytics IconButton — same
+            // load-on-first-open / toggle-after behavior, just legible.
+            //
+            // While vim mode is ENABLED the analysis UI belongs to the vim
+            // review flow (chunk pill → Full analysis), so this app-bar toggle
+            // is hidden rather than redundant. It only shows when vim is off,
+            // keeping analysis reachable for non-vim editing.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
               child: AnimatedBuilder(
                 animation: _editorController,
                 builder: (context, _) {
                   final driver = _editorController.activeController.driver;
-                  final vimMode =
-                      driver is VimModeAware
-                          ? (driver as VimModeAware).vimMode
-                          : null;
-                  Widget pagedEditor() => PagedEditor(
-                    controller: _editorController,
-                    partialEraser: _partialEraser,
-                    eraserWidth: _eraserWidth,
-                    analysisForBlock:
-                        (_showAnalysisPanel || (vimMode?.isAnalysis ?? false))
-                            ? _lookupBlockAnalysis
-                            : null,
-                  );
-                  // Non-vim engine: no mode to watch, panel state is enough.
-                  if (vimMode == null) return pagedEditor();
+                  if (driver is! VimModeAware) return _analysisViewToggle();
+                  final vimMode = (driver as VimModeAware).vimMode;
                   return AnimatedBuilder(
                     animation: vimMode,
-                    builder: (context, __) => pagedEditor(),
+                    builder: (context, __) {
+                      if (vimMode.isEnabled) return const SizedBox.shrink();
+                      return _analysisViewToggle();
+                    },
                   );
                 },
               ),
             ),
 
-            // Single screen-level drawing dial (was previously embedded once
-            // per page). Shown only in drawing mode and pointed at the ACTIVE
-            // page's ink notifier, so switching pages retargets the same dial.
-            // It floats above the whole page list; empty areas of the overlay
-            // don't absorb pointers, so strokes still reach the page canvas
-            // underneath. Positioned.fill is the direct Stack child (a Positioned
-            // returned from inside the AnimatedBuilder would break parent-data).
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _editorController,
-                builder: (context, _) {
-                  if (!_editorController.drawingEnabled) {
-                    return const SizedBox.shrink();
-                  }
-                  return ToolDialHub(
-                    notifier:
-                        _editorController.activeController.drawingNotifier,
-                    // Selecting a pen/highlighter/eraser follows across pages.
-                    onSelectTool: _editorController.applyDrawingTool,
-                    // Re-tapping the eraser toggles this partial/whole flag.
-                    partialEraser: _partialEraser,
-                    // The size selector sizes the eraser too (shared with pages).
-                    eraserWidth: _eraserWidth,
-                  );
-                },
-              ),
+            AnimatedBuilder(
+              animation: _editorController,
+              builder: (context, _) {
+                final drawingEnabled = _editorController.drawingEnabled;
+                return IconButton(
+                  icon: Icon(drawingEnabled ? Icons.brush : Icons.text_fields),
+                  tooltip:
+                      drawingEnabled
+                          ? 'Switch to text mode'
+                          : 'Switch to drawing mode',
+                  onPressed: () {
+                    _editorController.toggleDrawingMode();
+                    if (_editorController.drawingEnabled) {
+                      FocusScope.of(context).unfocus();
+                    }
+                  },
+                );
+              },
             ),
 
-            if (_showAnalysisPanel && _hasAttemptedLoad)
-              Positioned(
-                right: 16,
-                // Editor_settings pop up
-                child: Material(
-                  elevation: 8,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    height: 900,
-                    width: 800,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: const [
-                                Icon(Icons.insights_rounded, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Analysis Summary',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
+            // Page layout: vertical scroll (default) ↔ horizontal slideshow.
+            AnimatedBuilder(
+              animation: _editorController,
+              builder: (context, _) {
+                final horizontal =
+                    _editorController.layout == PageLayoutMode.horizontal;
+                return IconButton(
+                  icon: Icon(horizontal ? Icons.view_carousel : Icons.view_day),
+                  tooltip:
+                      horizontal
+                          ? 'Pages: slideshow (tap for scroll)'
+                          : 'Pages: scroll (tap for slideshow)',
+                  onPressed: _editorController.toggleLayout,
+                );
+              },
+            ),
 
-                            Row(
-                              children: [
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+            // Secondary, settings-style actions that don't need to be
+            // permanently visible: whether analysis runs for this note at
+            // all (distinct from just viewing the panel above), and the
+            // editing-engine switch, which is a testing tool, not a
+            // day-to-day control.
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                switch (value) {
+                  case 'toggle_analysis_enabled':
+                    _toggleAnalysis(!_analysisEnabled);
+                    break;
+                  case 'engine_appFlowy':
+                    _switchEngine(_TextEngine.appFlowy);
+                    break;
+                  case 'engine_superEditor':
+                    _switchEngine(_TextEngine.superEditor);
+                    break;
+                  case 'default_start_in_drawing_mode':
+                    setState(
+                      () =>
+                          _defaultStartInDrawingMode =
+                              !_defaultStartInDrawingMode,
+                    );
+                    break;
+                  case 'toggle_vim_mode':
+                    setState(_toggleVimMode);
+                    break;
+                  case 'enter_analysis_mode':
+                    _enterAnalysisMode();
+                    break;
+                }
+              },
+              itemBuilder:
+                  (context) => [
+                    CheckedPopupMenuItem<String>(
+                      value: 'toggle_analysis_enabled',
+                      checked: _analysisEnabled,
+                      enabled: !_isTogglingAnalysis,
+                      child: const Text('Analysis enabled for this note'),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'engine_appFlowy',
+                      child: Row(
+                        children: [
+                          Icon(
+                            _currentEngine == _TextEngine.appFlowy
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('Editing engine: AppFlowy'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'engine_superEditor',
+                      child: Row(
+                        children: [
+                          Icon(
+                            _currentEngine == _TextEngine.superEditor
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('Editing engine: super_editor (testing)'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    CheckedPopupMenuItem<String>(
+                      value: 'default_start_in_drawing_mode',
+                      checked: _defaultStartInDrawingMode,
+                      child: const Text('Open new notes in drawing mode'),
+                    ),
+                    CheckedPopupMenuItem<String>(
+                      value: 'toggle_vim_mode',
+                      checked: _vimModeEnabled,
+                      enabled:
+                          _vimModeAvailable &&
+                          !_editorController.drawingEnabled,
+                      child: Text(
+                        _vimModeAvailable
+                            ? 'Neovim keybindings'
+                            : 'Neovim keybindings (unsupported by this engine)',
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'enter_analysis_mode',
+                      enabled:
+                          _vimModeEnabled && !_editorController.drawingEnabled,
+                      child: const Text('Analysis review mode (vim)'),
+                    ),
+                  ],
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                // Block analysis widgets (inline tint + findings popover) show
+                // whenever analysis is loaded AND (the summary panel is open OR
+                // the ACTIVE page is in analysis review mode). The outer builder
+                // re-resolves the active page's driver on page switches; the
+                // inner one reacts to that page's vim-mode flips — so pressing
+                // n/N shows the widgets BY DEFAULT without the summary being open.
+                child: AnimatedBuilder(
+                  animation: _editorController,
+                  builder: (context, _) {
+                    final driver = _editorController.activeController.driver;
+                    final vimMode =
+                        driver is VimModeAware
+                            ? (driver as VimModeAware).vimMode
+                            : null;
+                    Widget pagedEditor() => PagedEditor(
+                      controller: _editorController,
+                      partialEraser: _partialEraser,
+                      eraserWidth: _eraserWidth,
+                      analysisForBlock:
+                          (_showAnalysisPanel || (vimMode?.isAnalysis ?? false))
+                              ? _lookupBlockAnalysis
+                              : null,
+                    );
+                    // Non-vim engine: no mode to watch, panel state is enough.
+                    if (vimMode == null) return pagedEditor();
+                    return AnimatedBuilder(
+                      animation: vimMode,
+                      builder: (context, __) => pagedEditor(),
+                    );
+                  },
+                ),
+              ),
+
+              // Single screen-level drawing dial (was previously embedded once
+              // per page). Shown only in drawing mode and pointed at the ACTIVE
+              // page's ink notifier, so switching pages retargets the same dial.
+              // It floats above the whole page list; empty areas of the overlay
+              // don't absorb pointers, so strokes still reach the page canvas
+              // underneath. Positioned.fill is the direct Stack child (a Positioned
+              // returned from inside the AnimatedBuilder would break parent-data).
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _editorController,
+                  builder: (context, _) {
+                    if (!_editorController.drawingEnabled) {
+                      return const SizedBox.shrink();
+                    }
+                    return ToolDialHub(
+                      notifier:
+                          _editorController.activeController.drawingNotifier,
+                      // Selecting a pen/highlighter/eraser follows across pages.
+                      onSelectTool: _editorController.applyDrawingTool,
+                      // Re-tapping the eraser toggles this partial/whole flag.
+                      partialEraser: _partialEraser,
+                      // The size selector sizes the eraser too (shared with pages).
+                      eraserWidth: _eraserWidth,
+                    );
+                  },
+                ),
+              ),
+
+              if (_showAnalysisPanel && _hasAttemptedLoad)
+                Positioned(
+                  right: 16,
+                  // Editor_settings pop up
+                  child: Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      height: 900,
+                      width: 800,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.insights_rounded, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Analysis Summary',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  onPressed:
-                                      (_isGeneratingAnalysis ||
-                                              !_analysisEnabled)
-                                          ? null
-                                          : _generateAnalysis,
-                                  icon:
-                                      _isGeneratingAnalysis
-                                          ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                          : const Icon(Icons.auto_awesome),
-                                  label: Text(
-                                    _isGeneratingAnalysis
-                                        ? 'Analysing...'
-                                        : 'Re-analyse',
-                                  ),
-                                ),
-
-                                const SizedBox(width: 8),
-
-                                IconButton(
-                                  icon: const Icon(Icons.close),
-                                  tooltip: 'Close',
-                                  onPressed: () {
-                                    setState(() {
-                                      _showAnalysisPanel = false;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const Divider(),
-                        if (!_analysisEnabled)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              'Analysis is currently turned off for this note.',
-                              style: TextStyle(
-                                fontStyle: FontStyle.italic,
-                                color: context.cerebrum.text.muted,
+                                ],
                               ),
-                            ),
-                          ),
-                        Expanded(
-                          child:
-                              _cachedAnalysis != null
-                                  // Error / empty / raw-regenerate-result states —
-                                  // no structured chunk data to build a list from.
-                                  ? SingleChildScrollView(
-                                    child: GptMarkdown(_cachedAnalysis!),
-                                  )
-                                  : ListView.builder(
-                                    itemCount: 1 + _analysisChunks.length,
-                                    itemBuilder: (context, index) {
-                                      if (index == 0) {
-                                        return _overviewMarkdown != null &&
-                                                _overviewMarkdown!
-                                                    .trim()
-                                                    .isNotEmpty
-                                            ? Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 12,
-                                              ),
-                                              child: GptMarkdown(
-                                                _overviewMarkdown!,
+
+                              Row(
+                                children: [
+                                  TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed:
+                                        (_isGeneratingAnalysis ||
+                                                !_analysisEnabled)
+                                            ? null
+                                            : _generateAnalysis,
+                                    icon:
+                                        _isGeneratingAnalysis
+                                            ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
                                               ),
                                             )
-                                            : const SizedBox.shrink();
-                                      }
-                                      // NOTE: this data is what is supposed to
-                                      // be loaded in to the chunk by chunk
-                                      // analysis viewer
-                                      //  return _ChunkExpansionTile(
-                                      //    chunk: _analysisChunks[index - 1],
-                                      //  );
+                                            : const Icon(Icons.auto_awesome),
+                                    label: Text(
+                                      _isGeneratingAnalysis
+                                          ? 'Analysing...'
+                                          : 'Re-analyse',
+                                    ),
+                                  ),
+
+                                  const SizedBox(width: 8),
+
+                                  IconButton(
+                                    icon: const Icon(Icons.close),
+                                    tooltip: 'Close',
+                                    onPressed: () {
+                                      setState(() {
+                                        _showAnalysisPanel = false;
+                                      });
                                     },
                                   ),
-                        ),
-                      ],
+                                ],
+                              ),
+                            ],
+                          ),
+                          const Divider(),
+                          if (!_analysisEnabled)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                'Analysis is currently turned off for this note.',
+                                style: TextStyle(
+                                  fontStyle: FontStyle.italic,
+                                  color: context.cerebrum.text.muted,
+                                ),
+                              ),
+                            ),
+                          Expanded(
+                            child:
+                                _cachedAnalysis != null
+                                    // Error / empty / raw-regenerate-result states —
+                                    // no structured chunk data to build a list from.
+                                    ? SingleChildScrollView(
+                                      child: GptMarkdown(_cachedAnalysis!),
+                                    )
+                                    : ListView.builder(
+                                      itemCount: 1 + _analysisChunks.length,
+                                      itemBuilder: (context, index) {
+                                        if (index == 0) {
+                                          return _overviewMarkdown != null &&
+                                                  _overviewMarkdown!
+                                                      .trim()
+                                                      .isNotEmpty
+                                              ? Padding(
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 12,
+                                                ),
+                                                child: GptMarkdown(
+                                                  _overviewMarkdown!,
+                                                ),
+                                              )
+                                              : const SizedBox.shrink();
+                                        }
+                                        // NOTE: this data is what is supposed to
+                                        // be loaded in to the chunk by chunk
+                                        // analysis viewer
+                                        //  return _ChunkExpansionTile(
+                                        //    chunk: _analysisChunks[index - 1],
+                                        //  );
+                                      },
+                                    ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
+              // Passive save-status indicator, replacing the old bare Save
+              // FAB. Tapping it still forces an immediate save — it's the
+              // same _save() call — but at rest it now tells you whether
+              // there's anything to save at all, instead of always looking
+              // like an unpressed button.
+              // SCAFFOLD: analysis-review toolbar (only visible in analysis mode).
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 16,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: _analysisModeBar(),
+                ),
               ),
-            // Passive save-status indicator, replacing the old bare Save
-            // FAB. Tapping it still forces an immediate save — it's the
-            // same _save() call — but at rest it now tells you whether
-            // there's anything to save at all, instead of always looking
-            // like an unpressed button.
-            // SCAFFOLD: analysis-review toolbar (only visible in analysis mode).
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 16,
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: _analysisModeBar(),
-              ),
-            ),
 
-            Positioned(
-              right: 16,
-              bottom: 16,
-              child: AnimatedBuilder(
-                animation: _editorController,
-                builder: (context, _) {
-                  final hasUnsaved = _hasUnsavedChanges();
-                  return Material(
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(20),
-                    elevation: 2,
-                    child: InkWell(
+              Positioned(
+                right: 16,
+                bottom: 16,
+                child: AnimatedBuilder(
+                  animation: _editorController,
+                  builder: (context, _) {
+                    final hasUnsaved = _hasUnsavedChanges();
+                    return Material(
+                      color:
+                          Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(20),
-                      onTap: _isSaving ? null : _save,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_isSaving)
-                              const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                      elevation: 2,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: _isSaving ? null : _save,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (_isSaving)
+                                const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              else
+                                Icon(
+                                  hasUnsaved ? Icons.circle : Icons.check,
+                                  size: 14,
+                                  color:
+                                      hasUnsaved
+                                          ? context.cerebrum.editor.unsavedBadge
+                                          : context.cerebrum.editor.savedBadge,
                                 ),
-                              )
-                            else
-                              Icon(
-                                hasUnsaved ? Icons.circle : Icons.check,
-                                size: 14,
-                                color:
-                                    hasUnsaved
-                                        ? context.cerebrum.editor.unsavedBadge
-                                        : context.cerebrum.editor.savedBadge,
+                              const SizedBox(width: 6),
+                              Text(
+                                _isSaving
+                                    ? 'Saving…'
+                                    : (hasUnsaved
+                                        ? 'Unsaved changes'
+                                        : 'Saved'),
+                                style: const TextStyle(fontSize: 12),
                               ),
-                            const SizedBox(width: 6),
-                            Text(
-                              _isSaving
-                                  ? 'Saving…'
-                                  : (hasUnsaved ? 'Unsaved changes' : 'Saved'),
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

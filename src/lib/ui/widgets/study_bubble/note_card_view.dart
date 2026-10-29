@@ -112,6 +112,7 @@ class NoteCardView extends StatelessWidget {
   final VoidCallback onDoubleTap;
   final VoidCallback onOpen;
   final VoidCallback onDelete;
+  final VoidCallback onRename;
 
   const NoteCardView({
     super.key,
@@ -127,6 +128,7 @@ class NoteCardView extends StatelessWidget {
     required this.onDoubleTap,
     required this.onOpen,
     required this.onDelete,
+    required this.onRename,
   });
 
   String get _title =>
@@ -229,22 +231,15 @@ class NoteCardView extends StatelessWidget {
                     _ThumbnailBox(preview: preview),
                   ],
                   IconButton(
-                    icon:
-                        isOpening
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                            : Icon(
-                              Icons.open_in_new,
-                              color: context.cerebrum.text.onDark.withValues(
-                                alpha: 0.7,
-                              ),
-                              size: 18,
-                            ),
-                    tooltip: 'Open note',
-                    onPressed: isOpening ? null : onOpen,
+                    icon: Icon(
+                      Icons.edit_outlined,
+                      color: context.cerebrum.text.onDark.withValues(
+                        alpha: 0.5,
+                      ),
+                      size: 18,
+                    ),
+                    tooltip: 'Rename note',
+                    onPressed: onRename,
                     visualDensity: VisualDensity.compact,
                   ),
                   IconButton(

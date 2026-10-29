@@ -19,6 +19,7 @@ class EditorColors {
     required this.modeBadgeInsert,
     required this.modeBadgeNormal,
     required this.modeBadgeAnalysis,
+    required this.modeBadgeVisual,
     required this.pageBorder,
     required this.pageShadow,
     required this.pageShadowSoft,
@@ -57,6 +58,9 @@ class EditorColors {
 
   /// Mode chip fill when in analysis mode.
   final Color modeBadgeAnalysis;
+
+  /// Mode chip fill when in visual mode.
+  final Color modeBadgeVisual;
 
   /// Page outline.
   final Color pageBorder;
@@ -114,6 +118,7 @@ class EditorColors {
     Color? modeBadgeInsert,
     Color? modeBadgeNormal,
     Color? modeBadgeAnalysis,
+    Color? modeBadgeVisual,
     Color? pageBorder,
     Color? pageShadow,
     Color? pageShadowSoft,
@@ -138,6 +143,7 @@ class EditorColors {
     modeBadgeInsert: modeBadgeInsert ?? this.modeBadgeInsert,
     modeBadgeNormal: modeBadgeNormal ?? this.modeBadgeNormal,
     modeBadgeAnalysis: modeBadgeAnalysis ?? this.modeBadgeAnalysis,
+    modeBadgeVisual: modeBadgeVisual ?? this.modeBadgeVisual,
     pageBorder: pageBorder ?? this.pageBorder,
     pageShadow: pageShadow ?? this.pageShadow,
     pageShadowSoft: pageShadowSoft ?? this.pageShadowSoft,
@@ -166,6 +172,7 @@ class EditorColors {
         modeBadgeNormal: Color.lerp(a.modeBadgeNormal, b.modeBadgeNormal, t)!,
         modeBadgeAnalysis:
             Color.lerp(a.modeBadgeAnalysis, b.modeBadgeAnalysis, t)!,
+        modeBadgeVisual: Color.lerp(a.modeBadgeVisual, b.modeBadgeVisual, t)!,
         pageBorder: Color.lerp(a.pageBorder, b.pageBorder, t)!,
         pageShadow: Color.lerp(a.pageShadow, b.pageShadow, t)!,
         pageShadowSoft: Color.lerp(a.pageShadowSoft, b.pageShadowSoft, t)!,
@@ -195,6 +202,7 @@ class EditorColors {
         modeBadgeInsert == other.modeBadgeInsert &&
         modeBadgeNormal == other.modeBadgeNormal &&
         modeBadgeAnalysis == other.modeBadgeAnalysis &&
+        modeBadgeVisual == other.modeBadgeVisual &&
         pageBorder == other.pageBorder &&
         pageShadow == other.pageShadow &&
         pageShadowSoft == other.pageShadowSoft &&
@@ -222,6 +230,7 @@ class EditorColors {
     modeBadgeInsert,
     modeBadgeNormal,
     modeBadgeAnalysis,
+    modeBadgeVisual,
     pageBorder,
     pageShadow,
     pageShadowSoft,
@@ -252,6 +261,7 @@ class EditorColors {
     'modeBadgeInsert': modeBadgeInsert,
     'modeBadgeNormal': modeBadgeNormal,
     'modeBadgeAnalysis': modeBadgeAnalysis,
+    'modeBadgeVisual': modeBadgeVisual,
     'pageBorder': pageBorder,
     'pageShadow': pageShadow,
     'pageShadowSoft': pageShadowSoft,

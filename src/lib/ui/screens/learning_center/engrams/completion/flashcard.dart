@@ -1,4 +1,5 @@
 import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/ui/widgets/floating_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
@@ -90,6 +91,7 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
   @override
   Widget build(BuildContext context) {
     final c = widget.engram.content as FlashcardContent;
+    Size size = MediaQuery.sizeOf(context);
 
     if (_loading) {
       return Scaffold(
@@ -100,12 +102,13 @@ class _FlashcardCompletionPageState extends State<FlashcardCompletionPage> {
 
     final rated = _ratedAs != null;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Flashcard')),
-      body: Padding(
+    return FloatingModal(
+      title: 'Flashcard',
+      child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+            Text('$size'),
             GestureDetector(
               onTap: rated ? null : () => setState(() => _flipped = !_flipped),
               child: Container(

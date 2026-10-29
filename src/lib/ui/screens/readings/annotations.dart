@@ -15,12 +15,14 @@
 //  keyed per file as `ink:<fileFingerprint>`. At runtime each page's overlay is
 //  a FIXED logical canvas sized to the page's PDF-point dimensions
 //  (PdfPage.width x .height, already rotated) inside a FittedBox that maps it
-//  onto pdfrx's zoom-scaled page rect. Scribble records points in that
-//  canonical canvas space, so strokes are zoom-independent by construction
-//  (both paint AND hit-test transform through the FittedBox — RenderFittedBox
-//  lays its child out with unbounded constraints and hit-tests through its
-//  transform). Conversion between the two models lives in
-//  sketchFromAnnotations / annotationsFromSketch below.
+//  onto pdfrx's zoom-scaled page rect. pdfrx does NOT give overlays tight
+//  constraints, so an OverflowBox forces the FittedBox to exactly the `pageRect`
+//  pdfrx passes to pageOverlaysBuilder (see reader_ink_layer.dart). Scribble
+//  records points in that canonical canvas space, so strokes are
+//  zoom-independent by construction (both paint AND hit-test transform through
+//  the FittedBox — RenderFittedBox lays its child out with unbounded
+//  constraints and hit-tests through its transform). Conversion between the two
+//  models lives in sketchFromAnnotations / annotationsFromSketch below.
 //
 //  STORAGE: one unified PageAnnotation hierarchy (ink / text-markup / note),
 //  serialized as a JSON array under `ink:<fileFingerprint>` (key unchanged, so
@@ -29,11 +31,14 @@
 //  feature builds on, so persistence never grows a second shape.
 //
 //  Known gaps / TODO:
-//   a. RESOLVED for drawing: the canonical canvas replaces the old
-//      normalize-on-input model. Still verify on device that pdfrx's overlay
-//      really equals the page rect and scales with zoom (it is built from
-//      _documentToRenderBox), and that stylus input doesn't also pan the
-//      viewer.
+//   a. RESOLVED: each page overlay is a canonical canvas inside a FittedBox
+//      that is forced to the zoomed page rect by an OverflowBox. Lesson learned:
+//      pdfrx passes `pageRect` but NOT tight constraints, so a bare FittedBox
+//      rendered the canvas at natural size (612x792) in the page's top-left
+//      corner; scribble's hover dot, drawing and hit-testing only worked inside
+//      that box, and everywhere else the default cursor returned and drags
+//      panned the viewer. Still verify on device that strokes stay aligned
+//      after zooming and that stylus input doesn't also pan the viewer.
 //   b. PAGE ROTATION / CROP BOX: PdfPage.width/height are ROTATED sizes, so
 //      strokes are stored in rotated page space. Verify with rotated and
 //      cropped PDFs; PDF-space export still needs `c`.
@@ -100,9 +105,13 @@
 //     (scribble notifies on every move; AnnotationStore._onSketchChanged now
 //     only debounces the save). Listeners that need live stroke state (the
 //     reader's undo/redo buttons) listen to the page's ScribbleNotifier
-//     directly, so the viewer rebuilds only on drawing-mode / active-page /
-//     tool changes. Still open: cache finished strokes in a ui.Picture per
-//     page if painting a dense page ever shows up in profiles.
+//     directly. The PdfViewer rebuilds ONLY when drawing mode toggles
+//     ([AnnotationStore.drawingListenable]); active-page changes go through a
+//     separate ValueNotifier ([AnnotationStore.activePageListenable]) that only
+//     the toolbar and tool dial follow, so pointer-down on a page can't rebuild
+//     the viewer and its overlays mid-gesture. Still open: cache finished
+//     strokes in a ui.Picture per page if painting a dense page ever shows up
+//     in profiles.
 // 10. RESOLVED — partial (split-stroke) erase + configurable radius shipped
 //     with the editor's NoteDrawingLayer (_PartialEraser / splitErase).
 // 11. TESTS — PARTIAL: the PageAnnotation JSON round trip (legacy blob, every
@@ -420,11 +429,20 @@ List<PageAnnotation> annotationsFromSketch(
 /// runs the opposite conversion. Non-ink annotations never enter scribble —
 /// they stay in [_rawAnnotations] and are written straight back.
 ///
-/// LISTENING: this store notifies for mode/page/tool changes only. It
-/// deliberately does NOT notify when a sketch changes — scribble notifies on
-/// every pointer move, and broadcasting that used to rebuild the reader's
-/// whole PdfViewer per move (header item 9). Anything that needs live stroke
-/// state (undo/redo availability) must listen to the page's
+/// LISTENING: three channels, by how often they fire.
+///  * [drawingListenable] — drawing mode on/off. The only thing the PdfViewer
+///    rebuilds for (text selection is disabled while drawing), and what each
+///    ink overlay follows for its IgnorePointer.
+///  * [activePageListenable] — the active page. Followed by the undo/redo
+///    buttons and the tool dial, NEVER by the viewer: it changes on
+///    pointer-down, and rebuilding the viewer there rebuilt every ink overlay
+///    in the middle of the gesture that was starting a stroke.
+///  * the store itself (notifyListeners) — drawing-mode and tool-selection
+///    changes and load completion, for the toolbar and the dial.
+/// The store deliberately does NOT notify when a sketch changes — scribble
+/// notifies on every pointer move, and broadcasting that used to rebuild the
+/// reader's whole PdfViewer per move (header item 9). Anything that needs live
+/// stroke state (undo/redo availability) must listen to the page's
 /// [ScribbleNotifier] directly.
 class AnnotationStore extends ChangeNotifier {
   AnnotationStore(this.fingerprint);
@@ -446,13 +464,19 @@ class AnnotationStore extends ChangeNotifier {
 
   final Map<int, ScribbleNotifier> _notifiers = {};
   final Map<int, Size> _pageSizes = {};
-  int _activePage = 1;
+
+  /// Active page, as its own notifier. Changing it must NOT rebuild the
+  /// PdfViewer: it used to go through notifyListeners() during the pointer-down
+  /// that starts a stroke, rebuilding the viewer and every ink overlay
+  /// mid-gesture. Only the undo/redo buttons and the tool dial follow it.
+  final ValueNotifier<int> activePageListenable = ValueNotifier(1);
 
   /// Whether the ink overlays take pointers. Independent of which tool is
   /// selected, exactly like the editor's `drawingEnabled`: entering drawing
   /// mode shows the dial and arms the overlays, and the last-used tool (or
-  /// scribble's black/5 default) is already on every notifier.
-  bool _drawing = false;
+  /// scribble's black/5 default) is already on every notifier. This is the
+  /// ONLY store state the PdfViewer params depend on.
+  final ValueNotifier<bool> drawingListenable = ValueNotifier(false);
 
   /// The currently selected tool broadcast (see [applyDrawingTool]), kept for
   /// notifiers created later. Survives leaving drawing mode so reopening
@@ -466,8 +490,8 @@ class AnnotationStore extends ChangeNotifier {
   List<PageAnnotation> _rawAnnotations = [];
   Timer? _saveTimer;
 
-  bool get drawing => _drawing;
-  int get activePage => _activePage;
+  bool get drawing => drawingListenable.value;
+  int get activePage => activePageListenable.value;
 
   /// Everything known for [page]: unmaterialized entries (ink whose canonical
   /// size isn't known yet, plus EVERY highlight/note — they never enter a
@@ -489,7 +513,7 @@ class AnnotationStore extends ChangeNotifier {
     return out;
   }
 
-  ScribbleNotifier get activeNotifier => notifierFor(_activePage);
+  ScribbleNotifier get activeNotifier => notifierFor(activePage);
 
   /// The page's scribble canvas, created lazily. The first call also wires the
   /// save-listener; strokes are seeded once the page size is known.
@@ -513,11 +537,11 @@ class AnnotationStore extends ChangeNotifier {
     if (n != null) _materialize(n, pageNumber);
   }
 
-  /// Undo/redo and the tool dial act on the page last touched.
+  /// Undo/redo and the tool dial act on the page last touched. Updates a
+  /// ValueNotifier only (a no-op when unchanged) — no store broadcast, so the
+  /// viewer and its overlays never rebuild because of it.
   void setActivePage(int pageNumber) {
-    if (pageNumber == _activePage) return;
-    _activePage = pageNumber;
-    notifyListeners();
+    activePageListenable.value = pageNumber;
   }
 
   /// Broadcast a tool config (from ToolDialHub's onSelectTool) to every page
@@ -529,27 +553,27 @@ class AnnotationStore extends ChangeNotifier {
     for (final n in _notifiers.values) {
       config(n);
     }
-    if (!_drawing) _drawing = true;
+    drawingListenable.value = true;
     notifyListeners();
   }
 
   /// Enters drawing mode: the tool dial appears and the overlays take
   /// pointers (only the pointer kinds in [pointerMode]; touch still scrolls).
   void enterDrawingMode() {
-    if (_drawing) return;
-    _drawing = true;
+    if (drawing) return;
+    drawingListenable.value = true;
     notifyListeners();
   }
 
   /// Leaves drawing mode: overlays stop taking pointers and the dial hides.
   /// Notifiers keep their last tool state, so reopening shows it.
   void exitDrawingMode() {
-    if (!_drawing) return;
-    _drawing = false;
+    if (!drawing) return;
+    drawingListenable.value = false;
     notifyListeners();
   }
 
-  void toggleDrawingMode() => _drawing ? exitDrawingMode() : enterDrawingMode();
+  void toggleDrawingMode() => drawing ? exitDrawingMode() : enterDrawingMode();
 
   void undo() => activeNotifier.undo();
   void redo() => activeNotifier.redo();
@@ -621,7 +645,7 @@ class AnnotationStore extends ChangeNotifier {
   /// Debounces the save ONLY. No notifyListeners here: scribble fires this on
   /// every pointer move, and broadcasting it rebuilt the reader's entire
   /// PdfViewer per move (header item 9). Live stroke state is listened to on
-  /// the ScribbleNotifier itself; this store announces mode/page/tool changes.
+  /// the ScribbleNotifier itself; this store announces mode/tool changes.
   void _onSketchChanged() => _scheduleSave();
 
   void _scheduleSave() {
@@ -653,6 +677,8 @@ class AnnotationStore extends ChangeNotifier {
     }
     partialEraser.dispose();
     eraserWidth.dispose();
+    activePageListenable.dispose();
+    drawingListenable.dispose();
     super.dispose();
   }
 

@@ -141,9 +141,28 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
       );
 
       if (mounted) {
+        // For notes the server knows about, a locally-dirty copy (e.g. a
+        // rename that hasn't synced yet) must win for the title, otherwise
+        // this refresh would overwrite the edit with the stale server title.
+        final serverNotes =
+            List<Map<String, dynamic>>.from(data).map((n) {
+              final match = local.firstWhere(
+                (l) =>
+                    (l['note_id'] != null && l['note_id'] == n['note_id']) ||
+                    (l['filename'] != null && l['filename'] == n['filename']),
+                orElse: () => const {},
+              );
+              if (match.isNotEmpty &&
+                  match['dirty'] == true &&
+                  match['title'] != null) {
+                return {...n, 'title': match['title']};
+              }
+              return n;
+            }).toList();
+
         final merged = [
           ...localOnly.map((n) => {...n, 'bubble_id': bubbleId}),
-          ...List<Map<String, dynamic>>.from(data),
+          ...serverNotes,
         ];
         setState(() {
           notes = merged;
@@ -294,6 +313,101 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
       unawaited(_loadAnalysisStatus(noteId!, filename));
     }
     await _loadGapCounts();
+  }
+
+  // -----------------------
+  // Rename a note (title)
+  // -----------------------
+  // The dialog owns its TextEditingController (see _RenameDialog) so the
+  // controller is only disposed once the dialog route is fully gone.
+  Future<void> _promptRename(_NoteCardData data) async {
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (_) => _RenameDialog(initialTitle: data.title),
+    );
+
+    if (newTitle == null || newTitle == data.title) return;
+    await _applyRename(data, newTitle);
+  }
+
+  Future<void> _applyRename(_NoteCardData data, String newTitle) async {
+    final filename = data.filename;
+    final noteId =
+        data.noteId ??
+        (filename != null && filename.endsWith('.json')
+            ? filename.substring(0, filename.length - 5)
+            : filename);
+    if (noteId == null) return;
+
+    try {
+      // Local-first read (has real ink + any unsynced edits). Fall back to the
+      // daemon copy only if the note isn't on disk yet.
+      Map<String, dynamic>? full = await NoteStore.readNote(bubbleId, noteId);
+      if (full == null && filename != null) {
+        try {
+          full = await BubbleNotesApi.fetchNoteByFileName(bubbleId, filename);
+        } catch (_) {}
+      }
+
+      final rawPages = full?['pages'] as List?;
+      if (full == null || rawPages == null || rawPages.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Can't rename this note until it's available offline.",
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
+      final pages =
+          rawPages.map((p) => Map<String, dynamic>.from(p as Map)).toList();
+      final serverFilename = filename ?? full['filename'] as String?;
+
+      // 1) Local write first: the rename can't be lost, and the index entry
+      //    (which feeds the list) gets the new title immediately.
+      await NoteStore.writeNote(
+        bubbleId: bubbleId,
+        noteId: noteId,
+        manifest: {
+          'title': newTitle,
+          'filename': serverFilename,
+          'analyse_note': full['analyse_note'] != false,
+        },
+        pages: pages,
+      );
+      await NoteStore.markDirty(bubbleId, noteId);
+
+      // 2) Push (or queue if offline). Same pages, new title.
+      final pushed = await SyncService.queueSave(
+        bubbleId: bubbleId,
+        noteId: noteId,
+        title: newTitle,
+        pages: pages,
+        filename: serverFilename,
+        analyseNote: full['analyse_note'] != false,
+      );
+
+      await loadNotes(bubbleId);
+      _loadSyncIndicator();
+
+      if (mounted && pushed == null) {
+        // Push failed or was queued. If you're online this means the daemon
+        // rejected /update — check the daemon logs for the error.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Renamed locally — waiting to sync.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to rename: $e')));
+      }
+    }
   }
 
   Future<void> _loadAnalysisStatus(String noteId, String filename) async {
@@ -639,7 +753,8 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
   }
 
   // -----------------------
-  //  Rename a note
+  //  Rename a note (legacy filename rename — no longer wired to the UI;
+  //  title renames go through _promptRename/_applyRename above)
   // -----------------------
   Future<void> renameNote(
     String bubbleId,
@@ -775,6 +890,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
                             if (note.isNotEmpty) _openNote(note);
                           },
                           onDelete: () => _confirmDelete(data),
+                          onRename: () => _promptRename(data),
                         );
                       },
                     ),
@@ -846,7 +962,7 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
           IconButton(
             icon: const Icon(Icons.add_rounded),
             tooltip: "Add note",
-            onPressed: () {},
+            onPressed: () => addNote(),
           ),
           IconButton(
             icon: const Icon(Icons.filter),
@@ -938,6 +1054,64 @@ class _DStudyBubblePageState extends State<DStudyBubblePage> {
     final gaps = data.gapCount;
     if (gaps != null && gaps > 3) return context.cerebrum.brand.accent;
     return context.cerebrum.status.neutralSoft;
+  }
+}
+
+/// Rename dialog. Owns its [TextEditingController] so it is disposed only when
+/// the dialog route is actually removed from the tree — disposing it right
+/// after `showDialog` returns crashes during the exit animation.
+class _RenameDialog extends StatefulWidget {
+  final String initialTitle;
+
+  const _RenameDialog({required this.initialTitle});
+
+  @override
+  State<_RenameDialog> createState() => _RenameDialogState();
+}
+
+class _RenameDialogState extends State<_RenameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialTitle);
+    // Select everything so typing replaces the old title.
+    _controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: widget.initialTitle.length,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    Navigator.of(context).pop(value.isEmpty ? null : value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename note'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: 'Note title'),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(onPressed: _submit, child: const Text('Rename')),
+      ],
+    );
   }
 }
 

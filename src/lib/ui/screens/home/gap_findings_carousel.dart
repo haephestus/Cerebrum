@@ -238,7 +238,15 @@ class _BubbleFindingsPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
+              // Both children FLEXIBLE. The count line used to be an inflexible
+              // child: sized to natural width FIRST, it overflowed the Row by
+              // whatever amount it was wider than the page (8px+) instead of
+              // ellipsizing — an Expanded sibling only protects the name.
+              // Weighted 3:1 so the title keeps most of the width and
+              // ellipsizes last; both text styles ellipsize within their flex
+              // slot, so no content is ever clipped, at any page width.
               Expanded(
+                flex: 3,
                 child: Text(
                   summary.bubbleName,
                   overflow: TextOverflow.ellipsis,
@@ -249,11 +257,15 @@ class _BubbleFindingsPage extends StatelessWidget {
                 ),
               ),
               if (summary.countLine.isNotEmpty)
-                Text(
-                  summary.countLine,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: context.cerebrum.text.muted,
+                Flexible(
+                  flex: 1,
+                  child: Text(
+                    summary.countLine,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.cerebrum.text.muted,
+                    ),
                   ),
                 ),
             ],

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:cerebrum/api/api_exception.dart';
 import 'package:cerebrum/api/learning_center_api.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
 import 'package:cerebrum/services/id.dart';
@@ -107,8 +108,13 @@ class EngramSyncService {
 
   // -- internals ---------------------------------------------------------
 
-  /// Move one attempt forward one step. Returns false only on a network failure
-  /// (so the caller stops draining); a not-yet-ready grade is NOT a failure.
+  /// Move one attempt forward one step. Returns false only when the failure is
+  /// worth RETRYING (offline / hub down / 5xx / 408 / 429 — the caller stops
+  /// draining); a not-yet-ready grade is NOT a failure, and a permanent
+  /// server-side rejection (other 4xx — unknown engram, rejected payload) is
+  /// also not a failure: the attempt is marked [failed] with the reason and
+  /// draining continues past it. Retrying a permanent rejection can never
+  /// succeed — before [ApiException] it just re-failed every 20s forever.
   static Future<bool> _advance(EngramAttempt a) async {
     try {
       if (a.isQueued) {
@@ -145,6 +151,33 @@ class EngramSyncService {
       }
 
       return true;
+    } on ApiException catch (e) {
+      if (!e.isPermanent) {
+        // Transient (408/429/5xx reachable-but-unhappy, connection errors
+        // surface through the generic catch below) — retry on the next drain.
+        debugPrint(
+          '[EngramSync] attempt ${a.attemptId} (${a.type}) deferred: $e',
+        );
+        return false;
+      }
+      // Permanent rejection — the daemon answered and means it. Mark terminal
+      // so the 20s auto-drain stops hammering a guaranteed 4xx and the user
+      // can see WHY instead of a silently stuck answer.
+      debugPrint(
+        '[EngramSync] attempt ${a.attemptId} (${a.type}) rejected: $e',
+      );
+      final updated = await EngramAttemptStore.update(a.attemptId, (x) {
+        x.status = 'failed';
+        x.error = e.message;
+      });
+      if (updated != null) {
+        await Notifications.notify(
+          title: 'Answer not submitted',
+          body: 'Your ${_label(updated.type)} answer was rejected by the server.',
+          payload: 'engram:${updated.engramId}',
+        );
+      }
+      return true; // not a connectivity failure — keep draining the rest
     } catch (e) {
       debugPrint(
         '[EngramSync] attempt ${a.attemptId} (${a.type}) deferred: $e',

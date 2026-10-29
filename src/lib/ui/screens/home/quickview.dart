@@ -1,7 +1,9 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:cerebrum/ui/screens/readings/reader.dart';
 import 'package:cerebrum/ui/themes/theme_access.dart';
-import 'dart:io';
-import 'package:cerebrum/api/knowledgebase_api.dart';
+import 'package:cerebrum/api/suggested_reading_api.dart';
+import 'package:http/http.dart' as http;
 import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/services/storage_paths.dart';
 import 'package:cerebrum/ui/screens/editor/editor_scaffold.dart';
@@ -197,32 +199,78 @@ class _QuickviewState extends State<Quickview> with WidgetsBindingObserver {
       return;
     }
 
-    // 3. Citation text like "CLRS": try to match an uploaded file by name
-    try {
-      final files = await KnowledgebaseApi.showFiles();
-      final needle = link.toLowerCase();
-      final match = files.cast<Map<String, dynamic>?>().firstWhere(
-        (f) => (f?['original_name']?.toString().toLowerCase() ?? '').contains(
-          needle,
-        ),
-        orElse: () => null,
-      );
-      final fingerprint = match?['file_fingerprint']?.toString();
-      if (fingerprint != null && fingerprint.isNotEmpty) {
-        _openReader(fingerprint);
-        return;
-      }
-    } catch (e) {
-      debugPrint('Reading lookup failed: $e');
+    // 3. Citation text like "CLRS": resolve through the daemon's
+    //    suggested-reading surface. It searches the knowledge base BY
+    //    CONTENT (embedding similarity over the note's weak areas), so the
+    //    match is the actual document — not a filename guess — and it
+    //    carries the fingerprint plus the best-hit PDF page to open at.
+    final bubbleId = suggestion.evidence.bubbleId;
+    final noteId = suggestion.evidence.noteId;
+
+    if (bubbleId == null || bubbleId.isEmpty) {
+      _snack('"$link" can\'t be resolved — the reading has no source note.');
+      return;
     }
 
-    _snack('"$link" isn\'t in your knowledge base');
+    try {
+      final readings = await SuggestedReadingApi.forNote(
+        bubbleId: bubbleId,
+        noteId: noteId,
+      );
+
+      SuggestedReading? match;
+      for (final r in readings) {
+        if (r.inKb && (r.fileFingerprint?.isNotEmpty ?? false)) {
+          match = r;
+          break;
+        }
+      }
+
+      final fingerprint = match?.fileFingerprint;
+      if (fingerprint != null) {
+        _openReader(fingerprint, page: match?.page);
+        return;
+      }
+
+      // Daemon answered and the KB holds no document addressing this
+      // note's material: the link is a real bibliographic citation, not a
+      // knowledge-base file. Say so plainly.
+      _snack('"$link" isn\'t in your knowledge base');
+    } on SocketException catch (e) {
+      // Daemon not running / wrong port / network unreachable. Do NOT report
+      // this as a missing file — the user was misled by that mask.
+      debugPrint('Reading lookup failed (daemon unreachable): $e');
+      _snack(
+        'Can\'t reach the knowledge-base daemon. Start it, then tap '
+        '"Open reading" again.',
+      );
+    } on http.ClientException catch (e) {
+      debugPrint('Reading lookup failed (daemon unreachable): $e');
+      _snack(
+        'Can\'t reach the knowledge-base daemon. Start it, then tap '
+        '"Open reading" again.',
+      );
+    } on TimeoutException catch (e) {
+      debugPrint('Reading lookup timed out: $e');
+      _snack(
+        'The knowledge-base daemon timed out. Start it, then tap '
+        '"Open reading" again.',
+      );
+    } catch (e) {
+      debugPrint('Reading lookup failed: $e');
+      _snack(
+        'Couldn\'t check your knowledge base. The daemon may be offline or '
+        'returned an error.',
+      );
+    }
   }
 
-  void _openReader(String fingerprint) {
+  void _openReader(String fingerprint, {int? page}) {
     if (!mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => Reader(fileFingerprint: fingerprint)),
+      MaterialPageRoute(
+        builder: (_) => Reader(fileFingerprint: fingerprint, page: page),
+      ),
     );
   }
 

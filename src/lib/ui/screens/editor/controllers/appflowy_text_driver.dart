@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter/widgets.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/editor_commands.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/greek_letters.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/text_editing_driver.dart';
 // NEW: the proper code block builder (syntax highlighting, language
@@ -13,10 +17,21 @@ import 'package:cerebrum/ui/screens/editor/controllers/text_editing_driver.dart'
 // to wherever you actually put the file.
 import 'package:cerebrum/ui/screens/editor/blocks/code_block/code_block_component.dart';
 import 'package:cerebrum/ui/screens/editor/blocks/ai_block/ai_block_component.dart';
+import 'package:cerebrum/ui/screens/editor/blocks/equation/equation_block_component.dart';
 // The table fork: registered against the stock 'table' type to REPLACE the
 // package builder. It caps table growth against the sheet and reports enough
 // geometry for the row-level overflow split (see blocks/table/README.md).
 import 'package:cerebrum/ui/screens/editor/blocks/table/table_block_component.dart';
+// Canonical document-space constants: the editor is laid out at a FIXED size
+// (inside a PageSurface page) and view zoom is applied around it, so these
+// values are constants — no environment-derived scaling may re-enter here.
+import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/paged_list_icons.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/paged_slash_menu.dart';
+// Fork of the stock paragraph block + AppFlowyRichText. Fixes the empty-delta
+// caret impostor (14pt unstyled root → 16.3px caret on empty rows). The fork
+// is described at the adjustTextSpan override in paged_fork/paged_rich_text.dart.
+import 'package:cerebrum/ui/screens/editor/widgets/paged_fork/paged_paragraph_block_component.dart';
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,
@@ -28,7 +43,24 @@ class AppFlowyTextDriver extends ChangeNotifier
     int? initialCaretBlockIndex,
     int? initialCaretOffset,
     bool seedCaret = true,
-  }) {
+
+    /// True ONLY for the page designated to own the caret right now (the
+    /// auto-focused opening page). With this false the seeded caret is held
+    /// as a pending selection and applied on focus gain — an unfocused,
+    /// never-touched page must not render a caret (phantom caret fix).
+    this.ownsCaretSeed = false,
+
+    /// Injected shared vim controller (see PagedNoteController): vim is a
+    /// TEXT MODALITY, not a page property — "prev page INSERT, next NORMAL"
+    /// was per-page vim instances diverging. Null builds a private one so
+    /// standalone driver instantiations (tests, engine swaps) keep working.
+    VimModeController? injectedVim,
+  }) : vimMode = injectedVim ?? VimModeController(),
+       // Only a controller THIS driver created may be disposed by it. An
+       // injected one is owned by PagedNoteController and shared by every
+       // page; disposing it from a page's dispose() killed it on the first
+       // page rebuild ("VimModeController was used after being disposed").
+       _ownsVimMode = injectedVim == null {
     _editorState = _buildEditorState(
       initialDocumentJson,
       initialCaretBlockIndex,
@@ -50,6 +82,8 @@ class AppFlowyTextDriver extends ChangeNotifier
     _transactionSub = _editorState.transactionStream.listen(
       (_) => notifyListeners(),
     );
+    // [caret-debug] TEMP — print caret rect heights per selection change.
+    _editorState.selectionNotifier.addListener(_debugCaretMetrics);
     // Narrow highlight-clear listener: when this page's vim mode LEAVES
     // analysis-review mode, drop the chunk highlight so it can't linger on
     // the document after you Esc back to normal/insert. This is deliberately
@@ -62,11 +96,21 @@ class AppFlowyTextDriver extends ChangeNotifier
     // (KeyboardServiceWidget._onFocusChanged) and never restores it on gain,
     // so a focused-but-selectionless editor looks exactly like the "page lost
     // focus" bug: no caret, and every vim motion guards on selection == null.
-    // Registered BEFORE AppFlowy's own focus listener (which mounts later with
-    // the editor widget): on a gain my listener runs first and re-seeds the
-    // caret while the selection is still null; on a loss I do nothing and let
-    // AppFlowy's nulling stand (it only matters for the non-active page).
+    // Focus listener: on GAIN revive/restore the caret and publish the gain to
+    // the paged controller (active-page bookkeeping follows the keyboard); on
+    // LOSS remember then clear the visual caret so an unfocused page never
+    // keeps one. See _onFocusNodeChanged for why AppFlowy's own keyboard
+    // service also nulls on loss and why drawing-mode flips stay exempt.
     editorFocusNode.addListener(_onFocusNodeChanged);
+    // PHANTOM CARET: a page that is seeded with a caret but NOT designated to
+    // own it keeps that selection until focus crosses it some day, and an
+    // unfocused editor still RENDERS its selection as a caret — which is how
+    // two pages ended up showing two carets that "competed for focus". Caret
+    // seeding is withdrawn into a pending selection applied on focus gain.
+    if (seedCaret && !ownsCaretSeed) {
+      _pendingCaret = _editorState.selection;
+      _editorState.selection = null;
+    }
     // NOTE: deliberately NOT `vimMode.addListener(notifyListeners)` here.
     // EditorSurface's mode badge already listens to `vimMode` directly
     // (its own narrowly-scoped AnimatedBuilder), so forwarding vimMode
@@ -89,6 +133,10 @@ class AppFlowyTextDriver extends ChangeNotifier
   late final StreamSubscription<dynamic> _transactionSub;
   late bool _wasInAnalysis = false;
 
+  /// Whether this driver created [vimMode] itself (and therefore must dispose
+  /// it). False when the controller was injected and is shared across pages.
+  final bool _ownsVimMode;
+
   /// Keyboard focus for this page's editor, owned by the DRIVER (not the
   /// package): AppFlowy 6.x only focuses its keyboard-service node on a tap,
   /// and its `autoFocus:` flag merely SETS A SELECTION — it never requests
@@ -99,6 +147,35 @@ class AppFlowyTextDriver extends ChangeNotifier
   final FocusNode editorFocusNode = FocusNode(
     debugLabel: 'cerebrum-page-editor',
   );
+
+  /// True when this page is designated to apply its seed caret immediately
+  /// (the auto-focused opening page); all other pages pend it for focus gain.
+  final bool ownsCaretSeed;
+
+  /// The seeded caret held back by the phantom-caret fix (see the constructor)
+  /// and applied the moment this editor acquires keyboard focus. Null once
+  /// applied/superseded; paths are validated before applying because reflows
+  /// may have moved blocks after seeding.
+  Selection? _pendingCaret;
+
+  /// The last selection this editor held before it lost focus. AppFlowy nulls
+  /// the selection on focus loss and never restores it, so without this the
+  /// only thing left on regain was [_reviveDefaultCaret] (first block) — the
+  /// "caret jumps to the top of the page after the cursor leaves the screen"
+  /// bug. On regain this is fed through [_applyPendingCaret], which validates
+  /// the path and clamps the offset against the current document.
+  Selection? _lastKnownCaret;
+
+  /// Notified when this page's editor ACQUIRES keyboard focus — the paged
+  /// controller uses it to keep active-page bookkeeping in sync with the
+  /// KEYBOARD rather than with recent pointer-downs. Without it, focus moving
+  /// to a non-active page (AppFlowy focuses its editor on tap, reflows hand
+  /// focus off, back-forward flows) left activeController stale, so the
+  /// scaffold's mode badge/toggles were bound to the previous page — and vim
+  /// keys entered through that page never showed up anywhere. Callers may
+  /// already have made the index change; the controller's setActive is
+  /// guarded/no-op on no change.
+  void Function()? onFocusGained;
 
   bool _disposed = false;
 
@@ -115,10 +192,11 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// flips the vim mode with no analysis to navigate.
   VoidCallback? onEnterAnalysisMode;
 
-  /// Called when the user presses 'o' in ANALYSIS mode to toggle the full
-  /// analysis panel (the overview tab) without switching vim modes. The
-  /// scaffold wires this to open/close the panel (lazy-loading the analysis
-  /// on first open). Null until wired — the key is a no-op then.
+  /// Called when the user presses 'q' in NORMAL or ANALYSIS mode to toggle
+  /// the full analysis panel (the overview tab) without switching vim
+  /// modes. The scaffold wires this to open/close the panel (lazy-loading
+  /// the analysis on first open). Null until wired — the key is a no-op
+  /// then. (Rebound from 'o', which is vim's open-line key now.)
   VoidCallback? onToggleAnalysisPanel;
 
   /// Called when Backspace is pressed with the caret at the VERY START of this
@@ -219,9 +297,12 @@ class AppFlowyTextDriver extends ChangeNotifier
   // The "/" slash menu is not a separate constructor param on
   // AppFlowyEditor — it's just another CharacterShortcutEvent
   // (the built-in `slashCommand`, triggered by typing '/'). To add our
-  // own items we build a replacement via `customSlashCommand(...)` and
-  // swap it in for the default one via `removeWhere`, same pattern
-  // AppFlowy's own code-block extension example uses.
+  // own items we build a replacement via `pagedSlashCommand(...)` — a
+  // fork of the stock `customSlashCommand` whose menu positions itself in
+  // TRUE screen px (the stock overlay math assumes the editor box is at
+  // screen origin and its size doc-px == screen-px — both false under
+  // PageSurface's fitted transform) — and swap it in for the default one
+  // by filtering the stock list (non-mutating; see _characterShortcutEvents).
   //
   // standardSelectionMenuItems only exposes Heading 1-3 — the heading
   // block itself supports any level via its `HeadingBlockKeys.level`
@@ -242,17 +323,99 @@ class AppFlowyTextDriver extends ChangeNotifier
   // rendering to `ParagraphBlockComponentBuilder` underneath — so all
   // the "why this is safe" reasoning from the old comment still holds,
   // this is strictly additive on top of it.
-  late final Map<String, BlockComponentBuilder> _blockComponentBuilders = {
-    ...standardBlockComponentBuilderMap,
-    kCodeBlockType: CodeBlockComponentBuilder(),
-    // SCAFFOLD: inline AI-feedback block (read-only, generation is a TODO).
-    kAiBlockType: AiBlockComponentBuilder(),
-    // Table fork — overrides the stock 'table' entry from the spread above.
-    // Guards in the fork cap table growth against the sheet, which the stock
-    // builder can't do (it creates the same default-width cell regardless of
-    // page size).
-    'table': CerebrumTableBlockComponentBuilder(),
-  };
+  late final Map<String, BlockComponentBuilder> _blockComponentBuilders = () {
+    // Start from the stock paragraph builder and change ONLY its placeholder
+    // style, so every other piece of stock paragraph configuration survives.
+    // Rebuilding the config from scratch risked breaking the placeholder text.
+    final stockParagraph =
+        standardBlockComponentBuilderMap[ParagraphBlockKeys.type]
+            as ParagraphBlockComponentBuilder;
+
+    return <String, BlockComponentBuilder>{
+      ...standardBlockComponentBuilderMap,
+
+      // Heading sizes are body-RELATIVE, not the stock absolute 32/28/24/18pt
+      // (which at kBaseFontSize=8 renders H1 as a 4x billboard). The multiplier
+      // list is the single tuning knob — see page_space.dart. Weight stays bold
+      // to match the stock look. The configuration is preserved from the stock
+      // registration: without it the empty-heading placeholder ("Heading 1")
+      // regresses to a blank space, because the default placeholderText is ' '.
+      HeadingBlockKeys.type: HeadingBlockComponentBuilder(
+        configuration: standardBlockComponentConfiguration.copyWith(
+          placeholderText:
+              (node) => 'Heading ${node.attributes[HeadingBlockKeys.level]}',
+        ),
+        textStyleBuilder:
+            (level) => TextStyle(
+              fontSize: kHeadingFontSizeFor(level),
+              fontWeight: FontWeight.bold,
+            ),
+      ),
+
+      // PARAGRAPH — the placeholder style sizes the empty-line layout (a 24pt
+      // test grew both the placeholder and the empty line), so it is pinned to
+      // the body size and line height. Color is a fixed grey because this
+      // field has no BuildContext to read the theme from.
+      // Forked builder (was: stock ParagraphBlockComponentBuilder): the stock
+      // AppFlowyRichText leaves the empty-delta root span unstyled → 14pt
+      // impostor caret at rest. Same configuration, fixed span builder.
+      ParagraphBlockKeys.type: PagedParagraphBlockComponentBuilder(
+        configuration: stockParagraph.configuration.copyWith(
+          placeholderText:
+              (_) => 'Enter a / to insert a block, or start typing',
+          placeholderTextStyle:
+              (node, {textSpan}) => TextStyle(
+                fontSize: kBaseFontSize,
+                height: kLineHeight,
+                color: const Color(0xFF8A8A8A),
+              ),
+        ),
+      ),
+
+      // LISTS — the stock entries from the spread above are REPLACED here only
+      // to inject body-relative icon columns (PagedListIcons): the stock icon
+      // builders hardcode a 26x22dp column for a 16pt body, which at the small
+      // canonical body renders ~2x the text row height (the "gap under list
+      // items that lineHeight didn't fix" — that gap is the icon column, outside
+      // the rich text). Configurations/payload behavior kept identical to stock.
+      TodoListBlockKeys.type: TodoListBlockComponentBuilder(
+        configuration: standardBlockComponentConfiguration.copyWith(
+          placeholderText: (_) => AppFlowyEditorL10n.current.toDoPlaceholder,
+        ),
+        toggleChildrenTriggers: [
+          LogicalKeyboardKey.shift,
+          LogicalKeyboardKey.shiftLeft,
+          LogicalKeyboardKey.shiftRight,
+        ],
+        iconBuilder: PagedListIcons.todo,
+      ),
+      BulletedListBlockKeys.type: BulletedListBlockComponentBuilder(
+        configuration: standardBlockComponentConfiguration.copyWith(
+          placeholderText:
+              (_) => AppFlowyEditorL10n.current.listItemPlaceholder,
+        ),
+        iconBuilder: PagedListIcons.bulleted,
+      ),
+      NumberedListBlockKeys.type: NumberedListBlockComponentBuilder(
+        configuration: standardBlockComponentConfiguration.copyWith(
+          placeholderText:
+              (_) => AppFlowyEditorL10n.current.listItemPlaceholder,
+        ),
+        iconBuilder: PagedListIcons.numbered,
+      ),
+
+      kCodeBlockType: CodeBlockComponentBuilder(),
+      // TeX equation block (flutter_math_fork rendering; non-text node).
+      kEquationBlockType: EquationBlockComponentBuilder(),
+      // SCAFFOLD: inline AI-feedback block (read-only, generation is a TODO).
+      kAiBlockType: AiBlockComponentBuilder(),
+      // Table fork — overrides the stock 'table' entry from the spread above.
+      // Guards in the fork cap table growth against the sheet, which the stock
+      // builder can't do (it creates the same default-width cell regardless of
+      // page size).
+      'table': CerebrumTableBlockComponentBuilder(),
+    };
+  }();
 
   late final List<SelectionMenuItem> _slashMenuItems = [
     ...standardSelectionMenuItems,
@@ -260,6 +423,7 @@ class AppFlowyTextDriver extends ChangeNotifier
     _headingMenuItem(5),
     _headingMenuItem(6),
     _codeBlockMenuItem(),
+    _equationMenuItem(),
     _imageMenuItem(),
     _aiBlockMenuItem(),
   ];
@@ -327,9 +491,17 @@ class AppFlowyTextDriver extends ChangeNotifier
       onEnterAnalysisMode: onEnterAnalysisMode,
       onToggleAnalysisPanel: onToggleAnalysisPanel,
     ),
-    customSlashCommand(_slashMenuItems),
-    ...standardCharacterShortcutEvents
-      ..removeWhere((element) => element == slashCommand),
+    // Greek `\name` + space substitution. MUST stay after the vim list and
+    // before the slash menu / standard events: character shortcuts dispatch
+    // in order and stop at the first `true`, and this event must be able to
+    // fall through (return false) to the standard markdown-on-space
+    // conversions whenever the caret isn't directly after `\name` — see
+    // GreekLetterShortcuts' header comment.
+    ...GreekLetterShortcuts.events,
+    pagedSlashCommand(_slashMenuItems),
+    // Non-mutating filter: the old `..removeWhere(...)` edited the package's
+    // GLOBAL standardCharacterShortcutEvents list in place.
+    ...standardCharacterShortcutEvents.where((e) => e != slashCommand),
   ];
 
   static SelectionMenuItem _headingMenuItem(int level) {
@@ -433,8 +605,61 @@ class AppFlowyTextDriver extends ChangeNotifier
     );
   }
 
+  /// "/equation" (also "/latex", "/math") → opens the LaTeX dialog with a
+  /// live preview and drops an equation_block where the caret is. Named
+  /// static like the other menu items; the dialog itself lives in
+  /// equation_block_component.dart so the block's own edit button reuses
+  /// the exact same UI.
+  ///
+  /// Convenience: if you type `\frac` and hit enter from the slash menu,
+  /// the inline quick-insertion parity with the ai block applies — a
+  /// paragraph with content gets the block APPENDED after it, an empty
+  /// paragraph is REPLACED, so formulae never eat surrounding prose.
+  static SelectionMenuItem _equationMenuItem() {
+    return SelectionMenuItem(
+      getName: () => 'LaTeX equation',
+      icon:
+          (editorState, isSelected, style) => SelectionMenuIconWidget(
+            icon: Icons.functions,
+            isSelected: isSelected,
+            style: style,
+          ),
+      keywords: ['equation', 'latex', 'math', 'formula', 'tex'],
+      handler: (editorState, menuService, context) async {
+        final source = await showEquationDialog(context);
+        if (source == null || source.isEmpty) return;
+        if (!context.mounted) return;
+
+        final selection = editorState.selection;
+        if (selection == null || !selection.isCollapsed) return;
+        final path = selection.start.path;
+        final node = editorState.getNodeAtPath(path);
+        if (node == null) return;
+
+        // Same replacement/append split as the ai block: a paragraph with
+        // text becomes the equation's parent header line, an empty
+        // paragraph is subsumed by the block. NOTE: no explicit
+        // afterSelection — the equation node is a non-text container, so
+        // there's no caret to reassert on it (AppFlowy keeps the caret
+        // where it can — same as the ai block's insertion).
+        final transaction = editorState.transaction;
+        if ((node.delta?.toPlainText().trim().isNotEmpty) ?? false) {
+          transaction.insertNode(path.next, equationBlockNode(latex: source));
+        } else {
+          transaction
+            ..insertNode(path, equationBlockNode(latex: source))
+            ..deleteNode(node);
+        }
+        await editorState.apply(transaction);
+      },
+    );
+  }
+
   @override
-  final VimModeController vimMode = VimModeController();
+  /// This page's vim controller — SHARED across every page of one note when
+  /// injected by PagedNoteController (see the constructor), so one mode exists
+  /// for the document rather than one per page.
+  final VimModeController vimMode;
 
   /// Exposed for anything AppFlowy-specific that needs it (there isn't
   /// much reason to reach for this outside of this file/tests).
@@ -578,19 +803,85 @@ class AppFlowyTextDriver extends ChangeNotifier
     }
   }
 
-  /// Fired when this page's editor focus node gains or loses focus. Revives
-  /// the caret on GAIN if AppFlowy nulled it during the unfocused spell (see
-  /// the registration comment in the constructor for why AppFlowy is the one
-  /// doing the nulling). Deliberately does nothing on LOSS: AppFlowy's own
-  /// listener clears the selection for the page that just went inactive, and
-  /// the page that GAINED focus is always re-armed by the caller (the
-  /// analysis chunk bar, the vim flip, the page tap) or by this revive.
+  /// Fired when this page's editor focus node gains or loses focus.
+  ///
+  /// On GAIN: revive the caret if AppFlowy nulled it during the unfocused
+  /// spell (see the registration comment in the constructor for why AppFlowy
+  /// is the one doing the nulling), restore the pending seed caret — or, failing
+  /// that, the LAST KNOWN caret from before focus was lost — and publish the
+  /// gain so the paged controller can re-point active-bookkeeping at THIS page
+  /// (the keyboard owner is the source of truth for the scaffold's vim
+  /// badge/toggles, not pointer downs).
+  ///
+  /// On LOSS: remember the selection, then clear the visual caret so an
+  /// unfocused page never keeps one — AppFlowy's own keyboard service clears
+  /// its side, and this covers the states where that listener isn't mounted
+  /// yet (a remounted page whose selection survives in the cached
+  /// EditorState). Without clearing, lost-focus pages kept rendering the stale
+  /// caret of a previous spell — the "two carets competing" state the
+  /// phantom-caret seeding produced.
   void _onFocusNodeChanged() {
-    if (!editorFocusNode.hasFocus) return; // revive only on gain
-    if (!vimMode.isEnabled) return; // drawing mode: no text caret to revive
     if (_disposed) return;
-    final selection = editorState.selection;
-    if (selection != null) return; // there's already a live caret
+    // Drawing mode owns the pointer, not the text caret: don't revive or
+    // publish caret semantics from focus flips while drawing is on.
+    if (!vimMode.isEnabled) return;
+    // A slash menu is intentionally stealing keyboard focus from this page
+    // (keyboardService.disable() unfocuses the editor node). The menu needs
+    // editorState.selection INTACT — every stock menu item handler's first
+    // line is `if (selection == null || !isCollapsed) return;` — so the
+    // loss-side caret clearing below would silently break Enter-to-insert.
+    // Skip the whole loss branch while the menu owns the keyboard.
+    if (isPagedSlashMenuOpen) return;
+    if (!editorFocusNode.hasFocus) {
+      final selection = editorState.selection;
+      if (selection != null) {
+        // Remember where the caret was so regaining focus resumes HERE
+        // instead of jumping to the first block.
+        _lastKnownCaret = selection;
+        editorState.updateSelectionWithReason(
+          null,
+          reason: SelectionUpdateReason.uiEvent,
+        );
+      }
+      return;
+    }
+    // GAIN, in priority order: pending seed first (it knows the exact caret
+    // the page was seeded with), then the last known caret from the previous
+    // focus spell, then the standard end-of-line revive on the first block.
+    if (editorState.selection == null) {
+      _pendingCaret ??= _lastKnownCaret;
+      _applyPendingCaret();
+    }
+    if (editorState.selection == null) {
+      _reviveDefaultCaret();
+    }
+    onFocusGained?.call();
+  }
+
+  /// Restore the pending seed caret, only if its path still resolves in the
+  /// current document (a reflow may have moved/merged the seeded block).
+  void _applyPendingCaret() {
+    final pending = _pendingCaret;
+    if (pending == null) return;
+    _pendingCaret = null;
+    // Walk to the path's node; a reflow could have made it unreachable.
+    Node node = editorState.document.root;
+    for (final index in pending.start.path) {
+      if (node.children.length <= index) return; // stale: let the default run
+      node = node.children[index];
+    }
+    final length = node.delta?.length ?? 0;
+    final offset = pending.start.offset.clamp(0, length).toInt();
+    editorState.updateSelectionWithReason(
+      Selection.collapsed(Position(path: node.path, offset: offset)),
+      reason: SelectionUpdateReason.uiEvent,
+    );
+  }
+
+  /// The pre-existing revive: end-of-line caret on the document's first block,
+  /// used when there's no pending seed or last-known caret (focus regained on
+  /// a page that was never interacted with).
+  void _reviveDefaultCaret() {
     final children = editorState.document.root.children;
     if (children.isEmpty) return;
     final target = children.first;
@@ -612,6 +903,12 @@ class AppFlowyTextDriver extends ChangeNotifier
     if (_disposed || attempts > 6) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_disposed || editorFocusNode.hasFocus) return;
+      // An open slash menu owns the keyboard: the menu's own Focus took
+      // primary focus the frame after mounting, and a retry from an earlier
+      // vim flip / focus change would steal it back — Enter then dies in the
+      // (disabled) editor keyboard service. Drop the retry silently; the
+      // menu hands focus back on dismissal.
+      if (isPagedSlashMenuOpen) return;
       editorFocusNode.requestFocus();
       if (!editorFocusNode.hasFocus) {
         requestEditorFocus(attempts: attempts + 1);
@@ -639,64 +936,89 @@ class AppFlowyTextDriver extends ChangeNotifier
 
   @override
   Widget buildEditor(BuildContext context) {
-    return AppFlowyEditor(
-      editorState: _editorState,
-      // Embed as a non-scrolling Column so this editor coexists with the
-      // paged ListView (see _scrollController). Without it, nesting the
-      // editor's own scroll view inside the page list throws the
-      // "Provider<EditorScrollController>" error on multi-page notes.
-      editorScrollController: _scrollController,
-      // Never let a page's editor drive scrolling to chase the caret. Each page
-      // is a bounded sheet inside the outer page ListView; auto-scroll-into-view
-      // would scroll that OUTER list — which showed up as the view lurching to
-      // the previous page after a backspace-merge, and "jumping to a new page"
-      // when Enter pushed the caret past the sheet. The user scrolls the page
-      // list themselves. (Gates desktop_scroll_service's scrollTo.)
-      disableAutoScroll: true,
-      disableScrollService: false,
+    // All sizes are CANONICAL document units: pages host this editor inside a
+    // FittedBox'd fixed-size document space (see page_surface.dart /
+    // page_space.dart), and view zoom scales paint — never this layout. A
+    // page's editor is identical on a 4K monitor and a laptop screen; the
+    // FittedBox absorbs the difference.
+    //
+    // DefaultTextStyle clamp: the caret's `max(main, placeholder)` branch
+    // measures paragraphs from Frame N while styles resolve from Frame N+1.
+    // On the empty→first-character transition the main RichText briefly has
+    // a ROOT span with NO fontSize (verified via the [para] dump:
+    // "[h=16.0 fs=null/null]") — an unstyled span falls back to the ambient
+    // DefaultTextStyle (Material's bodyMedium = 14pt), so the caret metric
+    // becomes 14pt Roboto ≈ 16.3px ≈ 2× the 8pt row, and the package's
+    // BlockSelectionArea paint loop can draw that inflated rect for a beat.
+    // Clamping the inherited default to OUR body metrics makes the transient
+    // resolve to 10px (fs 8 × kLineHeight 1.25) — identical to the settled
+    // row. Only fontSize/height are set: color/family keep inheriting the
+    // ambient theme exactly as before.
+    return DefaultTextStyle(
+      style: const TextStyle(fontSize: kBaseFontSize, height: kLineHeight),
+      child: AppFlowyEditor(
+        editorState: _editorState,
+        // Embed as a non-scrolling Column so this editor coexists with the
+        // paged ListView (see _scrollController). Without it, nesting the
+        // editor's own scroll view inside the page list throws the
+        // "Provider<EditorScrollController>" error on multi-page notes.
+        editorScrollController: _scrollController,
+        // Never let a page's editor drive scrolling to chase the caret. Each page
+        // is a bounded sheet inside the outer page ListView; auto-scroll-into-view
+        // would scroll that OUTER list — which showed up as the view lurching to
+        // the previous page after a backspace-merge, and "jumping to a new page"
+        // when Enter pushed the caret past the sheet. The user scrolls the page
+        // list themselves. (Gates desktop_scroll_service's scrollTo.)
+        disableAutoScroll: true,
+        disableScrollService: false,
 
-      // Hand the keyboard service OUR focus node (see [editorFocusNode]) —
-      // this is the only handle through which [requestEditorFocus] can work.
-      focusNode: editorFocusNode,
+        // Hand the keyboard service OUR focus node (see [editorFocusNode]) —
+        // this is the only handle through which [requestEditorFocus] can work.
+        focusNode: editorFocusNode,
 
-      // Always false. AppFlowy 6.x's autoFocus does NOT focus: it merely
-      // overwrites the selection with `Selection(path[0])` on mount — which
-      // would clobber the caret the driver seeded (end-of-last-line, or the
-      // merge/overflow seam). Real focus is [requestEditorFocus], called by
-      // the controller on exactly the page that owns the caret.
-      autoFocus: false,
-      // Carries the standard block builders plus the 'code_block' type
-      // added above (registered against CodeBlockComponentBuilder with
-      // syntax highlighting). Cached field — see _blockComponentBuilders.
-      blockComponentBuilders: _blockComponentBuilders,
-      // Custom shortcuts go FIRST: AppFlowyEditor stops at the first
-      // matching shortcut whose handler returns `handled`. The standard
-      // library ships its own Escape binding (used to collapse
-      // selection / dismiss popups) — with standard shortcuts checked
-      // first, that binding swallowed Escape before
-      // `mode.enterNormalMode()` ever ran, so Escape looked like a
-      // no-op instead of returning to normal mode. Same reasoning
-      // applies to characterShortcutEvents.
-      //
-      // These are cached fields (see above), NOT rebuilt here, so the
-      // same List/object identity survives every rebuild.
-      commandShortcutEvents: _commandShortcutEvents,
-      // Carries the customized "/" slash menu (standard items + H4-H6 +
-      // Code Block) via customSlashCommand — see
-      // _characterShortcutEvents above. There is no separate
-      // `selectionMenuItems` constructor param.
-      characterShortcutEvents: _characterShortcutEvents,
-      // ANALYSIS MODE: wraps every rendered block in a tap-interceptor that
-      // selects the WHOLE block (cursor-less highlight) instead of letting the
-      // editor drop an editable caret. Passes through untouched in normal and
-      // insert modes — see [_buildBlockWrapper].
-      blockWrapper: _buildBlockWrapper,
-      editorStyle: EditorStyle.desktop(
-        // or .mobile(), depending on target
-        textStyleConfiguration: TextStyleConfiguration(
-          text: TextStyle(
-            color: context.cerebrum.text.strong, // wire to your theme token
-            fontSize: 16,
+        // Always false. AppFlowy 6.x's autoFocus does NOT focus: it merely
+        // overwrites the selection with `Selection(path[0])` on mount — which
+        // would clobber the caret the driver seeded (end-of-last-line, or the
+        // merge/overflow seam). Real focus is [requestEditorFocus], called by
+        // the controller on exactly the page that owns the caret.
+        autoFocus: false,
+        // Carries the standard block builders plus the 'code_block' type
+        // added above (registered against CodeBlockComponentBuilder with
+        // syntax highlighting). Cached field — see _blockComponentBuilders.
+        blockComponentBuilders: _blockComponentBuilders,
+        // Custom shortcuts go FIRST: AppFlowyEditor stops at the first
+        // matching shortcut whose handler returns `handled`. The standard
+        // library ships its own Escape binding (used to collapse
+        // selection / dismiss popups) — with standard shortcuts checked
+        // first, that binding swallowed Escape before
+        // `mode.enterNormalMode()` ever ran, so Escape looked like a
+        // no-op instead of returning to normal mode. Same reasoning
+        // applies to characterShortcutEvents.
+        //
+        // These are cached fields (see above), NOT rebuilt here, so the
+        // same List/object identity survives every rebuild.
+        commandShortcutEvents: _commandShortcutEvents,
+        // Carries the customized "/" slash menu (standard items + H4-H6 +
+        // Code Block) via pagedSlashCommand — the page-space-aware fork of
+        // customSlashCommand (see widgets/paged_slash_menu.dart). There is no
+        // separate `selectionMenuItems` constructor param.
+        characterShortcutEvents: _characterShortcutEvents,
+        // ANALYSIS MODE: wraps every rendered block in a tap-interceptor that
+        // selects the WHOLE block (cursor-less highlight) instead of letting the
+        // editor drop an editable caret. Passes through untouched in normal and
+        // insert modes — see [_buildBlockWrapper].
+        blockWrapper: _buildBlockWrapper,
+        editorStyle: EditorStyle.desktop(
+          //cursorColor
+          padding: EdgeInsets.symmetric(horizontal: kBaseHorizontalPadding),
+          textStyleConfiguration: TextStyleConfiguration(
+            text: TextStyle(
+              color: context.cerebrum.text.strong, // wire to your theme token
+              fontSize: kBaseFontSize,
+            ),
+            // Single knob for caret height AND row leading slack AND page
+            // density — see kLineHeight in page_space.dart.
+            lineHeight: kLineHeight,
           ),
         ),
       ),
@@ -709,11 +1031,33 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// detector, so its deeper tap recognizer wins the gesture arena and the
   /// editor's own tap-to-caret path never runs. In every other mode the block
   /// is returned untouched (zero behavior change for normal/insert editing).
+  ///
+  /// Also prepends a faint "H1"/"H2"/… gutter tag to every non-empty heading
+  /// block. The tag is pure chrome — it is NOT part of the node's delta and is
+  /// never persisted, selected, or copied. Empty headings are left alone so
+  /// the stock "Heading N" placeholder isn't shadowed by a redundant tag.
+  ///
+  /// Why the heading tag lives HERE (in blockWrapper) rather than in a forked
+  /// HeadingBlockComponentBuilder: the pinned appflowy_editor narrows
+  /// `BlockComponentBuilder.build` to return `BlockComponentWidget`, so a
+  /// subclass override can't return a plain `Row` without also subclassing
+  /// BlockComponentWidget — whose abstract getters/constructor shape vary
+  /// between 5.x and 6.x. `blockWrapper` is typed as
+  /// `Widget Function(BuildContext, {Node, Widget})` and accepts any Widget,
+  /// so it sidesteps the version-specific class entirely. See [_HeadingWithLevelTag].
   Widget _buildBlockWrapper(
     BuildContext context, {
     required Node node,
     required Widget child,
   }) {
+    if (node.type == HeadingBlockKeys.type) {
+      final isEmpty = node.delta?.isEmpty ?? true;
+      if (!isEmpty) {
+        final level =
+            (node.attributes[HeadingBlockKeys.level] as num?)?.toInt() ?? 1;
+        child = _HeadingWithLevelTag(level: level, child: child);
+      }
+    }
     return _AnalysisTapCapture(
       vimMode: vimMode,
       editorState: _editorState,
@@ -841,15 +1185,78 @@ class AppFlowyTextDriver extends ChangeNotifier
     }
   }
 
+  // [caret-debug] TEMP — caret rect heights on every selection change, plus
+  // (only when the caret height is anomalous, i.e. bigger than a body row)
+  // a ONE-LINE dump of every RenderParagraph under the selected node with
+  // its box height and span fontSize. debugPrint is throttled, so emitting
+  // one line per paragraph per selection change dropped the dump entirely —
+  // anomaly-gating + concatenation is what makes it survive.
+  void _debugCaretMetrics() {
+    if (_disposed) return;
+    final sel = _editorState.selection;
+    final node =
+        sel == null ? null : _editorState.getNodeAtPath(sel.start.path);
+    final rects = sel != null ? _editorState.selectionRects() : const <Rect>[];
+    final heights = rects
+        .map(
+          (r) => "${r.height.toStringAsFixed(1)}@${r.top.toStringAsFixed(1)}",
+        )
+        .join(" ");
+    debugPrint(
+      '[caret-debug] mode=${vimMode.isNormal
+          ? "normal"
+          : vimMode.isInsert
+          ? "insert"
+          : vimMode.isAnalysis
+          ? "analysis"
+          : "visual"} '
+      'path=${sel?.start.path} offset=${sel?.start.offset} '
+      'type=${node?.type} emptyDelta=${(node?.delta?.isEmpty ?? true)} '
+      'rects=$heights',
+    );
+    if (rects.isEmpty ||
+        (rects.every((r) => r.height <= 12) && node?.delta?.isEmpty != true)) {
+      return;
+    }
+    final el = node?.context;
+    if (el == null || !el.mounted) return;
+    final root = el.findRenderObject();
+    if (root == null) {
+      debugPrint('[para] node render object unavailable');
+      return;
+    }
+    final dump = StringBuffer();
+    _dumpParagraphs(root, dump);
+    debugPrint('[para] ANOMALY-CARET $heights :: $dump');
+  }
+
+  void _dumpParagraphs(RenderObject ro, StringBuffer dump) {
+    if (ro is RenderParagraph) {
+      final span = ro.text;
+      final TextSpan ts = span is TextSpan ? span : const TextSpan();
+      final TextSpan child =
+          ts.children?.whereType<TextSpan>().firstOrNull ?? ts;
+      final plain = ts.toPlainText();
+      dump.write(
+        '[h=${ro.size.height.toStringAsFixed(1)} fs=${ts.style?.fontSize}/${child.style?.fontSize} '
+        '"${plain.substring(0, math.min(16, plain.length))}"] ',
+      );
+    }
+    ro.visitChildren((child) => _dumpParagraphs(child, dump));
+  }
+
   @override
   void dispose() {
     _disposed = true;
     _transactionSub.cancel();
+    _editorState.selectionNotifier.removeListener(_debugCaretMetrics);
     vimMode.removeListener(_onVimModeChanged);
     editorFocusNode.removeListener(_onFocusNodeChanged);
     editorFocusNode.dispose();
     _scrollController.dispose();
-    vimMode.dispose();
+    // Only dispose a vim controller this driver created. The injected one is
+    // shared across pages and disposed by PagedNoteController.dispose().
+    if (_ownsVimMode) vimMode.dispose();
     super.dispose();
   }
 }
@@ -948,6 +1355,56 @@ class _AnalysisTapCapture extends StatelessWidget {
     editorState.updateSelectionWithReason(
       Selection(start: selectable.start(), end: selectable.end()),
       reason: SelectionUpdateReason.uiEvent,
+    );
+  }
+}
+
+/// A faint "H1"/"H2"/… label drawn in the left gutter of a heading block.
+/// Rendered via [AppFlowyTextDriver._buildBlockWrapper] — NOT as part of the
+/// delta, so it never appears in the document text, in a copy, or in the
+/// saved JSON.
+///
+/// All sizes are DOCUMENT units: the page is laid out at canonical size inside
+/// a FittedBox (see page_space.dart), so the tag scales with the page exactly
+/// as the heading text does — no per-window/dpi math needed.
+///
+/// `fontSize` and `height` are pinned to the body's metrics so the tag reads
+/// as a caption, not a second heading. If the driver's DefaultTextStyle clamp
+/// in `buildEditor` is ever removed or moved, this stays visually correct
+/// instead of inheriting the heading's (huge) inherited style.
+class _HeadingWithLevelTag extends StatelessWidget {
+  const _HeadingWithLevelTag({required this.level, required this.child});
+
+  final int level;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          // 2px down so the tag lands on the heading's first baseline;
+          // 6px right so it never kisses the heading's first glyph.
+          padding: const EdgeInsets.only(top: 4, right: 3),
+          child: Opacity(
+            opacity: 0.8,
+            child: Text(
+              'H$level',
+              style: TextStyle(
+                fontSize: kBaseFontSize * 0.6,
+                height: kLineHeight,
+                fontWeight: FontWeight.w700,
+                color: context.cerebrum.brand.accent,
+              ),
+            ),
+          ),
+        ),
+        // Expanded, not Flexible: headings are full-width (their own
+        // textAlign decides where the glyphs sit), so the child needs the
+        // remaining space, not a shrink-wrap fit.
+        Expanded(child: child),
+      ],
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/ui/widgets/floating_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
@@ -160,9 +161,9 @@ class _ShortQuestionCompletionPageState
   Widget build(BuildContext context) {
     final c = widget.engram.content as ShortQuestionContent;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Short Questions')),
-      body:
+    return FloatingModal(
+      title: 'Short Questions',
+      child:
           _loading
               ? const Center(child: CircularProgressIndicator())
               : _attempt != null

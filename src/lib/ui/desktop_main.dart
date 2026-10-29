@@ -1,5 +1,6 @@
 import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:cerebrum/ui/screens/home/d_homescreen_page.dart';
+import 'package:cerebrum/ui/screens/file_library/file_library.dart';
 import 'package:cerebrum/ui/screens/learning_center/d_learning_center_page.dart';
 import 'package:cerebrum/ui/screens/settings/settings.dart';
 import 'package:flutter/material.dart';
@@ -37,18 +38,39 @@ class _DesktopUIState extends State<DesktopUI> {
     });
   }
 
+  /// The page that stays mounted (inert) UNDERNEATH the floating File
+  /// Library window. Remembered when the library is summoned, restored
+  /// when the window closes -- that's what makes the window "float over
+  /// the page you were on" instead of over an empty background. Never 5
+  /// (guarded in [changePage]).
+  int _underPage = 0;
+
   void changePage(int page) {
     setState(() {
+      // Summoning the library: remember what's beneath the window so the
+      // close restores it. Already-open is a no-op on _underPage.
+      if (page == 5 && selectedPage != 5) {
+        _underPage = selectedPage;
+      }
       selectedPage = page;
     });
+  }
+
+  /// Barrier tap / floating-window X: close the library and go back to the
+  /// page that was open when it was summoned.
+  void closeLibrary() {
+    setState(() => selectedPage = _underPage);
   }
 
   Widget _buildPage() {
     if (_userId == null) {
       return const Center(child: CircularProgressIndicator());
     }
+    return _pageFor(selectedPage);
+  }
 
-    if (selectedPage == 0) {
+  Widget _pageFor(int page) {
+    if (page == 0) {
       return DHomescreen(
         onOpenBubble: (bubble) {
           setState(() {
@@ -58,7 +80,7 @@ class _DesktopUIState extends State<DesktopUI> {
         },
         onOpenStudyBubbles: () => changePage(1),
       );
-    } else if (selectedPage == 1) {
+    } else if (page == 1) {
       return DStudyBubbleHome(
         onOpenBubble: (bubble) {
           setState(() {
@@ -67,11 +89,11 @@ class _DesktopUIState extends State<DesktopUI> {
           });
         },
       );
-    } else if (selectedPage == 2) {
+    } else if (page == 2) {
       return DLearningCenterPage(userId: _userId!);
-    } else if (selectedPage == 3) {
+    } else if (page == 3) {
       return SettingPage();
-    } else if (selectedPage == 4) {
+    } else if (page == 4) {
       return DStudyBubblePage(
         bubble: payload,
         onBack: () {
@@ -81,6 +103,15 @@ class _DesktopUIState extends State<DesktopUI> {
           });
         },
       );
+    } else if (page == 5) {
+      // File Library as its own sidebar page. The window itself is NOT
+      // built here: it is overlaid at the SHELL level (see the end of
+      // build()) so its dim barrier covers the whole viewport including
+      // the icon rail. The content area shows the page that was open when
+      // the library was summoned (_underPage remembers it, closeLibrary
+      // restores it), rendered inert under the barrier -- the floating
+      // window layered OVER real content, like the Settings dialog.
+      return _pageFor(_underPage);
     }
     return const Center(child: Text('Unknown Page'));
   }
@@ -178,6 +209,13 @@ class _DesktopUIState extends State<DesktopUI> {
                         collapsed: !_sidebarOpen,
                         onPressed: () => changePage(2),
                       ),
+                      SidebarButton(
+                        icon: Icons.library_books,
+                        label: 'File Library',
+                        selected: selectedPage == 5,
+                        collapsed: !_sidebarOpen,
+                        onPressed: () => changePage(5),
+                      ),
                       const Spacer(),
                       SidebarButton(
                         icon: Icons.settings,
@@ -201,6 +239,33 @@ class _DesktopUIState extends State<DesktopUI> {
               ),
             ),
           ),
+
+          // Floating File Library overlay -- LAST children of this Stack so
+          // the dim barrier covers the ENTIRE window, content AND icon rail
+          // alike, exactly like a showDialog route (the in-content-area
+          // version floated only over the page body and left the rail
+          // undimmed/clickable). Overhead exists only while page 5 is open:
+          // with the barrier on top, the underlying page and the rail are
+          // visible-but-inert, and the only way out is the barrier tap or
+          // the window's X, both of which call [closeLibrary].
+          if (selectedPage == 5) ...[
+            // Modal barrier: dims everything beneath and swallows all
+            // pointer events. Shade matches the Settings dialog barrier.
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: closeLibrary,
+                child: ColoredBox(
+                  color: context.cerebrum.text.muted.withAlpha(100),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+            // The floating window itself. FloatingModal centers itself via
+            // its internal Center + ConstrainedBox; as an unpositioned
+            // Stack child it fills the shell and centers within it.
+            FileLibrary(onClose: closeLibrary),
+          ],
         ],
       ),
     );

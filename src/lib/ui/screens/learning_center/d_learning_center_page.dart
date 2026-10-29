@@ -91,6 +91,7 @@ class _DLearningCenterPageState extends State<DLearningCenterPage> {
     );
 
     // Local-first name resolution. Bubble names come from the daemon; note
+    // TODO: persist bubbles in local sync as well
     // titles from the local index (no daemon round-trip per note).
     final bubbleNames = <String, String>{};
     try {

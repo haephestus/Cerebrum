@@ -5,6 +5,7 @@ import 'package:cerebrum/ui/screens/editor/blocks/table/table_page_bounds.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart'
     show BlockAnalysisLookup;
 
@@ -12,19 +13,39 @@ import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart'
 /// editor + ink layer, stacked — the paged equivalent of EditorSurface, bounded
 /// to a page instead of filling the screen.
 ///
-/// Ink is naturally page-LOCAL: each page has its own bounded scribble widget,
-/// so strokes are relative to this sheet, not a global surface.
+/// **Fixed document space, fitted view.** The page's content is laid out
+/// ONCE, at the canonical size ([kDocSheetWidth] wide, A4 aspect — see
+/// page_space.dart), and a [FittedBox] paints it scaled to whatever space the
+/// window gives this page. That single transform is the whole scaling story:
+/// text, ink, block chrome and popovers are laid out in document units, so the
+/// same amount of text occupies the same fraction of a page at any window
+/// size, layout mode, or DPI — the FittedBox cannot change layout, only paint.
+/// (An earlier attempt scaled font sizes per-widget instead; one clamped or
+/// unscaled metric reintroduced spills, and resize/mode-switch frame races
+/// against the overflow detector force-created pages.)
+///
+/// FittedBox applies the inverse transform to hit tests, so pointer positions
+/// arriving in the editor and in the ink layer are already in CANONICAL
+/// document coordinates — strokes are captured and stored at their document
+/// position, independent of the zoom they were drawn at. (Strokes recorded
+/// before this change carry whatever sheet-pixel coordinates the capturing
+/// window had and are NOT migratable: there is no draw-time width to rescale
+/// from.)
 ///
 /// **Why the overflow detection lives HERE, not in the controller.** The
 /// controller decides *what* to move on overflow ([PagedNoteController.pushOverflow]),
 /// but it can't tell *whether* the page overflows — that's a rendered-layout
 /// question, and only the widget can see the layout. So this widget measures each
-/// block's on-screen rect against the sheet's bottom edge and reports the first
+/// block's rect against the sheet's bottom edge and reports the first
 /// block that spills over (via [onOverflow]). The measurement runs in a
 /// post-frame callback (a block's rect only exists after layout) and is coalesced
 /// to once per frame (typing fires many notifications). Because a rebuild remounts
 /// this widget (`ObjectKey(controller)`), the check re-runs on the new page and
-/// naturally *cascades* forward until every page fits.
+/// naturally *cascades* forward until every page fits. All measurements are in
+/// document units (rects from the engine arrive global — screen px including
+/// the zoom — and are mapped back through the page's box), so a window resize
+/// or a zoom change CANNOT disturb them: nothing about the document layout
+/// changed.
 ///
 /// **Why the sheet is fixed-height even though content can exceed it.** Keeping
 /// the A4 `AspectRatio` is what makes "the page fills → spill forward" meaningful;
@@ -38,8 +59,8 @@ import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart'
 /// edits/reorders; the block index is kept only to position the highlight rect.
 ///
 /// UNVERIFIED (no device run here) — the overflow measurement and the analysis
-/// overlay geometry (globalToLocal, popover placement) need a smoke test on a
-/// real page.
+/// overlay geometry (globalToLocal positioning under the fitted zoom) need a
+/// smoke test on a real page.
 class PageSurface extends StatefulWidget {
   const PageSurface({
     super.key,
@@ -49,9 +70,10 @@ class PageSurface extends StatefulWidget {
     this.pageId,
     this.analysisForBlock,
     this.onOverflow,
+    this.onUnderfill,
     this.partialEraser,
     this.eraserWidth,
-    this.aspectRatio = 1 / 1.414, // A4 portrait
+    this.aspectRatio = kPageAspectRatio, // A4 portrait
   });
 
   final NoteEditorController controller;
@@ -77,6 +99,20 @@ class PageSurface extends StatefulWidget {
   /// whole block — the piece that keeps a page from becoming scrollable.
   final void Function(int fromBlockIndex, {double? tableAvailableHeight})?
   onOverflow;
+
+  /// Called after EVERY placed-out check in which this page did NOT overflow,
+  /// with two locally-measured DOCUMENT-unit numbers that feed the controller's
+  /// backward reflow:
+  ///  * [freeHeight] — spare space below this page's last block; how much a
+  ///    PREVIOUS page could hand up.
+  ///  * [headHeight] — this page's own first block's height (what a PREVIOUS
+  ///    page would receive if it pulled from here). Null when the first block
+  ///    never laid out.
+  /// Both sides of the move measure on their own page at the same canonical
+  /// width, so heights are directly comparable without cross-page math. Null
+  /// disables backward reflow. Reports are silent (never notify): the
+  /// controller re-checks on a settle timer instead — see its reflow comment.
+  final void Function(double freeHeight, double? headHeight)? onUnderfill;
 
   final double aspectRatio;
 
@@ -129,9 +165,13 @@ class _PageSurfaceState extends State<PageSurface> {
     super.dispose();
   }
 
-  /// Measure once per frame, after layout, whether this page overflows the sheet.
+  /// Measure once per frame, after layout, whether this page overflows the
+  /// sheet — and if not, publish the fill stats the backward reflow pairs on.
   void _scheduleOverflowCheck() {
-    if (_overflowCheckScheduled || widget.onOverflow == null) return;
+    if (_overflowCheckScheduled ||
+        (widget.onOverflow == null && widget.onUnderfill == null)) {
+      return;
+    }
     _overflowCheckScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _overflowCheckScheduled = false;
@@ -143,12 +183,21 @@ class _PageSurfaceState extends State<PageSurface> {
     if (!mounted || widget.drawingEnabled) return;
     final onOverflow = widget.onOverflow;
     final driver = _driver;
-    if (onOverflow == null || driver == null) return;
+    if ((onOverflow == null && widget.onUnderfill == null) || driver == null) {
+      return;
+    }
 
     final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null || !stackBox.hasSize) return;
-    final pageBottom =
-        stackBox.localToGlobal(Offset(0, stackBox.size.height)).dy;
+    // Document units. The Stack is laid out inside the fitted document space,
+    // so its LOCAL size IS the sheet's canonical content bounds — a constant
+    // that no window size or layout mode can influence. `rectOfBlock` returns
+    // GLOBAL rects (screen px, carrying the fitted zoom), so each block is
+    // mapped back through the page's box; because the zoom is a uniform
+    // axis-aligned scale, converting top-left and bottom-left pins the
+    // document-space height exactly, and the pageBottom comparison is stable
+    // across resizes rather than racing the FittedBox against the editor.
+    final pageBottomLocal = stackBox.size.height;
 
     final blocks =
         (widget.controller.documentJson['children'] as List?) ?? const [];
@@ -157,20 +206,38 @@ class _PageSurfaceState extends State<PageSurface> {
     // TABLE at index 0 is handled too. A NON-table block at index 0 that's
     // taller than the whole sheet can't be divided by this model, so it's left
     // to overflow rather than loop forever.
-    const tolerance = 0.5;
+    const tolerance = 0.5; // document pixels
+    // Fill stats gathered in the same pass — no overflow means ONE extra
+    // local-vs-local subtraction per pair, all in document units.
+    double? headHeight;
+    double? lastBottomLocal;
     for (var i = 0; i < blocks.length; i++) {
       final rect = driver.rectOfBlock(i);
       if (rect == null) continue;
-      if (rect.bottom > pageBottom + tolerance) {
+      final topLocal = stackBox.globalToLocal(rect.topLeft);
+      final bottomLocal = stackBox.globalToLocal(rect.bottomLeft).dy;
+      if (i == 0) headHeight = bottomLocal - topLocal.dy;
+      lastBottomLocal = bottomLocal;
+      if (bottomLocal > pageBottomLocal + tolerance) {
         final isTable = (blocks[i] as Map?)?['type'] == 'table';
         if (i == 0 && !isTable) continue;
-        onOverflow(
+        onOverflow?.call(
           i,
-          tableAvailableHeight: isTable ? pageBottom - rect.top : null,
+          tableAvailableHeight: isTable ? pageBottomLocal - topLocal.dy : null,
         );
         return;
       }
     }
+
+    // No overflow → publish the fill stats for the backward reflow. An empty
+    // document still lays out its filler paragraph, so lastBottom exists
+    // whenever there's anything at all; skip the report on a non-laid-out
+    // page (no lastBottom = nothing to receive on either side).
+    final onUnderfill = widget.onUnderfill;
+    if (onUnderfill == null || lastBottomLocal == null) return;
+    final free = pageBottomLocal - lastBottomLocal;
+    if (free <= 0) return; // full page; nothing to receive happens either way
+    onUnderfill(free, headHeight);
   }
 
   /// The (blockIndex, chunks) the caret currently implies, or null when there's
@@ -228,52 +295,82 @@ class _PageSurfaceState extends State<PageSurface> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: AnimatedBuilder(
-              animation: widget.controller,
-              builder: (context, _) {
-                return Stack(
-                  key: _stackKey,
-                  children: [
-                    // Text layer — absorbs pointers while drawing so strokes
-                    // don't also move the caret (same pattern as EditorSurface).
-                    // The PagedTableBounds exposes this page's sheet geometry to
-                    // deep block widgets (the forked table) so they can cap
-                    // their own growth against the page.
-                    PagedTableBounds(
-                      sheetKey: _stackKey,
-                      child: AbsorbPointer(
-                        absorbing: widget.drawingEnabled,
-                        child: widget.controller.driver.buildEditor(context),
-                      ),
-                    ),
-                    // Ink layer — only receptive to pointers while drawing.
-                    IgnorePointer(
-                      ignoring: !widget.drawingEnabled,
-                      child: NoteDrawingLayer(
-                        notifier: widget.controller.drawingNotifier,
-                        partialEraser: widget.partialEraser,
-                        eraserWidth: widget.eraserWidth,
-                      ),
-                    ),
-                    if (widget.pageNumber != null)
-                      Positioned(
-                        right: 8,
-                        bottom: 6,
-                        child: IgnorePointer(
-                          child: Text(
-                            '${widget.pageNumber}',
-                            style: TextStyle(
-                              color: context.cerebrum.text.disabled,
-                              fontSize: 11,
+            // The ASPECT RATIO is set on the on-screen box; the document space
+            // has the SAME aspect at its canonical size, so the FittedBox's
+            // scale is exactly onScreenWidth/700 both axes — no residual gaps,
+            // no letterboxing.
+            //
+            // FittedBox lays its child out UNCONSTRAINED first (== intrinsic),
+            // so the inner SizedBox is what imposes the canonical TIGHT size on
+            // the editor subtree: 700 wide, same A4 aspect. Text wraps at 700,
+            // ink captures (inverse-transformed hit tests) are in document
+            // units, and paint is then scaled to the on-screen box. Clip.none
+            // is fine — the outer ClipRRect clips the box, and rounding never
+            // overpaints it.
+            child: FittedBox(
+              fit: BoxFit.contain,
+              alignment: Alignment.topLeft,
+              clipBehavior: Clip.none,
+              child: SizedBox(
+                width: kDocSheetWidth,
+                height: kDocSheetWidth / widget.aspectRatio,
+                child: AnimatedBuilder(
+                  animation: widget.controller,
+                  builder: (context, _) {
+                    return Stack(
+                      key: _stackKey,
+                      children: [
+                        // Text layer — absorbs pointers while drawing so strokes
+                        // don't also move the caret (same pattern as EditorSurface).
+                        // The PagedTableBounds exposes this page's sheet geometry to
+                        // deep block widgets (the forked table) so they can cap
+                        // their own growth against the page — in DOCUMENT units,
+                        // which is what makes those caps stable across windows.
+                        PagedTableBounds(
+                          sheetKey: _stackKey,
+                          child: AbsorbPointer(
+                            absorbing: widget.drawingEnabled,
+                            child: widget.controller.driver.buildEditor(
+                              context,
                             ),
                           ),
                         ),
-                      ),
-                    // Analysis-review overlay: tint the block + inline popover.
-                    ..._analysisOverlay(),
-                  ],
-                );
-              },
+                        // Ink layer — only receptive to pointers while drawing.
+                        // Positions here are document units: a stroke drawn at
+                        // overview zoom records exactly where it LOOKS in the
+                        // page's own space, not where the pointer was on screen.
+                        // Chrome sized for the HAND (eraser cursor, scribble
+                        // width) therefore looks proportionally smaller at
+                        // overview zoom — correct: the page is zoomed out.
+                        IgnorePointer(
+                          ignoring: !widget.drawingEnabled,
+                          child: NoteDrawingLayer(
+                            notifier: widget.controller.drawingNotifier,
+                            partialEraser: widget.partialEraser,
+                            eraserWidth: widget.eraserWidth,
+                          ),
+                        ),
+                        if (widget.pageNumber != null)
+                          Positioned(
+                            right: 8,
+                            bottom: 6,
+                            child: IgnorePointer(
+                              child: Text(
+                                '${widget.pageNumber}',
+                                style: TextStyle(
+                                  color: context.cerebrum.text.disabled,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Analysis-review overlay: tint the block + inline popover.
+                        ..._analysisOverlay(),
+                      ],
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         ),
@@ -329,10 +426,14 @@ class _PageSurfaceState extends State<PageSurface> {
     final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null) return const [];
 
-    // Global → page-local. The editor lays out 1:1 within the page (no scaling),
-    // so the block's size carries over unchanged.
+    // Global → page-local (document) coordinates. rectOfBlock rects are
+    // GLOBAL and now carry the fitted zoom, so position AND size must be
+    // converted: mapping two opposite corners back through the page's box is
+    // exact under the zoom's uniform axis-aligned scale (a single point map
+    // plus an unscaled size would not be).
     final localTopLeft = stackBox.globalToLocal(sectionRect.topLeft);
-    final blockRect = localTopLeft & sectionRect.size;
+    final localBottomRight = stackBox.globalToLocal(sectionRect.bottomRight);
+    final blockRect = Rect.fromPoints(localTopLeft, localBottomRight);
     final pageSize = stackBox.size;
 
     const gap = 6.0;

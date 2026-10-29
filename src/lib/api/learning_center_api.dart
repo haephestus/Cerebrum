@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/engram_store.dart';
 import 'api_config.dart';
+import 'api_exception.dart';
 
 class LearningCenterApi {
   static String get baseUrl => ApiConfig.baseUrl;
@@ -88,8 +89,10 @@ class LearningCenterApi {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
-    throw Exception(
+    throw ApiException(
+      response.statusCode,
       'Failed to submit MCQ (${response.statusCode}): ${response.body}',
+      body: response.body,
     );
   }
 
@@ -117,8 +120,10 @@ class LearningCenterApi {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
-    throw Exception(
+    throw ApiException(
+      response.statusCode,
       'Failed to submit flashcard (${response.statusCode}): ${response.body}',
+      body: response.body,
     );
   }
 
@@ -147,8 +152,10 @@ class LearningCenterApi {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
-    throw Exception(
+    throw ApiException(
+      response.statusCode,
       'Failed to submit short question (${response.statusCode}): ${response.body}',
+      body: response.body,
     );
   }
 
@@ -176,8 +183,10 @@ class LearningCenterApi {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
-    throw Exception(
+    throw ApiException(
+      response.statusCode,
       'Failed to submit long question (${response.statusCode}): ${response.body}',
+      body: response.body,
     );
   }
 
@@ -210,7 +219,11 @@ class LearningCenterApi {
     }
     // 404 = unknown/unowned job → nothing to wait for.
     if (response.statusCode == 404) return null;
-    throw Exception('Failed to fetch grading job (${response.statusCode})');
+    throw ApiException(
+      response.statusCode,
+      'Failed to fetch grading job (${response.statusCode})',
+      body: response.body,
+    );
   }
 
   static Future<EngramListResponse> listEngrams({

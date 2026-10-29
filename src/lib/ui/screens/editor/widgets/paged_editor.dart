@@ -197,12 +197,22 @@ class _PagedEditorState extends State<PagedEditor> {
                 // overflowing tail (from block `fromIndex`) onto the next page.
                 // A table reports a measured height budget so the controller
                 // can split it at a row boundary (see PagedNoteController).
+                //
+                // The underfill report is the same measurement's flip side:
+                // free space below the last block + this page's head height,
+                // both already in document units — the controller pairs page
+                // i's free with page i+1's head and pulls blocks UP when they
+                // would fit, now that a small kBaseFontSize can leave pages
+                // half-empty. Forward push and backward pull share the
+                // `_flowing` reentrancy guard.
                 onOverflow:
                     (fromIndex, {tableAvailableHeight}) => c.pushOverflow(
                       i,
                       fromIndex,
                       tableAvailableHeight: tableAvailableHeight,
                     ),
+                onUnderfill: (freeHeight, headHeight) =>
+                    c.onPageMeasured(i, freeHeight, headHeight),
               ),
             ),
           );

@@ -90,6 +90,7 @@ const tokyoNightTokens = CerebrumColors(
     modeBadgeInsert: Color(0xFF9ECE6A),
     modeBadgeNormal: Color(0xFFE0AF68),
     modeBadgeAnalysis: Color(0xFFBB9AF7),
+    modeBadgeVisual: Color(0xFF7AA2F7),
     pageBorder: Color(0xFF3B4261),
     pageShadow: Color(0xAA000000),
     pageShadowSoft: Color(0x66000000),

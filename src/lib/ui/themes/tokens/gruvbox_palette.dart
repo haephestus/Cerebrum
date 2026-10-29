@@ -90,6 +90,7 @@ const gruvboxDarkTokens = CerebrumColors(
     modeBadgeInsert: Color(0xFF98971A),
     modeBadgeNormal: Color(0xFFD79921),
     modeBadgeAnalysis: Color(0xFF689D6A),
+    modeBadgeVisual: Color(0xFF8EC07C),
     pageBorder: Color(0xFF504945),
     pageShadow: Color(0xAA000000),
     pageShadowSoft: Color(0x66000000),

@@ -226,6 +226,14 @@ class SyncService {
           pages: pages,
         );
       }
+      // /update doesn't change the note's title on the daemon; only the
+      // dedicated rename endpoint does. If the server's copy still has an
+      // old title, rename it now. If this throws, the outer catch leaves
+      // the entry queued, so an offline rename retries on the next drain.
+      if (filename != null && result['title'] != title) {
+        await BubbleNotesApi.renameNote(bubbleId, filename, title);
+        result['title'] = title;
+      }
 
       // Persist the server-confirmed copy locally so a background drain also
       // captures daemon-assigned fields (notably a new note's `filename`) —

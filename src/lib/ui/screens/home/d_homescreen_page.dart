@@ -1,15 +1,14 @@
-import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:cerebrum/models/gap_models.dart';
 import 'package:cerebrum/services/note_store.dart';
 import 'package:cerebrum/services/user_session.dart';
 import 'package:cerebrum/ui/screens/editor/editor_scaffold.dart';
 import 'package:cerebrum/ui/screens/home/dashboard_pulse_strip.dart';
-import 'package:cerebrum/ui/screens/home/file_library_launcher.dart';
 import 'package:cerebrum/ui/screens/home/gap_findings_carousel.dart';
-import 'package:cerebrum/models/gap_models.dart';
 import 'package:cerebrum/ui/screens/home/priority_gap_card.dart';
 import 'package:cerebrum/ui/screens/home/quickview.dart';
 import 'package:cerebrum/ui/screens/home/study_bubbles_summary.dart';
 import 'package:cerebrum/ui/screens/home/upcoming_engrams.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
 
 /// Dashboard layout (top to bottom):
@@ -20,7 +19,10 @@ import 'package:flutter/material.dart';
 ///        right = PriorityGapCard  -- compact "needs attention" notice
 ///                StudyBubblesSummaryCard -- beneath it
 ///   4. Gap reports & findings -- paged carousel, one bubble per page
-///   5. File library launcher  -- opens the full library in a dialog
+///
+/// (The file library no longer lives here: it is its own sidebar page --
+/// d_file_library_page.dart, mounted by DesktopUI. See the Layer-5 spot
+/// further down for the removal note.)
 ///
 /// Two features from the redesign brief are NOT implemented below because
 /// building them would mean guessing at APIs/data this codebase doesn't
@@ -249,9 +251,12 @@ class _DHomescreenState extends State<DHomescreen> {
               // resolved-flag + reading-opened marker before this can be
               // more than a re-display of the same gap data shown above.
 
-              // Layer 5: file library is its own thing now -- a launcher,
-              // not embedded dashboard real estate.
-              const FileLibraryLauncher(),
+              // Layer 5 (file library launcher) has moved: the library is
+              // now its own sidebar page -- d_file_library_page.dart,
+              // mounted by DesktopUI's navigation shell. The in-content
+              // compact launcher row was removed with it ("lift out of the
+              // home screen" per direction), keeping this dashboard's role
+              // to gap/test content only.
             ],
           ),
         ),

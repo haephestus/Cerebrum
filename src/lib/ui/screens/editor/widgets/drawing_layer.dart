@@ -25,7 +25,13 @@ import 'package:scribble/scribble.dart';
 ///
 /// Both are only in play while the tool is the eraser (`state is Erasing`, set
 /// by the wheel). For any other tool this layer is just the plain canvas. Ink is
-/// page-LOCAL — each page has its own bounded scribble widget.
+/// page-LOCAL — each page has its own bounded scribble widget — and is stored in
+/// the page's CANONICAL document coordinates: inside PageSurface the layer sits
+/// under the fitted zoom, and FittedBox inverse-transforms hit tests, so
+/// `localPosition` here is document space regardless of what zoom the pointer
+/// was drawn at (see page_space.dart). Chrome sized for the hand (eraser
+/// cursor, gesture widths) is therefore document-proportioned too — it scales
+/// visually with the page, exactly like the pen it's acting on.
 class NoteDrawingLayer extends StatelessWidget {
   const NoteDrawingLayer({
     super.key,
