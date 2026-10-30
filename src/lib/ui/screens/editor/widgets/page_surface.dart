@@ -384,16 +384,6 @@ class _PageSurfaceState extends State<PageSurface> {
       return const [];
     }
 
-    // The highlight group is either (a) the RECORDED chunk blockIds in analysis
-    // mode, or (b) the caret's semantic section in tap mode.
-    //
-    // (a) is the stable case: a chunk's blockIds are fixed by the daemon, so the
-    // highlight is pinned to the whole group and does not resize as j/k moves the
-    // caret within it — it only swaps wholesale when the caret crosses into a
-    // different chunk's group.
-    //
-    // (b) is the tap-into-context case: one block tapped, we expand to its
-    // heading-plus-body section.
     final inAnalysis = _driver!.vimMode.isAnalysis;
     final chunks = _activeChunks;
 
@@ -408,14 +398,11 @@ class _PageSurfaceState extends State<PageSurface> {
     var staleCount = 0;
     if (inAnalysis) {
       sectionRect = _chunkGroupRect(chunks);
-      // Stale: the chunk references blocks that no longer exist on this page.
       staleCount = _countMissingOnPage(coveredIds);
     } else {
       final walk = _sectionWalk(idx);
       sectionRect = walk.$1;
       final walkedIds = walk.$2;
-      // Stale = recorded blocks that vanished + blocks the tint now covers that
-      // the analysis never recorded (content added since the analysis ran).
       staleCount = _countMissingOnPage(coveredIds);
       if (coveredIds.isNotEmpty) {
         staleCount += walkedIds.where((id) => !coveredIds.contains(id)).length;
@@ -426,35 +413,31 @@ class _PageSurfaceState extends State<PageSurface> {
     final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null) return const [];
 
-    // Global → page-local (document) coordinates. rectOfBlock rects are
-    // GLOBAL and now carry the fitted zoom, so position AND size must be
-    // converted: mapping two opposite corners back through the page's box is
-    // exact under the zoom's uniform axis-aligned scale (a single point map
-    // plus an unscaled size would not be).
+    // Convert vertical bounds from global (screen px with fitted zoom) to local document units
     final localTopLeft = stackBox.globalToLocal(sectionRect.topLeft);
     final localBottomRight = stackBox.globalToLocal(sectionRect.bottomRight);
-    final blockRect = Rect.fromPoints(localTopLeft, localBottomRight);
-    final pageSize = stackBox.size;
 
+    // Set horizontal bounds to full content column width
+    const double leftInset = kBaseHorizontalPadding;
+    const double contentWidth = kDocSheetWidth - (2 * kBaseHorizontalPadding);
+
+    final blockRect = Rect.fromLTWH(
+      leftInset,
+      localTopLeft.dy,
+      contentWidth,
+      (localBottomRight.dy - localTopLeft.dy).clamp(1.0, double.infinity),
+    );
+
+    final pageSize = stackBox.size;
     const gap = 6.0;
-    // floor so a tiny/narrow block doesn't produce an unreadable popover
-    const minPopoverWidth = 200.0;
-    final popoverWidth =
-        blockRect.width < minPopoverWidth ? minPopoverWidth : blockRect.width;
-    // Prefer below the block; flip above if it would overflow the sheet bottom.
-    final estPopoverHeight = 220.0;
+    const estPopoverHeight = 220.0;
+
     final belowSpace = pageSize.height - blockRect.bottom;
     final placeBelow =
         belowSpace >= estPopoverHeight || belowSpace >= blockRect.top;
 
-    // Since popoverWidth is now tied to blockRect.width, left can just be
-    // blockRect.left directly in the common case — but keep the clamp for
-    // the minPopoverWidth fallback, where popoverWidth might exceed the
-    // remaining page width if the block sits near the right edge.
-    final left = blockRect.left.clamp(
-      0.0,
-      (pageSize.width - popoverWidth).clamp(0.0, double.infinity),
-    );
+    final popoverWidth = blockRect.width;
+    final left = blockRect.left;
     final top =
         placeBelow
             ? (blockRect.bottom + gap)
@@ -465,8 +448,7 @@ class _PageSurfaceState extends State<PageSurface> {
 
     final stale = staleCount > 0;
     return [
-      // Block tint. Border shifts amber → orange when stale so a highlight that
-      // no longer matches the recorded analysis reads as suspect, not quiet.
+      // Highlight tint spanning the full text content area
       Positioned.fromRect(
         rect: blockRect,
         child: IgnorePointer(
@@ -488,7 +470,7 @@ class _PageSurfaceState extends State<PageSurface> {
           ),
         ),
       ),
-      // Findings popover.
+      // Findings popover attached to the block section
       Positioned(
         left: left,
         top: top,

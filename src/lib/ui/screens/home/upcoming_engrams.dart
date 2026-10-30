@@ -1,4 +1,3 @@
-import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -6,6 +5,7 @@ import 'package:cerebrum/api/learning_center_api.dart';
 import 'package:cerebrum/models/engram_models.dart';
 import 'package:cerebrum/services/user_session.dart';
 import 'package:cerebrum/ui/screens/learning_center/d_learning_center_page.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
@@ -297,7 +297,7 @@ class _UpcomingEngramsSectionState extends State<UpcomingEngramsSection>
 /// │ Tuesday  │  3 pm       4 pm       5 pm  │ 2        │
 /// │ 13       │  │          │          │     │ overdue  │
 /// │ DEC      │  Meeting    │     +    │     │ 5        │
-/// │          │      +      │           │     │ unsched. │
+/// │          │      +      │          │     │ unsched. │
 /// └──────────┴──────────────────────────────┴──────────┘
 ///
 /// The date column and the counters column stay fixed while the timeline can
@@ -607,78 +607,78 @@ class _ScheduleRailState extends State<ScheduleRail> {
       width: _dateWidth,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 10, 4, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              weekdays[selected.weekday - 1],
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10,
-                height: 1,
-                fontWeight: FontWeight.w500,
-                color: context.cerebrum.brand.ink.withValues(alpha: 0.9),
-              ),
-            ),
-
-            const SizedBox(height: 3),
-
-            // Big numerals: at large display text scales a month like "SEP"
-            // is wider than the 64px date column and would wrap glyph-by-
-            // glyph into 3 stacked lines (a real overflow seen at scale ~1.5).
-            // softWrap:false keeps them on ONE line at natural width and
-            // FittedBox scales the line down instead — never wraps, never
-            // overflows.
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.topCenter,
-              child: Text(
-                '${selected.day}',
-                softWrap: false,
+        child: GestureDetector(
+          onTap: widget.onOpenCalendar,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                weekdays[selected.weekday - 1],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 31,
-                  height: 0.95,
-                  fontWeight: FontWeight.w800,
-                  color: context.cerebrum.brand.ink,
+                  fontSize: 10,
+                  height: 1,
+                  fontWeight: FontWeight.w500,
+                  color: context.cerebrum.brand.ink.withValues(alpha: 0.9),
                 ),
               ),
-            ),
 
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                months[selected.month - 1],
-                softWrap: false,
-                style: TextStyle(
-                  fontSize: 28,
-                  height: 0.95,
-                  fontWeight: FontWeight.w800,
-                  color: context.cerebrum.brand.ink,
+              const SizedBox(height: 3),
+
+              // Big numerals: at large display text scales a month like "SEP"
+              // is wider than the 64px date column and would wrap glyph-by-
+              // glyph into 3 stacked lines (a real overflow seen at scale ~1.5).
+              // softWrap:false keeps them on ONE line at natural width and
+              // FittedBox scales the line down instead — never wraps, never
+              // overflows.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.topCenter,
+                child: Text(
+                  '${selected.day}',
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: 31,
+                    height: 0.95,
+                    fontWeight: FontWeight.w800,
+                    color: context.cerebrum.brand.ink,
+                  ),
                 ),
               ),
-            ),
 
-            // Bottom block (day arrows + TODAY) is pinned to the bottom when
-            // there is room but NEVER allowed to overflow the column: an
-            // OverflowBox passes unbounded height so the block keeps its
-            // natural size and clips at worst on tiny/large-scaled layouts —
-            // the RenderFlex overflow error is structurally impossible here,
-            // regardless of font metrics or text scale.
-            Expanded(
-              child: OverflowBox(
-                alignment: Alignment.bottomLeft,
-                minHeight: 0,
-                maxHeight: double.infinity,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (isToday)
-                      GestureDetector(
-                        onTap: widget.onOpenCalendar,
-                        child: Text(
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  months[selected.month - 1],
+                  softWrap: false,
+                  style: TextStyle(
+                    fontSize: 28,
+                    height: 0.95,
+                    fontWeight: FontWeight.w800,
+                    color: context.cerebrum.brand.ink,
+                  ),
+                ),
+              ),
+
+              // Bottom block (day arrows + TODAY) is pinned to the bottom when
+              // there is room but NEVER allowed to overflow the column: an
+              // OverflowBox passes unbounded height so the block keeps its
+              // natural size and clips at worst on tiny/large-scaled layouts —
+              // the RenderFlex overflow error is structurally impossible here,
+              // regardless of font metrics or text scale.
+              Expanded(
+                child: OverflowBox(
+                  alignment: Alignment.bottomLeft,
+                  minHeight: 0,
+                  maxHeight: double.infinity,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isToday)
+                        Text(
                           'TODAY',
                           style: TextStyle(
                             fontSize: 12,
@@ -687,12 +687,12 @@ class _ScheduleRailState extends State<ScheduleRail> {
                             color: context.cerebrum.status.dangerDeep,
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
