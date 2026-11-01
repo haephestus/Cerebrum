@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:cerebrum/api/bubbles_api.dart';
+import 'package:cerebrum/api/knowledgebase_api.dart';
 import 'package:cerebrum/api/learning_center_api.dart';
 import 'package:cerebrum/services/id.dart';
 import 'package:cerebrum/services/note_store.dart';
@@ -15,10 +16,11 @@ import 'package:cerebrum/ui/screens/editor/controllers/text_editing_driver.dart'
 import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/radial_tool_dial.dart';
+import 'package:cerebrum/ui/screens/readings/floating_reader.dart';
 import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:flutter/services.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 
 enum _TextEngine { appFlowy, superEditor }
 
@@ -56,7 +58,7 @@ class EditorScaffold extends StatefulWidget {
 class _EditorScaffoldState extends State<EditorScaffold> {
   late final PagedNoteController _editorController;
   _TextEngine _currentEngine = _TextEngine.appFlowy;
-
+  final FocusNode _readerFocus = FocusNode(debugLabel: 'floating reader');
   // Captured ONCE at open from the note map, and used for every request instead
   // of re-reading widget.note['bubble_id'] each time. The daemon's note response
   // carries an EMPTY bubble_id (it's a computed field off manifest.bubble_id,
@@ -90,6 +92,90 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   // (shared_preferences, or a user-settings API call) instead of a
   // static field.
   static bool _defaultStartInDrawingMode = false;
+
+  bool _showReader = false;
+  String? _readerFingerprint;
+  static String? _lastReaderFingerprint; // remembered for this app session
+
+  Future<void> _pickReaderFile() async {
+    final fp = await showDialog<String>(
+      context: context,
+      builder: (_) => _ReaderFilePicker(currentFingerprint: _readerFingerprint),
+    );
+    if (fp == null || fp.isEmpty || !mounted) return;
+    setState(() {
+      _readerFingerprint = fp;
+      _showReader = true;
+    });
+  }
+
+  void _focusEditor() {
+    final d = _editorController.activeController.driver;
+    if (d is AppFlowyTextDriver) d.requestEditorFocus();
+  }
+
+  void _focusReader() {
+    if (!_showReader) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _readerFocus.requestFocus();
+    });
+  }
+
+  void _toggleReader() {
+    if (_readerFingerprint == null) {
+      _pickReaderFile(); // opens, then focuses (see below)
+      return;
+    }
+    setState(() => _showReader = !_showReader);
+    _showReader ? _focusReader() : _focusEditor();
+  }
+
+  bool get _editorInVimCommandMode {
+    if (_editorController.drawingEnabled) return false;
+    final d = _editorController.activeController.driver;
+    if (d is! VimModeAware) return false;
+    final v = (d as VimModeAware).vimMode;
+    return v.isEnabled && (v.isNormal || v.isAnalysis);
+  }
+
+  bool _onGlobalKey(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted) return false;
+    // Only while this screen is on top (dialogs / other pages: leave keys alone).
+    if (!(ModalRoute.of(context)?.isCurrent ?? false)) return false;
+    // Never steal letters from a text field.
+    final fctx = FocusManager.instance.primaryFocus?.context;
+    if (fctx != null &&
+        (fctx.widget is EditableText ||
+            fctx.findAncestorWidgetOfExactType<EditableText>() != null)) {
+      return false;
+    }
+
+    final hk = HardwareKeyboard.instance;
+    final key = event.logicalKey;
+
+    // Ctrl+w: swap focus between editor and reader.
+    if (key == LogicalKeyboardKey.keyW &&
+        hk.isControlPressed &&
+        !hk.isAltPressed &&
+        !hk.isMetaPressed) {
+      if (!_showReader) return false;
+      _readerFocus.hasFocus ? _focusEditor() : _focusReader();
+      return true;
+    }
+
+    // Plain r: toggle the reader (from the reader, or editor in vim normal/analysis).
+    if (key == LogicalKeyboardKey.keyR &&
+        !hk.isControlPressed &&
+        !hk.isAltPressed &&
+        !hk.isMetaPressed &&
+        !hk.isShiftPressed) {
+      if ((_showReader && _readerFocus.hasFocus) || _editorInVimCommandMode) {
+        _toggleReader();
+        return true;
+      }
+    }
+    return false;
+  }
 
   Timer? _debounce;
   bool _isSaving = false;
@@ -153,7 +239,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
 
     // Seed the toggle from the note payload (backend field: analyse_note).
     _analysisEnabled = widget.note['analyse_note'] as bool? ?? true;
-
+    HardwareKeyboard.instance.addHandler(_onGlobalKey);
     // "Opt to see the full analysis" from analysis-review mode → open the panel
     // (loading it first if we haven't yet).
     _analysisMode.onOpenFullPanel = () {
@@ -1194,6 +1280,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     _eraserWidth.dispose();
     _analysisMode.dispose();
     _debounce?.cancel();
+    HardwareKeyboard.instance.removeHandler(_onGlobalKey);
+    _readerFocus.dispose();
     super.dispose();
   }
 
@@ -1264,6 +1352,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   final driver = _editorController.activeController.driver;
                   if (driver is! VimModeAware) return _analysisViewToggle();
                   final vimMode = (driver as VimModeAware).vimMode;
+
                   return AnimatedBuilder(
                     animation: vimMode,
                     builder: (context, __) {
@@ -1274,7 +1363,13 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                 },
               ),
             ),
-
+            IconButton(
+              icon: Icon(
+                _showReader ? Icons.menu_book : Icons.menu_book_outlined,
+              ),
+              tooltip: _showReader ? 'Hide reader' : 'Open reader',
+              onPressed: _toggleReader,
+            ),
             AnimatedBuilder(
               animation: _editorController,
               builder: (context, _) {
@@ -1679,6 +1774,18 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   },
                 ),
               ),
+              if (_readerFingerprint != null)
+                FloatingReaderWindow(
+                  fileFingerprint: _readerFingerprint!,
+                  visible: _showReader,
+                  readerFocusNode: _readerFocus,
+                  onReleaseFocus: _focusEditor,
+                  onClose: () {
+                    setState(() => _showReader = false);
+                    _focusEditor();
+                  },
+                  onChangeFile: _pickReaderFile,
+                ),
             ],
           ),
         ),
@@ -1824,6 +1931,108 @@ class _FindingTile extends StatelessWidget {
               ],
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Dialog listing the user's uploaded documents (same source as FileLibrary).
+/// Pops with the chosen file's fingerprint.
+class _ReaderFilePicker extends StatefulWidget {
+  final String? currentFingerprint;
+  const _ReaderFilePicker({this.currentFingerprint});
+
+  @override
+  State<_ReaderFilePicker> createState() => _ReaderFilePickerState();
+}
+
+class _ReaderFilePickerState extends State<_ReaderFilePicker> {
+  late final Future<List<Map<String, dynamic>>> _files = _load();
+  String _query = '';
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final data = await KnowledgebaseApi.showFiles();
+    return List<Map<String, dynamic>>.from(data);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Open document'),
+      content: SizedBox(
+        width: 420,
+        height: 440,
+        child: Column(
+          children: [
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Search documents',
+              ),
+              onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _files,
+                builder: (context, snap) {
+                  if (snap.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snap.hasError) {
+                    return Center(
+                      child: Text(
+                        'Failed to load documents: ${snap.error}',
+                        textAlign: TextAlign.center,
+                      ),
+                    );
+                  }
+                  final files =
+                      (snap.data ?? []).where((f) {
+                        final name =
+                            (f['original_name'] ?? '').toString().toLowerCase();
+                        return _query.isEmpty || name.contains(_query);
+                      }).toList();
+                  if (files.isEmpty) {
+                    return const Center(child: Text('No documents found'));
+                  }
+                  return ListView.builder(
+                    itemCount: files.length,
+                    itemBuilder: (context, i) {
+                      final f = files[i];
+                      final fp = f['file_fingerprint'] as String?;
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.picture_as_pdf),
+                        title: Text(
+                          (f['original_name'] ?? 'Unnamed file').toString(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing:
+                            fp == widget.currentFingerprint
+                                ? const Icon(Icons.check, size: 18)
+                                : null,
+                        enabled: fp != null,
+                        onTap:
+                            fp == null
+                                ? null
+                                : () => Navigator.pop(context, fp),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
         ),
       ],
     );
