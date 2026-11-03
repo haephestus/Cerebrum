@@ -4,6 +4,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/page_block_component.dart'
     // Prefixed: appflowy_editor exports a same-named stock builder.
     as cerebrum_page;
@@ -78,13 +79,16 @@ void main() {
   List<String> pageIds(EditorState state) =>
       [for (final n in blocks(state)) n.attributes['pageId'] as String];
 
+  /// Prefer [inkPages2] (real store); the raw inkPages set stays as a cheap
+  /// override for tests that don't care about sketch semantics.
   FlowTransactionExecutor makeExecutor(
     EditorState state, {
     Set<String> inkPages = const {},
+    PageInkStore? withInk,
   }) {
     final ex = FlowTransactionExecutor(
       editorState: state,
-      pageHasInk: inkPages.contains,
+      pageHasInk: withInk?.hasInk ?? inkPages.contains,
       settle: Duration.zero,
     );
     ex.debugDisableSweeps(disable: true);
@@ -258,7 +262,21 @@ void main() {
       para('b0', 't0', 'p1'),
       para('b1', 't1', 'p2'),
     ]);
-    final executor = makeExecutor(state, inkPages: {'p2'});
+    final inkStore = PageInkStore();
+    inkStore.setInk('p2', [
+      const <String, dynamic>{
+        'lines': [
+          {
+            'points': [
+              {'x': 1.0, 'y': 2.0},
+            ],
+            'color': 0,
+            'width': 3.0,
+          },
+        ],
+      },
+    ]);
+    final executor = makeExecutor(state, withInk: inkStore);
     await tester.pumpWidget(harness(
       state,
       cerebrum_page.PageBlockComponentBuilder(

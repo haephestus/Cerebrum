@@ -38,6 +38,7 @@ import 'package:cerebrum/ui/screens/editor/widgets/page_block_component.dart'
     as cerebrum_page;
 import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
     show FlowTransactionExecutor, kUseSingleDocumentPagination;
+import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,
@@ -61,6 +62,12 @@ class AppFlowyTextDriver extends ChangeNotifier
     /// was per-page vim instances diverging. Null builds a private one so
     /// standalone driver instantiations (tests, engine swaps) keep working.
     VimModeController? injectedVim,
+
+    /// Strategy-B per-pageId ink store, owned by the paged controller
+    /// (null today; consulted for the inked-donor pull rules via
+    /// [_flowExecutor] only when it is supplied; later also per-sheet
+    /// `Scribble` rendering).
+    this.pagedInks,
   }) : vimMode = injectedVim ?? VimModeController(),
        // Only a controller THIS driver created may be disposed by it. An
        // injected one is owned by PagedNoteController and shared by every
@@ -140,17 +147,26 @@ class AppFlowyTextDriver extends ChangeNotifier
 
   /// Strategy B's flow executor (single-document pagination). No-op
   /// machinery when [kUseSingleDocumentPagination] is off. `pageHasInk`
-  /// is a placeholder until the Strategy-B note model lands — it must
-  /// report the per-pageId ink lookup the controller will then own.
+  /// answers the pull-removal rules from the OPTIONAL per-pageId ink store
+  /// [PageInkStore] — no store (today, and any non-paged note) means no
+  /// ink is ever attributed to a sheet, which is honest for a note with no
+  /// ink anywhere. The store is created and owned by the paged controller
+  /// once the Strategy-B note model lands; the driver only references it.
   late final FlowTransactionExecutor _flowExecutor = FlowTransactionExecutor(
     editorState: _editorState,
-    pageHasInk: (_) => false,
+    pageHasInk:
+        (_) => false, //  pagedInks == null ? (_) => false : pagedInks!.hasInk,
   );
   late bool _wasInAnalysis = false;
 
   /// Whether this driver created [vimMode] itself (and therefore must dispose
   /// it). False when the controller was injected and is shared across pages.
   final bool _ownsVimMode;
+
+  /// Strategy-B per-pageId ink store (null today — the flag keeps Strategy A
+  /// running; the Strategy-B note model phase hands one over). Owned by the
+  /// paged controller; the driver only references it for pull rules.
+  final PageInkStore? pagedInks;
 
   /// Keyboard focus for this page's editor, owned by the DRIVER (not the
   /// package): AppFlowy 6.x only focuses its keyboard-service node on a tap,
