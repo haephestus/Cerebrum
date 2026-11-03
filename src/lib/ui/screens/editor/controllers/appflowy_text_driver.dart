@@ -177,6 +177,18 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// guarded/no-op on no change.
   void Function()? onFocusGained;
 
+  /// Whether the note's keyboard currently belongs to THIS page. Wired by
+  /// [PagedNoteController] (whose `activeIndex` follows the keyboard and
+  /// pointer claims) so [vimMode] broadcasts can be arbitrated: vim mode is
+  /// ONE shared controller across every page, so a flip — in particular one
+  /// triggered by the toolbar mode buttons — notifies every driver at once,
+  /// and ungated self-focus re-assertions race each other in the post-frame
+  /// retry loop ([requestEditorFocus]), with the caret landing on whichever
+  /// page's widget sits later in the tree instead of the user's page.
+  /// Null = legacy behavior (always self-assert) for callers that don't do
+  /// multi-page arbitration.
+  bool Function()? isKeyboardOwner;
+
   bool _disposed = false;
 
   /// Analysis-review-mode chunk stepping: +1 = next chunk, -1 = previous.
@@ -771,7 +783,18 @@ class AppFlowyTextDriver extends ChangeNotifier
         });
       }
     }
-    _editorState.apply(transaction);
+    // recordUndo:false — the tint is VIEW state (which chunk is under the
+    // analysis pointer), not note content; recording it put "highlight a
+    // chunk" / "leave analysis mode" into the undo stack, so ctrl+z spent
+    // steps re-tinting chunks instead of undoing typing. Interim stopgap
+    // (§7.1(b)); the real fix is rendering the highlight in a view layer so
+    // the document never carries it at all.
+    unawaited(
+      _editorState.apply(
+        transaction,
+        options: const ApplyOptions(recordUndo: false),
+      ),
+    );
   }
 
   /// Fired by [vimMode] changes. When the page leaves analysis-review mode,
@@ -786,12 +809,17 @@ class AppFlowyTextDriver extends ChangeNotifier
     }
     _wasInAnalysis = inAnalysis;
 
-    // Re-assert keyboard focus across every vim flip that happens ON this
-    // page: Esc (insert→normal, analysis→normal), 'i' (→insert), 'n'
-    // (→analysis), and the toolbar mode switch (which momentarily focuses
-    // the button that toggled it). Keys arrive on THIS driver only when it is
-    // the page the user is interacting with, so requesting self-focus is
-    // correct in every single-page case.
+    // Re-assert keyboard focus after every vim flip, but ONLY on the page
+    // that owns the keyboard: Esc (insert→normal, analysis→normal), 'i'
+    // (→insert), 'n' (→analysis) and the toolbar mode switch all flip the
+    // note's ONE shared [vimMode], which fires this listener on EVERY page
+    // at once. Keys typed on this page mean this page owns the keyboard,
+    // and an in-flight toolbar flip means the page that just lost keyboard
+    // to the button does — both resolve through the controller's
+    // keyboard-bookkeeping ([isKeyboardOwner]). Ungated, every page's
+    // [requestEditorFocus] retry raced and the caret landed on the last
+    // tree-ordered page instead of the user's page ("switch to edit on
+    // page one, caret ends up in page two").
     //
     // Deliberately gated on isEnabled: the drawing toggle broadcasts
     // `setEnabled(false)` to EVERY page on the way in, and those pages must
@@ -799,7 +827,8 @@ class AppFlowyTextDriver extends ChangeNotifier
     // re-requests focus itself, on the ACTIVE page only (see
     // PagedNoteController.toggleDrawingMode).
     if (vimMode.isEnabled) {
-      requestEditorFocus();
+      final owner = isKeyboardOwner;
+      if (owner == null || owner()) requestEditorFocus();
     }
   }
 
@@ -932,7 +961,20 @@ class AppFlowyTextDriver extends ChangeNotifier
   // Emit each node's id here and restore it on load (see _restoreNodeIds)
   // so a block keeps ONE identity across edits/reloads/sync — the same
   // contract ink strokes already have via their stroke id.
+  //
+  // ALSO: strip [_transientAttrKeys] — analysis-mode chunk highlighting
+  // writes `bgColor` on live nodes (see [setChunkHighlight]); today the
+  // only producer of that attribute in this app is the highlight, so a
+  // save taken while a chunk was tinted would otherwise persist the analysis
+  // view state into the note (and, past sync, other pages of blocks moved
+  // mid-highlight would keep their tint after leaving analysis). The
+  // in-memory nodes keep the tint for live rendering; only the persisted
+  // JSON is scrubbed.
   _nodeToJsonWithId(_editorState.document.root);
+
+  /// Attributes that are view/run-time state, never note content. Persisted
+  /// documents must not carry them (see the [documentJson] comment).
+  static const String _transientAttrKey = blockComponentBackgroundColor;
 
   @override
   Widget buildEditor(BuildContext context) {
@@ -1153,10 +1195,12 @@ class AppFlowyTextDriver extends ChangeNotifier
 
   /// Serialise a node (recursively) INCLUDING its `id`. Mirrors AppFlowy's
   /// Node.toJson() shape (`type` / `data` / `children`) and adds `id` at every
-  /// level so block identity round-trips to the daemon.
+  /// level so block identity round-trips to the daemon. Runs at EVERY level,
+  /// so nested nodes (table cells, list children) are scrubbed too.
   static Map<String, dynamic> _nodeToJsonWithId(Node node) {
     final map = Map<String, dynamic>.from(node.toJson());
     map['id'] = node.id;
+    map.remove(_transientAttrKey);
     final kids = node.children;
     if (kids.isNotEmpty) {
       map['children'] = kids.map(_nodeToJsonWithId).toList(growable: false);

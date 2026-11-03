@@ -77,7 +77,9 @@ class NotePage {
 ///    because the single screen-level drawing dial + undo/redo act on whichever
 ///    page you last touched, not a page-per-dial.
 ///
-/// UNVERIFIED (no flutter tooling in the build env) — run `flutter analyze`.
+/// Verified with `flutter analyze` + `flutter test` (Flutter SDK is now
+/// available; 2026-11-02: 3 pre-existing suite failures live in unrelated
+/// test files — due_today_strip, upcoming_engrams, hit_test_pass_through).
 class PagedNoteController extends ChangeNotifier {
   PagedNoteController._(this._pages, {required VimModeController sharedVim})
     : _sharedVim = sharedVim {
@@ -200,6 +202,16 @@ class PagedNoteController extends ChangeNotifier {
       driver.onFocusGained = () {
         final idx = _pages.indexOf(page);
         if (idx != -1 && idx != _activeIndex) setActive(idx);
+      };
+      // Arbitrate shared-vim focus re-assertions: [_activeIndex] is
+      // keyboard-following (above) plus pointer-down claims, i.e. "the page
+      // the user is working on", so a toolbar mode flip — which fires every
+      // page's vim listener at once — must let ONLY this predicate's page
+      // [requestEditorFocus]. Identity lookup at call time, so it stays
+      // correct as pages are added/removed/merged.
+      driver.isKeyboardOwner = () {
+        final idx = _pages.indexOf(page);
+        return idx != -1 && idx == _activeIndex;
       };
     }
   }
