@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:cerebrum/ui/screens/editor/blocks/table/table_page_bounds.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
+    show kUseSingleDocumentPagination;
 import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart'
@@ -278,6 +280,25 @@ class _PageSurfaceState extends State<PageSurface> {
 
   @override
   Widget build(BuildContext context) {
+    if (kUseSingleDocumentPagination) {
+      // Strategy B: ONE editor per note, paginated by the page block
+      // itself (sheets are the paper chrome). This surface is a bare
+      // wrapper — the per-sheet pointer absorb + ink live inside the
+      // sheets, overlaid on the same document. No onOverflow/onUnderfill
+      // measurements here (the driver does its own), no analysis overlay
+      // (its geometry anchored to this surface's Stack, which is gone).
+      return SizedBox(
+        width: kDocSheetWidth,
+        child: AnimatedBuilder(
+          animation: widget.controller,
+          builder:
+              (context, _) => AbsorbPointer(
+                absorbing: widget.drawingEnabled,
+                child: widget.controller.driver.buildEditor(context),
+              ),
+        ),
+      );
+    }
     return Center(
       child: AspectRatio(
         aspectRatio: widget.aspectRatio,

@@ -1,3 +1,5 @@
+import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
+    show kUseSingleDocumentPagination;
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
@@ -153,7 +155,11 @@ class _PagedEditorState extends State<PagedEditor> {
       builder: (context, _) {
         final c = widget.controller;
         final pages = c.pages;
-        final itemCount = pages.length + 1; // + trailing "add page" tile
+        // Under Strategy B the note is ONE document with sheets — no
+        // physical page to add/remove, so the add-tile disappears.
+        final itemCount = kUseSingleDocumentPagination
+            ? pages.length
+            : pages.length + 1;
 
         Widget itemAt(int i) {
           if (i == pages.length) {
@@ -190,7 +196,13 @@ class _PagedEditorState extends State<PagedEditor> {
                 drawingEnabled: c.drawingEnabled,
                 pageNumber: i + 1,
                 pageId: pages[i].pageId,
-                analysisForBlock: widget.analysisForBlock,
+                // Analysis overlay is geometric against THIS surface's
+                // stack; under Strategy B the anchoring moved inside the
+                // page block's sheets, so it is disabled in this mode.
+                analysisForBlock:
+                    kUseSingleDocumentPagination
+                        ? null
+                        : widget.analysisForBlock,
                 partialEraser: widget.partialEraser,
                 eraserWidth: widget.eraserWidth,
                 // When this page's content spills past the sheet, move the
@@ -205,14 +217,22 @@ class _PagedEditorState extends State<PagedEditor> {
                 // would fit, now that a small kBaseFontSize can leave pages
                 // half-empty. Forward push and backward pull share the
                 // `_flowing` reentrancy guard.
+                // The Strategy-B driver dispatches its own overflow reports
+                // (page block measure → executor); push/pull stay null here.
                 onOverflow:
-                    (fromIndex, {tableAvailableHeight}) => c.pushOverflow(
-                      i,
-                      fromIndex,
-                      tableAvailableHeight: tableAvailableHeight,
-                    ),
-                onUnderfill: (freeHeight, headHeight) =>
-                    c.onPageMeasured(i, freeHeight, headHeight),
+                    kUseSingleDocumentPagination
+                        ? null
+                        : (fromIndex, {tableAvailableHeight}) =>
+                            c.pushOverflow(
+                              i,
+                              fromIndex,
+                              tableAvailableHeight: tableAvailableHeight,
+                            ),
+                onUnderfill:
+                    kUseSingleDocumentPagination
+                        ? null
+                        : (freeHeight, headHeight) =>
+                            c.onPageMeasured(i, freeHeight, headHeight),
               ),
             ),
           );

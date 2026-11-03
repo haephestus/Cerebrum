@@ -64,11 +64,17 @@ class AppFlowyTextDriver extends ChangeNotifier
     /// standalone driver instantiations (tests, engine swaps) keep working.
     VimModeController? injectedVim,
 
-    /// Strategy-B per-pageId ink store, owned by the paged controller
-    /// (null today; consulted for the inked-donor pull rules via
-    /// [_flowExecutor] only when it is supplied; later also per-sheet
-    /// `Scribble` rendering).
+    /// Strategy-B per-pageId ink store, owned by the paged controller.
+    /// Executor reads from it for the inked-donor pull rules. What the
+    /// controller builds today is the FULL surface below — so it can be
+    /// handed in READY when the controller owns it, avoiding a split
+    /// surface between driver and scaffold.
     this.pagedInks,
+
+    /// The already-built per-sheet ink rail (nullable; when supplied the
+    /// driver uses exactly this instance so surface ownership stays with
+    /// the split without doubling it into existence).
+    this.pagedInksSurface,
   }) : vimMode = injectedVim ?? VimModeController(),
        // Only a controller THIS driver created may be disposed by it. An
        // injected one is owned by PagedNoteController and shared by every
@@ -174,6 +180,10 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// running; the Strategy-B note model phase hands one over). Owned by the
   /// paged controller; the driver only references it for pull rules.
   final PageInkStore? pagedInks;
+
+  /// Pre-built ink surface handed over by the controller (unchanged
+  /// topology: `_inkSurface` resolves to this when supplied).
+  final PageInkSurface? pagedInksSurface;
 
   /// Keyboard focus for this page's editor, owned by the DRIVER (not the
   /// package): AppFlowy 6.x only focuses its keyboard-service node on a tap,
@@ -1355,8 +1365,11 @@ class AppFlowyTextDriver extends ChangeNotifier
     // sweep so no timer fires against a disposed editor.
     _flowExecutor.dispose();
     // The surface owns per-pageId notifiers and binds them to the shared
-    // store — drop them before the store's last page vanishes.
-    _inkSurface?.dispose();
+    // store. If the controller handed the surface in, the CONTROLLER owns
+    // disposal (and the store); we only drop a surface we built ourselves.
+    if (pagedInksSurface == null) {
+      _inkSurface?.dispose();
+    }
     super.dispose();
   }
 }

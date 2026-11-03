@@ -6,6 +6,11 @@ import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart
 import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/table_splitter.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
+    show kUseSingleDocumentPagination;
+import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
 
 /// Vertical continuous scroll (default, document feel) vs horizontal PageView
 /// (slideshow). Both render the same page widget — see PagedEditor.
@@ -114,6 +119,12 @@ class PagedNoteController extends ChangeNotifier {
   /// dependence on which page is active, and no pointer-dispatch ordering race).
   void applyDrawingTool(void Function(ScribbleNotifier) config) {
     _activeTool = config;
+    if (kUseSingleDocumentPagination) {
+      // Under Strategy B the sheets' notifiers live in the surface, not
+      // on the single page's controller — fan out there instead.
+      _inkSurface?.applyDrawingTool(config);
+      return;
+    }
     for (final p in _pages) {
       config(p.controller.drawingNotifier);
     }
@@ -183,8 +194,13 @@ class PagedNoteController extends ChangeNotifier {
   void _initPage(NotePage page) {
     _wireMerge(page);
     // A page created after a tool was picked inherits it, so the pen/highlighter
-    // /eraser stays consistent on brand-new pages.
-    _activeTool?.call(page.controller.drawingNotifier);
+    // /eraser stays consistent on brand-new pages. Under Strategy B the ink
+    // surface owns every sheet's notifier — _activeTool lands on all of them.
+    if (kUseSingleDocumentPagination) {
+      if (_activeTool != null) _inkSurface?.applyDrawingTool(_activeTool!);
+    } else {
+      _activeTool?.call(page.controller.drawingNotifier);
+    }
     // New pages get the image uploader too, so "/image" works on any page.
     final driver = page.controller.driver;
     if (driver is AppFlowyTextDriver) {
@@ -235,6 +251,15 @@ class PagedNoteController extends ChangeNotifier {
   int _activeIndex = 0;
   bool _drawingEnabled = false;
 
+  /// Strategy-B path ONLY: the note's per-pageId ink book and surface.
+  /// Created in [_bootstrap] from the persisted ink map; the executor and
+  /// the per-sheet overlay read from the same maps, so pull rules and the
+  /// renderer can never disagree about which page holds ink.
+  PageInkStore? _inkStore;
+  PageInkSurface? _inkSurface;
+  /// The ink store the codec hands over; null in Strategy A.
+  PageInkStore? get inkStore => _inkStore;
+
   /// Vim-enabled state per page, captured when drawing turns ON so it can be
   /// restored when drawing turns OFF (see [toggleDrawingMode]).
   final Map<String, bool> _vimEnabledBeforeDrawing = {};
@@ -270,6 +295,30 @@ class PagedNoteController extends ChangeNotifier {
     Map<String, dynamic>? legacyDocument,
     List<Map<String, dynamic>>? legacyInk,
   }) {
+    if (kUseSingleDocumentPagination && pages != null && pages.isNotEmpty) {
+      // Strategy B: ONE page in one EditorState carries the whole note;
+      // sheets (and ink) key off pageId. Both legacy notes and B notes
+      // decode through the codec: legacy pages join into one document.
+      final b = fromPages(pages);
+      final store = PageInkStore();
+      for (final e in b.ink.entries) {
+        store.setInk(e.key, e.value);
+      }
+      final surface = PageInkSurface(store: store);
+      _inkStore = store;
+      _inkSurface = surface;
+      final page = _makePage(
+        pageId: 'main',
+        index: 0,
+        document: b.document,
+        inkStore: store,
+        inkSurface: surface,
+        autoFocus: true,
+      );
+      _pages.add(page);
+      _initPage(page);
+      return;
+    }
     if (pages != null && pages.isNotEmpty) {
       for (var i = 0; i < pages.length; i++) {
         final p = pages[i];
@@ -314,6 +363,8 @@ class PagedNoteController extends ChangeNotifier {
     int? caretOffset,
     bool autoFocus = false,
     bool seedCaret = true,
+    PageInkStore? inkStore,
+    PageInkSurface? inkSurface,
   }) {
     final page = NotePage(
       pageId: pageId,
@@ -330,6 +381,10 @@ class PagedNoteController extends ChangeNotifier {
           ownsCaretSeed: autoFocus,
           // The note's ONE vim mode rides every (re)built page.
           injectedVim: _sharedVim,
+          // Strategy-B ink lands via the surface — the driver's own
+          // (single-sketch) notifier is not used in this mode.
+          pagedInks: inkStore,
+          pagedInksSurface: inkSurface,
         ),
         initialInkJson: ink,
       ),
@@ -355,6 +410,8 @@ class PagedNoteController extends ChangeNotifier {
   void toggleDrawingMode() {
     final enteringDrawing = !_drawingEnabled;
     _drawingEnabled = !_drawingEnabled;
+    // Under Strategy B the sheets' pointer gate is the surface's own flag.
+    _inkSurface?.setDrawingEnabled(_drawingEnabled);
 
     // Vim mode is a TEXT modality and must not be active while drawing —
     // its markers, shortcuts and analysis state are meaningless over the
@@ -1128,15 +1185,33 @@ class PagedNoteController extends ChangeNotifier {
   };
 
   /// Serialise to the `NoteStorage.pages` shape for save/sync.
-  List<Map<String, dynamic>> toPagesJson() => [
-    for (var i = 0; i < _pages.length; i++)
-      {
-        'page_id': _pages[i].pageId,
-        'page_index': i,
-        'document': _pages[i].controller.documentJson,
-        'ink': _pages[i].controller.inkJson,
-      },
-  ];
+  ///
+  /// Production shape (both modes): a pages list — but B carries it as ONE
+  /// entry (the codec) whose document holds every sheet's blocks and whose
+  /// `ink` is the {pageId: payload} map, never index-keyed. The existing
+  /// writeNote/outbox path is shape-blind.
+  List<Map<String, dynamic>> toPagesJson() {
+    if (kUseSingleDocumentPagination) {
+      final json = _pages.isNotEmpty ? _pages[0].controller.documentJson : <String, dynamic>{
+        'type': 'page',
+        'children': <dynamic>[],
+      };
+      return StrategyBNotation(
+        document: json,
+        ink: (_inkStore?.toJson() ?? {})
+            .map((k, v) => MapEntry(k, List<Map<String, dynamic>>.from(v))),
+      ).toPages();
+    }
+    return [
+      for (var i = 0; i < _pages.length; i++)
+        {
+          'page_id': _pages[i].pageId,
+          'page_index': i,
+          'document': _pages[i].controller.documentJson,
+          'ink': _pages[i].controller.inkJson,
+        },
+    ];
+  }
 
   @override
   void dispose() {
@@ -1144,6 +1219,8 @@ class PagedNoteController extends ChangeNotifier {
     for (final p in _pages) {
       p.controller.dispose();
     }
+    // Strategy B: the surface (and its per-pageId notifiers) is ours.
+    _inkSurface?.dispose();
     // The shared vim controller is owned here, not by any page driver, so it
     // is disposed exactly once — after every page driver is gone.
     _sharedVim.dispose();
