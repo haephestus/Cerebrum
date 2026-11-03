@@ -1,6 +1,7 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/page_runs.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
 
 /// Production "page" block component for Strategy B (single-document
@@ -17,15 +18,33 @@ import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
 /// through the sheet's box, so all numbers are document units and
 /// window-independent, exactly like PageSurface's pre-Strategy-B checks.
 /// Reports go to the optional [onOverflow] / [onUnderfill] callbacks with
-/// the GLOBAL top-level block index (position in root.children, not the
-/// sheet-local position) because that is what the flow executor addresses.
+/// the sheet's `pageId` plus the GLOBAL top-level block index (position in
+/// root.children, not the sheet-local position) because that is what the
+/// flow executor addresses — see helpers/flow_executor.dart.
 ///
-/// UNVERIFIED on device — executor wiring (transaction-based flows) is the
-/// next phase; with null callbacks this renders and measures silently.
+/// UNVERIFIED on device — executor is transaction-wired but the Strategy-B
+/// note model (single EditorState per NOTE) is still behind the
+/// [kUseSingleDocumentPagination] flag; with null callbacks this renders
+/// and measures silently.
 class PageBlockComponentBuilder extends BlockComponentBuilder {
   // Not const-constructible: BlockComponentBuilder has mutable fields
   // (validate) — same constraint EquationBlockComponentBuilder documents.
-  PageBlockComponentBuilder();
+  PageBlockComponentBuilder({
+    this.onOverflow,
+    this.onUnderfill,
+    this.sheetWidth,
+    this.sheetHeight,
+  });
+
+  /// Forwarded to every sheet the component builds. Tests inject small
+  /// sheet metrics so everything fits the default test viewport; production
+  /// leaves both null → canonical page_space.dart geometry.
+  final void Function(String pageId, int fromBlockIndex,
+      {double? tableAvailableHeight})? onOverflow;
+  final void Function(String pageId, double freeHeight,
+      double? headBlockHeight)? onUnderfill;
+  final double? sheetWidth;
+  final double? sheetHeight;
 
   @override
   BlockComponentWidget build(BlockComponentContext blockComponentContext) {
@@ -34,6 +53,10 @@ class PageBlockComponentBuilder extends BlockComponentBuilder {
       key: node.key,
       node: node,
       configuration: configuration,
+      onOverflow: onOverflow,
+      onUnderfill: onUnderfill,
+      sheetWidth: sheetWidth,
+      sheetHeight: sheetHeight,
     );
   }
 }
@@ -48,26 +71,36 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
     super.configuration = const BlockComponentConfiguration(),
     this.onOverflow,
     this.onUnderfill,
+    this.sheetWidth,
+    this.sheetHeight,
   });
 
-  /// First GLOBAL top-level block index that spills past the sheet bottom.
-  /// [tableAvailableHeight] is set only when the overflowing block is a
-  /// table — the vertical room the table head may keep on this sheet, so
-  /// the executor can split at a row boundary instead of moving the whole
-  /// block.
-  final void Function(int fromBlockIndex, {double? tableAvailableHeight})?
-  onOverflow;
+  /// First GLOBAL top-level block index that spills past [pageId]'s sheet
+  /// bottom. [tableAvailableHeight] is set only when the overflowing block
+  /// is a table — the vertical room the table head may keep on this sheet,
+  /// so the executor can split at a row boundary instead of moving the
+  /// whole block.
+  final void Function(String pageId, int fromBlockIndex,
+      {double? tableAvailableHeight})? onOverflow;
 
   /// Fired when the sheet did NOT overflow: [freeHeight] is spare space
   /// below the last block, [headBlockHeight] the first block's height —
   /// the underfill pair the backward reflow pulls on. Null head means the
   /// first block never laid out.
-  final void Function(double freeHeight, double? headBlockHeight)? onUnderfill;
+  final void Function(String pageId, double freeHeight,
+      double? headBlockHeight)? onUnderfill;
+
+  /// Paper geometry overrides (tests use small sheets). Null → canonical
+  /// [kDocSheetWidth] / A4 aspect from page_space.dart.
+  final double? sheetWidth;
+  final double? sheetHeight;
 
   @override
   Widget build(BuildContext context) {
     final editorState = context.read<EditorState>();
-    final runs = _groupByPageId(node.children);
+    final runs = groupRunsByPageId(node.children);
+    final width = sheetWidth ?? kDocSheetWidth;
+    final height = sheetHeight ?? kDocSheetWidth / kPageAspectRatio;
 
     return Column(
       children: [
@@ -76,43 +109,15 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
             key: ValueKey('cerebrum-sheet-${run.nodes.first.id}'),
             editorState: editorState,
             nodes: run.nodes,
+            pageId: run.pageId,
             globalStartIndex: run.start,
-            sheetWidth: kDocSheetWidth,
-            sheetHeight: kDocSheetWidth / kPageAspectRatio,
+            sheetWidth: width,
+            sheetHeight: height,
             onOverflow: onOverflow,
             onUnderfill: onUnderfill,
           ),
       ],
     );
-  }
-
-  /// Group children by their `pageId` attribute; also record each run's
-  /// starting index in [node.children] so measurements can report GLOBAL
-  /// block indexes (the currency pushOverflow/planForwardOverflow speak).
-  /// Missing pageId defaults to the first page.
-  List<({String pageId, int start, List<Node> nodes})> _groupByPageId(
-    Iterable<Node> children,
-  ) {
-    final runs = <({String pageId, int start, List<Node> nodes})>[];
-    var currentId = 'sheet-1';
-    var start = 0;
-    var run = <Node>[];
-    var index = 0;
-    for (final child in children) {
-      final pageId = child.attributes['pageId']?.toString() ?? 'sheet-1';
-      if (pageId != currentId && run.isNotEmpty) {
-        runs.add((pageId: currentId, start: start, nodes: run));
-        run = <Node>[];
-        currentId = pageId;
-        start = index;
-      }
-      run.add(child);
-      index++;
-    }
-    if (run.isNotEmpty) {
-      runs.add((pageId: currentId, start: start, nodes: run));
-    }
-    return runs;
   }
 }
 
@@ -123,6 +128,7 @@ class _PageSheet extends StatefulWidget {
     super.key,
     required this.editorState,
     required this.nodes,
+    required this.pageId,
     required this.globalStartIndex,
     required this.sheetWidth,
     required this.sheetHeight,
@@ -132,12 +138,14 @@ class _PageSheet extends StatefulWidget {
 
   final EditorState editorState;
   final List<Node> nodes;
+  final String pageId;
   final int globalStartIndex;
   final double sheetWidth;
   final double sheetHeight;
-  final void Function(int fromBlockIndex, {double? tableAvailableHeight})?
-  onOverflow;
-  final void Function(double freeHeight, double? headBlockHeight)? onUnderfill;
+  final void Function(String pageId, int fromBlockIndex,
+      {double? tableAvailableHeight})? onOverflow;
+  final void Function(String pageId, double freeHeight,
+      double? headBlockHeight)? onUnderfill;
 
   @override
   State<_PageSheet> createState() => _PageSheetState();
@@ -205,6 +213,7 @@ class _PageSheetState extends State<_PageSheet> {
       if (bottomLocal > pageBottom + tolerance) {
         final isTable = node.type == 'table';
         widget.onOverflow?.call(
+          widget.pageId,
           widget.globalStartIndex + i,
           tableAvailableHeight: isTable ? pageBottom - topLocal.dy : null,
         );
@@ -223,6 +232,6 @@ class _PageSheetState extends State<_PageSheet> {
       final firstBottom = sheetBox.globalToLocal(firstRect.bottomLeft).dy;
       headHeight = firstBottom - firstTop;
     }
-    widget.onUnderfill?.call(free, headHeight);
+    widget.onUnderfill?.call(widget.pageId, free, headHeight);
   }
 }

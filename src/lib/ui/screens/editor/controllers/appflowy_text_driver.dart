@@ -32,6 +32,12 @@ import 'package:cerebrum/ui/screens/editor/widgets/paged_slash_menu.dart';
 // caret impostor (14pt unstyled root → 16.3px caret on empty rows). The fork
 // is described at the adjustTextSpan override in paged_fork/paged_rich_text.dart.
 import 'package:cerebrum/ui/screens/editor/widgets/paged_fork/paged_paragraph_block_component.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/page_block_component.dart'
+    // Prefixed: appflowy_editor also exports a (stock, unused here)
+    // PageBlockComponentBuilder under the same name.
+    as cerebrum_page;
+import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
+    show FlowTransactionExecutor, kUseSingleDocumentPagination;
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,
@@ -131,6 +137,15 @@ class AppFlowyTextDriver extends ChangeNotifier
   late final EditorState _editorState;
   late final EditorScrollController _scrollController;
   late final StreamSubscription<dynamic> _transactionSub;
+
+  /// Strategy B's flow executor (single-document pagination). No-op
+  /// machinery when [kUseSingleDocumentPagination] is off. `pageHasInk`
+  /// is a placeholder until the Strategy-B note model lands — it must
+  /// report the per-pageId ink lookup the controller will then own.
+  late final FlowTransactionExecutor _flowExecutor = FlowTransactionExecutor(
+    editorState: _editorState,
+    pageHasInk: (_) => false,
+  );
   late bool _wasInAnalysis = false;
 
   /// Whether this driver created [vimMode] itself (and therefore must dispose
@@ -426,6 +441,17 @@ class AppFlowyTextDriver extends ChangeNotifier
       // builder can't do (it creates the same default-width cell regardless of
       // page size).
       'table': CerebrumTableBlockComponentBuilder(),
+
+      // Strategy B (flagged): the stock 'page' entry from the spread above is
+      // replaced by the single-document paginating page block, whose sheets
+      // stream overflow/underfill straight into the one-editor flow executor.
+      // Safe to reference _flowExecutor here: this late-final map is only
+      // touched after the constructor, by which time _editorState exists.
+      if (kUseSingleDocumentPagination)
+        PageBlockKeys.type: cerebrum_page.PageBlockComponentBuilder(
+          onOverflow: _flowExecutor.onOverflow,
+          onUnderfill: _flowExecutor.onUnderfill,
+        ),
     };
   }();
 
@@ -1301,6 +1327,9 @@ class AppFlowyTextDriver extends ChangeNotifier
     // Only dispose a vim controller this driver created. The injected one is
     // shared across pages and disposed by PagedNoteController.dispose().
     if (_ownsVimMode) vimMode.dispose();
+    // Cheap no-op when the executor is idle; cancels the pending settle
+    // sweep so no timer fires against a disposed editor.
+    _flowExecutor.dispose();
     super.dispose();
   }
 }
