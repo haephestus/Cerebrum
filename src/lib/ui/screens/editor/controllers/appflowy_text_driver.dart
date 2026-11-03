@@ -39,6 +39,7 @@ import 'package:cerebrum/ui/screens/editor/widgets/page_block_component.dart'
 import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
     show FlowTransactionExecutor, kUseSingleDocumentPagination;
 import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,
@@ -154,10 +155,16 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// once the Strategy-B note model lands; the driver only references it.
   late final FlowTransactionExecutor _flowExecutor = FlowTransactionExecutor(
     editorState: _editorState,
-    pageHasInk:
-        (_) => false, //  pagedInks == null ? (_) => false : pagedInks!.hasInk,
+    pageHasInk: pagedInks == null ? (_) => false : pagedInks!.hasInk,
   );
   late bool _wasInAnalysis = false;
+
+  /// The Strategy-B ink rail for the per-sheet drawing surface. Built from the
+  /// SAME store bound to the executor's pull rules — "has ink" can never
+  /// disagree between the renderer and the reflow. Null (no store handed in
+  /// today): sheets render no ink layer.
+  late final PageInkSurface? _inkSurface =
+      pagedInks == null ? null : PageInkSurface(store: pagedInks!);
 
   /// Whether this driver created [vimMode] itself (and therefore must dispose
   /// it). False when the controller was injected and is shared across pages.
@@ -467,6 +474,7 @@ class AppFlowyTextDriver extends ChangeNotifier
         PageBlockKeys.type: cerebrum_page.PageBlockComponentBuilder(
           onOverflow: _flowExecutor.onOverflow,
           onUnderfill: _flowExecutor.onUnderfill,
+          inkSurface: _inkSurface,
         ),
     };
   }();
@@ -1346,6 +1354,9 @@ class AppFlowyTextDriver extends ChangeNotifier
     // Cheap no-op when the executor is idle; cancels the pending settle
     // sweep so no timer fires against a disposed editor.
     _flowExecutor.dispose();
+    // The surface owns per-pageId notifiers and binds them to the shared
+    // store — drop them before the store's last page vanishes.
+    _inkSurface?.dispose();
     super.dispose();
   }
 }

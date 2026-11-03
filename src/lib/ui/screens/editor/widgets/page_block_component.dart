@@ -2,6 +2,8 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/page_runs.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
 
 /// Production "page" block component for Strategy B (single-document
@@ -32,6 +34,7 @@ class PageBlockComponentBuilder extends BlockComponentBuilder {
   PageBlockComponentBuilder({
     this.onOverflow,
     this.onUnderfill,
+    this.inkSurface,
     this.sheetWidth,
     this.sheetHeight,
   });
@@ -43,6 +46,11 @@ class PageBlockComponentBuilder extends BlockComponentBuilder {
       {double? tableAvailableHeight})? onOverflow;
   final void Function(String pageId, double freeHeight,
       double? headBlockHeight)? onUnderfill;
+
+  /// Strategy-B ink rail (notifiers keyed by pageId, seeded from the
+  /// per-pageId ink store; drawing-enabled toggled by the controller).
+  /// Null: no ink layer renders (pre-note-model, and the flag stays off).
+  final PageInkSurface? inkSurface;
   final double? sheetWidth;
   final double? sheetHeight;
 
@@ -55,6 +63,7 @@ class PageBlockComponentBuilder extends BlockComponentBuilder {
       configuration: configuration,
       onOverflow: onOverflow,
       onUnderfill: onUnderfill,
+      inkSurface: inkSurface,
       sheetWidth: sheetWidth,
       sheetHeight: sheetHeight,
     );
@@ -71,6 +80,7 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
     super.configuration = const BlockComponentConfiguration(),
     this.onOverflow,
     this.onUnderfill,
+    this.inkSurface,
     this.sheetWidth,
     this.sheetHeight,
   });
@@ -90,6 +100,10 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
   final void Function(String pageId, double freeHeight,
       double? headBlockHeight)? onUnderfill;
 
+  /// Strategy-B ink rail shared with the builder (see
+  /// [PageBlockComponentBuilder.inkSurface]). Forwarded to every sheet.
+  final PageInkSurface? inkSurface;
+
   /// Paper geometry overrides (tests use small sheets). Null → canonical
   /// [kDocSheetWidth] / A4 aspect from page_space.dart.
   final double? sheetWidth;
@@ -107,6 +121,7 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
         for (final run in runs)
           _PageSheet(
             key: ValueKey('cerebrum-sheet-${run.nodes.first.id}'),
+            inkSurface: inkSurface,
             editorState: editorState,
             nodes: run.nodes,
             pageId: run.pageId,
@@ -132,8 +147,9 @@ class _PageSheet extends StatefulWidget {
     required this.globalStartIndex,
     required this.sheetWidth,
     required this.sheetHeight,
-    required this.onOverflow,
-    required this.onUnderfill,
+    this.inkSurface,
+    this.onOverflow,
+    this.onUnderfill,
   });
 
   final EditorState editorState;
@@ -142,6 +158,8 @@ class _PageSheet extends StatefulWidget {
   final int globalStartIndex;
   final double sheetWidth;
   final double sheetHeight;
+  /// Strategy-B ink rail shared with the component; null → no ink layer.
+  final PageInkSurface? inkSurface;
   final void Function(String pageId, int fromBlockIndex,
       {double? tableAvailableHeight})? onOverflow;
   final void Function(String pageId, double freeHeight,
@@ -172,12 +190,41 @@ class _PageSheetState extends State<_PageSheet> {
         borderRadius: BorderRadius.circular(6),
       ),
       padding: const EdgeInsets.symmetric(horizontal: kBaseHorizontalPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (final node in widget.nodes)
-            widget.editorState.renderer.build(context, node),
-        ],
+      child: AnimatedBuilder(
+        animation: widget.inkSurface?.drawingEnabled ??
+            const AlwaysStoppedAnimation<bool>(false),
+        builder: (context, _) {
+          final drawing = widget.inkSurface?.drawingEnabled.value ?? false;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              // Text layer — absorbs pointers while drawing so strokes
+              // don't also move the caret (same pattern as PageSurface).
+              AbsorbPointer(
+                absorbing: drawing,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final node in widget.nodes)
+                      widget.editorState.renderer.build(context, node),
+                  ],
+                ),
+              ),
+              // Ink layer — only receptive to pointers while drawing. Keyed
+              // strictly by pageId, so a stroke follows [widget.pageId]'s
+              // run wherever the document decides that run lives.
+              if (widget.inkSurface != null)
+                IgnorePointer(
+                  ignoring: !drawing,
+                  child: NoteDrawingLayer(
+                    notifier: widget.inkSurface!.notifierFor(widget.pageId),
+                    partialEraser: widget.inkSurface!.partialEraser,
+                    eraserWidth: widget.inkSurface!.eraserWidth,
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
