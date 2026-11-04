@@ -1,75 +1,115 @@
 import 'package:cerebrum/ui/screens/editor/controllers/paged_note_controller.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
+    show kUseSingleDocumentPagination;
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 /// Regression guard for the BACKWARD reflow (idle-gated pull sweep).
 ///
 /// Pull must be a faithful block move: type, attributes (heading levels),
-/// delta text and stable ids survive the serialize → rebuild round trip the
-/// sweep performs on both pages. It once rendered a pulled H1 as a plain
-/// body paragraph on the receiving page.
+/// delta text and stable ids survive the round trip. It once rendered a
+/// pulled H1 as a plain body paragraph on the receiving page.
 ///
-/// Runs inside [fakeAsync] because the sweep is only reachable through the
-/// idle-settle timer (the physical harness measured real frames; here the
-/// controller API is driven directly).
+/// Shaped by the flag: under Strategy A the sweep serializes and rebuilds
+/// both page editors, and the guard watches that round trip there. Under
+/// Strategy B the two source pages are MIGRATED into one document at
+/// [PagedNoteController.fromNote] (a JSON round trip in its own right), so
+/// the guard checks the same invariants at the migration boundary and that
+/// the idle sweep is inert when there is one page.
+///
+/// Runs inside [fakeAsync] because the A-shape sweep is only reachable
+/// through the idle-settle timer.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  final pages = [
+    {
+      'page_id': 'p1',
+      'page_index': 0,
+      'document': {
+        'type': 'page',
+        'children': [
+          {
+            'type': 'paragraph',
+            'data': {
+              'delta': [
+                {'insert': 'list item one'},
+              ],
+            },
+          },
+          {
+            'type': 'numbered_list',
+            'data': {
+              'delta': [
+                {'insert': 'short'}
+              ],
+              'number': 1,
+            },
+          },
+        ],
+      },
+    },
+    {
+      'page_id': 'p2',
+      'page_index': 1,
+      'document': {
+        'type': 'page',
+        'children': [
+          {
+            'type': 'heading',
+            'data': {
+              'delta': [
+                {'insert': 'Training and splitting data'}
+              ],
+              'level': 1,
+            },
+          },
+          {
+            'type': 'paragraph',
+            'data': {
+              'delta': [
+                {'insert': 'Splitting data according to traing and test.'},
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ];
+
   test('pull moves the donor head with type and attributes intact', () {
     fakeAsync((async) {
-      final c = PagedNoteController.fromNote(pages: [
-        {
-          'page_id': 'p1',
-          'page_index': 0,
-          'document': {
-            'type': 'page',
-            'children': [
-              {
-                'type': 'paragraph',
-                'data': {
-                  'delta': [
-                    {'insert': 'list item one'},
-                  ],
-                },
-              },
-              {
-                'type': 'numbered_list',
-                'data': {
-                  'delta': [
-                    {'insert': 'short'}
-                  ],
-                  'number': 1,
-                },
-              },
-            ],
-          },
-        },
-        {
-          'page_id': 'p2',
-          'page_index': 1,
-          'document': {
-            'type': 'page',
-            'children': [
-              {
-                'type': 'heading',
-                'data': {
-                  'delta': [
-                    {'insert': 'Training and splitting data'}
-                  ],
-                  'level': 1,
-                },
-              },
-              {
-                'type': 'paragraph',
-                'data': {
-                  'delta': [
-                    {'insert': 'Splitting data according to traing and test.'},
-                  ],
-                },
-              },
-            ],
-          },
-        },
-      ]);
+      final c = PagedNoteController.fromNote(pages: pages);
+
+      if (kUseSingleDocumentPagination) {
+        // Strategy B: the note is ONE document now — the pages were joined
+        // by the codec migration. The heading must have landed with its
+        // type, level and text intact.
+        expect(c.pages.length, 1, reason: 'B migration joins the pages');
+        final children =
+            (c.pages[0].controller.documentJson['children'] as List)
+                .cast<Map>();
+        expect(children.map((e) => e['type']).toList(), [
+          'paragraph',
+          'numbered_list',
+          'heading',
+          'paragraph',
+        ]);
+        final head = children[2];
+        expect(head['type'], 'heading');
+        final data = head['data'] as Map;
+        expect(data['level'], 1, reason: 'heading level survives migration');
+        expect(
+          (data['delta'] as List).single['insert'],
+          'Training and splitting data',
+        );
+
+        // The idle sweep is inert under B (one page, executor-owed reflow):
+        // measuring pages must not crash or move anything.
+        c.onPageMeasured(0, 500.0, 20.0);
+        c.onPageMeasured(1, 200.0, 20.0);
+        async.elapse(const Duration(milliseconds: 700));
+        return;
+      }
 
       // Receiver page 0 has 500ish doc px free, donor's head is ~20 doc px
       // tall: comfortably past the pull-fit margin.

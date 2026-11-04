@@ -11,12 +11,12 @@ import 'package:cerebrum/ui/screens/editor/helpers/table_splitter.dart';
 /// When true, the `'page'` block renders through [PageBlockComponentBuilder]
 /// and overflow/backward-reflow run through [FlowTransactionExecutor]
 /// against ONE EditorState (the note is a single document; sheets are just
-/// runs of `pageId`-tagged blocks). Default OFF — Strategy A (one editor per
-/// page, JSON-rebuild flows) keeps running until the Strategy-B note model
-/// (fromNote/toPagesJson over one document + the page-local ink map) lands.
-/// With the flag on, PageSurface's own sheet chrome must NOT wrap the editor
-/// (that would double-chrome); removing it is part of the note-model work.
-const bool kUseSingleDocumentPagination = false;
+/// runs of `pageId`-tagged blocks). The Strategy-B note model
+/// (fromNote/toPagesJson over one document + the page-local ink map) has
+/// landed behind this flag — legacy A-shape notes migrate in-memory on
+/// open and persist in B shape on save (see `strategy_b_notes.dart`; the
+/// sync contract reconciles the page-set shrink server-side).
+const bool kUseSingleDocumentPagination = true;
 
 /// Spare document-pixel room a pulled head must clear on the receiver —
 /// deliberately greater than the forward check's 0.5 tolerance so a
