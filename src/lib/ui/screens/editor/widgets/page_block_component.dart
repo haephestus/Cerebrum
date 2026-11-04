@@ -116,7 +116,16 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
     final width = sheetWidth ?? kDocSheetWidth;
     final height = sheetHeight ?? kDocSheetWidth / kPageAspectRatio;
 
-    return Column(
+    return ListView(
+      // The notes canvas is one bounded-height A4 viewport under Strategy B;
+      // consecutive sheets can outgrow it (some notes are hundreds of
+      // paragraphs), so the sheet column must be scrollable. shrinkWrap:
+      // the ListView reports the full document height to shrink-wrap
+      // parent layouts (the AppFlowy engine measures the Column as a
+      // shrink-wrapped scrollable child) — children keep their fixed
+      // canonical heights regardless.
+      shrinkWrap: true,
+      physics: const ClampingScrollPhysics(),
       children: [
         for (final run in runs)
           _PageSheet(

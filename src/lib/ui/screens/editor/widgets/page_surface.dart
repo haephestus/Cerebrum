@@ -287,25 +287,36 @@ class _PageSurfaceState extends State<PageSurface> {
       // sheets, overlaid on the same document. No onOverflow/onUnderfill
       // measurements here (the driver does its own), no analysis overlay
       // (its geometry anchored to this surface's Stack, which is gone).
-      return Center(
-      child: AspectRatio(
-        // Unbounded heights make appflowy's editor overlay (_Theatre) crash
-        // in dry layout — the aspect-ratio'd box is what gave the editor
-        // finite constraints in the A branch. NO paper chrome here: no
-        // FittedBox, no decoration — the sheets own all of that. This box
-        // exists ONLY to hand the editor bounded constraints inside the
-        // paged list view's sliver.
-        aspectRatio: widget.aspectRatio,
-        child: AnimatedBuilder(
-          animation: widget.controller,
-          builder:
-              (context, _) => AbsorbPointer(
-                absorbing: widget.drawingEnabled,
-                child: widget.controller.driver.buildEditor(context),
+      return LayoutBuilder(
+        builder: (context, viewport) {
+          // Fixed canonical width, viewport height — the box must be
+          // BOUNDED in both axes (appflowy's overlay needs finite
+          // constraints) while letting the sheet column grow SCROLLABLE
+          // inside (see PageBlockComponent's shrinkWrapped ListView).
+          // Deliberately no FittedBox: the scale is exactly 1 — the sheets
+          // render at canonical size on every window, no letterbox zoom.
+          // `LayoutBuilder` yields infinity when an ancestor is
+          // unbounded (e.g. a scrollable paged list); fall back to the
+          // canonical A4 height in that case so constraints stay finite.
+          final double h = viewport.hasBoundedHeight
+              ? viewport.maxHeight
+              : kDocSheetWidth / kPageAspectRatio;
+          return Center(
+            child: SizedBox(
+              width: kDocSheetWidth,
+              height: h,
+              child: AnimatedBuilder(
+                animation: widget.controller,
+                builder:
+                    (context, _) => AbsorbPointer(
+                      absorbing: widget.drawingEnabled,
+                      child: widget.controller.driver.buildEditor(context),
+                    ),
               ),
-        ),
-      ),
-    );
+            ),
+          );
+        },
+      );
     }
     return Center(
       child: AspectRatio(
