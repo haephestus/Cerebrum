@@ -40,6 +40,8 @@ import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
     show FlowTransactionExecutor, kUseSingleDocumentPagination;
 import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart'
+    show stampPageIds;
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,
@@ -99,9 +101,15 @@ class AppFlowyTextDriver extends ChangeNotifier
       editorState: _editorState,
       shrinkWrap: true,
     );
-    _transactionSub = _editorState.transactionStream.listen(
-      (_) => notifyListeners(),
-    );
+    _transactionSub = _editorState.transactionStream.listen((_) {
+      // Under Strategy B, brand-new top-level nodes must carry a pageId —
+      // typing inserts/removes blocks freely (paragraph split, new table
+      // from the slash menu …) and the run grouper would otherwise drop an
+      // untagged block into the ghost default page. Stamp from the nearest
+      // preceding tagged sibling, or the first page when none exists yet.
+      if (kUseSingleDocumentPagination) _normalizePageIds();
+      notifyListeners();
+    });
     // [caret-debug] TEMP — print caret rect heights per selection change.
     _editorState.selectionNotifier.addListener(_debugCaretMetrics);
     // Narrow highlight-clear listener: when this page's vim mode LEAVES
@@ -165,12 +173,28 @@ class AppFlowyTextDriver extends ChangeNotifier
   );
   late bool _wasInAnalysis = false;
 
-  /// The Strategy-B ink rail for the per-sheet drawing surface. Built from the
-  /// SAME store bound to the executor's pull rules — "has ink" can never
-  /// disagree between the renderer and the reflow. Null (no store handed in
-  /// today): sheets render no ink layer.
+  /// The Strategy-B ink rail for the per-sheet drawing surface. The SAME store
+  /// binds the executor's pull rules — "has ink" can never disagree between the
+  /// renderer and the reflow. THE SUPPLIED surface wins (the controller builds
+  /// one so the scaffold persists ink through ONE registry; when we build our
+  /// own here, sheets — and the controller-owned surface — would each grow a
+  /// parallel notifier set over the same store and double-write every stroke).
+  /// If neither store nor surface is supplied, sheets render no ink layer.
   late final PageInkSurface? _inkSurface =
-      pagedInks == null ? null : PageInkSurface(store: pagedInks!);
+      pagedInksSurface ??
+      (pagedInks == null ? null : PageInkSurface(store: pagedInks!));
+
+  /// Strategy B: brand-new top-level blocks must carry a pageId, or the run
+  /// grouper drops them in the ghost default sheet — see
+  /// [strategy_b_notes.stampPageIds].
+  void _normalizePageIds() {
+    if (!_normalizePageIdsEnabled) return;
+    stampPageIds(_editorState.document);
+    // No notify here: this runs inside the transactionStream listener, which
+    // notifies the UI itself — the sheets rebuild with the now-tagged blocks.
+  }
+
+  bool get _normalizePageIdsEnabled => kUseSingleDocumentPagination;
 
   /// Whether this driver created [vimMode] itself (and therefore must dispose
   /// it). False when the controller was injected and is shared across pages.

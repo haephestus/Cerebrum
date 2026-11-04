@@ -1,3 +1,4 @@
+import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart';
 
@@ -171,7 +172,48 @@ void main() {
   test('migrateToB emits one page entry with the main page_id', () {
     final out = migrateToB(legacyPages);
     expect(out, hasLength(1));
-    expect(out[0]['page_id'], 'main');
+    expect(out[0]['page_id'], kStrategyBPageId);
     expect((out[0]['document'] as Map)['children'], hasLength(3));
+  });
+
+  group('stampPageIds', () {
+    Document docOf(List<Node> children) =>
+        Document(root: Node(type: 'page', children: children));
+
+    Node tagged(String id, String pageId) {
+      final n = paragraphNode(text: id, attributes: {'pageId': pageId});
+      n.id = id;
+      return n;
+    }
+
+    Node untagged(String id) => paragraphNode(text: id)..id = id;
+
+    test('stamps a fresh untagged block after the sheet it split from', () {
+      final doc = docOf([tagged('b0', 'p1'), untagged('b1')]);
+      stampPageIds(doc);
+      expect(doc.root.children[1].attributes['pageId'], 'p1');
+      expect(doc.root.children[0].attributes['pageId'], 'p1');
+    });
+
+    test('follows the nearest preceding tag mid-document', () {
+      final doc = docOf([
+        tagged('b0', 'p1'),
+        untagged('b1'),
+        tagged('b2', 'p2'),
+        untagged('b3'),
+      ]);
+      stampPageIds(doc);
+      expect(doc.root.children[1].attributes['pageId'], 'p1');
+      expect(doc.root.children[3].attributes['pageId'], 'p2');
+    });
+
+    test('fallback is the single B page id when nothing is tagged', () {
+      final doc = docOf([untagged('b0'), untagged('b1')]);
+      stampPageIds(doc);
+      expect(
+        doc.root.children.map((n) => n.attributes['pageId']),
+        everyElement(kStrategyBPageId),
+      );
+    });
   });
 }

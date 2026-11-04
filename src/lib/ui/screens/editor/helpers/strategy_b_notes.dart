@@ -1,5 +1,7 @@
 import 'dart:convert' show jsonDecode, jsonEncode;
 
+import 'package:appflowy_editor/appflowy_editor.dart';
+
 /// Strategy-B note codec: ONE document with `pageId`-stamped top-level
 /// blocks, ink stored as `{pageId: [Sketch.toJson()]}`.
 ///
@@ -53,12 +55,36 @@ class StrategyBNotation {
   /// The ONE-ELEMENT pages list the existing save pipeline consumes.
   List<Map<String, dynamic>> toPages() => [
         {
-          'page_id': 'main',
+          'page_id': kStrategyBPageId,
           'page_index': 0,
           'document': document,
           'ink': ink,
         },
       ];
+}
+
+/// The single page id every Strategy-B note uses. New top-level blocks are
+/// stamped with it when no tagged sibling precedes them (see
+/// [stampPageIds]).
+const kStrategyBPageId = 'main';
+
+/// Invariant repair: every top-level block must carry a `pageId`, or the
+/// sheet grouper drops it into a phantom default page. Typing inserts
+/// blocks freely (paragraph splits, slash-menu tables) and AppFlowy does
+/// NOT carry custom attributes to the new node — so stamp the untagged
+/// block with the nearest preceding tagged sibling's page (`'main'` when
+/// nothing is tagged yet: under B there is exactly ONE page). Runs after
+/// every transaction so a mid-document insert never flashes a ghost sheet.
+void stampPageIds(Document doc) {
+  var last = kStrategyBPageId;
+  for (final node in doc.root.children) {
+    final tag = node.attributes['pageId'];
+    if (tag is String && tag.isNotEmpty) {
+      last = tag;
+      continue;
+    }
+    node.updateAttributes({'pageId': last});
+  }
 }
 
 typedef InkMap = Map<String, List<Map<String, dynamic>>>;
