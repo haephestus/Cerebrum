@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart' show PointerScrollEvent, PointerSignalEvent;
+import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:cerebrum/ui/screens/editor/blocks/table/table_page_bounds.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
@@ -137,6 +139,21 @@ class _PageSurfaceState extends State<PageSurface> {
   // ValueNotifier the AnimatedBuilder below already listens to loosely;
   // it stays within this surface so desktop zoom doesn't touch the
   // executor, ink, or document-unit measurements.
+  // Word-style Ctrl+wheel zoom: ~15% zoom step per notch, clamped
+  // 1.0..2.5. When Ctrl is held the signal is swallowed before the
+  // inner sheet ListView sees it (focus for zoom, not scroll).
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    if (!HardwareKeyboard.instance.isControlPressed) return;
+    if (event.scrollDelta.dy == 0) return;
+    final double zoom = _zoom.value;
+    final double step = event.scrollDelta.dy.sign * 0.15;
+    final double target = (zoom - step).clamp(1.0, 2.5);
+    if (target == zoom) return;
+    _zoomController.value = Matrix4.diagonal3Values(target, target, 1.0);
+    _zoom.value = target;
+  }
+
   final ValueNotifier<double> _zoom = ValueNotifier<double>(1.0);
   final TransformationController _zoomController = TransformationController();
   // First build computes the fit-width zoom; later builds keep the
@@ -326,8 +343,12 @@ class _PageSurfaceState extends State<PageSurface> {
               // units — the zoom is a transform on the painted surface,
               // identical to changing the window size.
               return Center(
-                child: InteractiveViewer(
-                  transformationController: _zoomController,
+                child: Listener(
+                  // Outside InteractiveViewer so the wheel signal arrives
+                  // BEFORE any child handler, and we can swallow it.
+                  onPointerSignal: _onPointerSignal,
+                  child: InteractiveViewer(
+                    transformationController: _zoomController,
                   panEnabled: zoom > 1.0,
                   scaleEnabled: true,
                   minScale: 1.0,
@@ -367,6 +388,7 @@ class _PageSurfaceState extends State<PageSurface> {
                       ),
                     ),
                   ),
+                ),
                 ),
               );
             },

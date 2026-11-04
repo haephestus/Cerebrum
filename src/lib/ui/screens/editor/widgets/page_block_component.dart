@@ -1,5 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:provider/provider.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/page_runs.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
@@ -28,6 +29,24 @@ import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
 /// note model (single EditorState per NOTE) is still behind the
 /// [kUseSingleDocumentPagination] flag; with null callbacks this renders
 /// and measures silently.
+/// Declines all scroll consumption while Ctrl is held — so Ctrl+wheel goes
+/// to the page-surface zoom handler, not to this sheets-column scroll view.
+/// Wheel without Ctrl scrolls the sheets as usual.
+class _NoZoomScrollPhysics extends ScrollPhysics {
+  const _NoZoomScrollPhysics({super.parent});
+
+  @override
+  ScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _NoZoomScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  bool shouldAcceptUserOffset(ScrollMetrics metrics) {
+    if (HardwareKeyboard.instance.isControlPressed) return false;
+    return super.shouldAcceptUserOffset(metrics);
+  }
+}
+
 class PageBlockComponentBuilder extends BlockComponentBuilder {
   // Not const-constructible: BlockComponentBuilder has mutable fields
   // (validate) — same constraint EquationBlockComponentBuilder documents.
@@ -125,7 +144,11 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
       // shrink-wrapped scrollable child) — children keep their fixed
       // canonical heights regardless.
       shrinkWrap: true,
-      physics: const ClampingScrollPhysics(),
+      // Word-style Ctrl+wheel: zoom must take the wheel, not scroll — the
+      // surface handles the zoom; decline scroll consumption while Ctrl
+      // is held so the inner column doesn't scroll the sheets as the
+      // user zooms.
+      physics: const _NoZoomScrollPhysics(),
       children: [
         for (final run in runs)
           _PageSheet(
