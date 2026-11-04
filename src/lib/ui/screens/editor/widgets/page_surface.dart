@@ -287,8 +287,15 @@ class _PageSurfaceState extends State<PageSurface> {
       // sheets, overlaid on the same document. No onOverflow/onUnderfill
       // measurements here (the driver does its own), no analysis overlay
       // (its geometry anchored to this surface's Stack, which is gone).
-      return SizedBox(
-        width: kDocSheetWidth,
+      return Center(
+      child: AspectRatio(
+        // Unbounded heights make appflowy's editor overlay (_Theatre) crash
+        // in dry layout — the aspect-ratio'd box is what gave the editor
+        // finite constraints in the A branch. NO paper chrome here: no
+        // FittedBox, no decoration — the sheets own all of that. This box
+        // exists ONLY to hand the editor bounded constraints inside the
+        // paged list view's sliver.
+        aspectRatio: widget.aspectRatio,
         child: AnimatedBuilder(
           animation: widget.controller,
           builder:
@@ -297,7 +304,8 @@ class _PageSurfaceState extends State<PageSurface> {
                 child: widget.controller.driver.buildEditor(context),
               ),
         ),
-      );
+      ),
+    );
     }
     return Center(
       child: AspectRatio(
