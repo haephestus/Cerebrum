@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:cerebrum/api/bubbles_api.dart';
 import 'package:cerebrum/services/note_store.dart';
+import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart'
+    show isBShape;
 
 /// Offline-capable note sync — the client push half (offline-first plan,
 /// phases 1-4).
@@ -192,6 +194,11 @@ class SyncService {
         // Brand-new note: materialise it server-side (creates the folder) with
         // OUR client-minted id, so the server filename becomes `<noteId>.json`
         // and there's no identity churn. Then push the whole page set /update.
+        // Ink at create stays the LEGACY single-sketch list: under Strategy B
+        // `ink` is a pageId→sketches MAP, which `createNote`'s list-param shape
+        // cannot carry — pass NO ink for B instead (`null` → daemon default),
+        // the immediately-following /update carries the full B set verbatim.
+        final bShape = pages.isNotEmpty && isBShape(pages);
         final created = await BubbleNotesApi.createNote(
           bubbleId: bubbleId,
           title: title,
@@ -200,11 +207,11 @@ class SyncService {
             'document': pages.isNotEmpty ? pages.first['document'] : const {},
           },
           ink:
-              pages.isNotEmpty
-                  ? List<Map<String, dynamic>>.from(
+              bShape || pages.isEmpty
+                  ? const []
+                  : List<Map<String, dynamic>>.from(
                     (pages.first['ink'] as List?) ?? const [],
-                  )
-                  : const [],
+                  ),
         );
         filename = created['filename'] as String?;
         result = created;
