@@ -41,7 +41,7 @@ import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
 import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart'
-    show stampPageIds;
+    show kStrategyBPageId, stampPageIds;
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,
@@ -195,6 +195,22 @@ class AppFlowyTextDriver extends ChangeNotifier
   }
 
   bool get _normalizePageIdsEnabled => kUseSingleDocumentPagination;
+
+  /// The Strategy-B pageId of the block the caret currently sits in (null
+  /// under Strategy A, and null under B when there is no selection or the
+  /// top-level block is not [PageBlockKeys.type]-headed — e.g. mid-apply).
+  /// The scaffold's tool dial uses this to scope undo/redo to the sheet the
+  /// user is drawing in.
+  String? get activePageId {
+    if (!kUseSingleDocumentPagination) return null;
+    final selection = _editorState.selection;
+    if (selection == null || selection.start.path.isEmpty) return null;
+    final block =
+        _editorState.document.nodeAtPath([selection.start.path.first]);
+    if (block == null) return null;
+    final tag = block.attributes['pageId'];
+    return tag is String && tag.isNotEmpty ? tag : kStrategyBPageId;
+  }
 
   /// Whether this driver created [vimMode] itself (and therefore must dispose
   /// it). False when the controller was injected and is shared across pages.

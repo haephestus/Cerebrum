@@ -1560,8 +1560,11 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                       return const SizedBox.shrink();
                     }
                     return ToolDialHub(
-                      notifier:
-                          _editorController.activeController.drawingNotifier,
+                      // A: the active page's own notifier; B: the ink
+                      // surface's notifier for the caret's sheet (undo/redo
+                      // must hit the strokes the user sees — controller
+                      // resolves it; see [PagedNoteController.dialNotifier]).
+                      notifier: _editorController.dialNotifier,
                       // Selecting a pen/highlighter/eraser follows across pages.
                       onSelectTool: _editorController.applyDrawingTool,
                       // Re-tapping the eraser toggles this partial/whole flag.

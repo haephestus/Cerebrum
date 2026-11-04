@@ -271,6 +271,22 @@ class PagedNoteController extends ChangeNotifier {
   PageLayoutMode get layout => _layout;
   NoteEditorController get activeController => _pages[_activeIndex].controller;
 
+  /// The ink notifier the tool dial should drive. Under Strategy A this is
+  /// the active page's own notifier; under Strategy B the sheets' notifiers
+  /// live in the ink surface, so resolve the ACTIVE SHEET's one from the
+  /// caret's pageId (null selection falls back to the single B page —
+  /// `notifierFor` is lazily creating, so this matches the sheets).
+  ScribbleNotifier get dialNotifier {
+    if (kUseSingleDocumentPagination) {
+      final driver = _pages[_activeIndex].controller.driver;
+      final pageId = driver is AppFlowyTextDriver ? driver.activePageId : null;
+      if (_inkSurface != null) {
+        return _inkSurface!.notifierFor(pageId ?? kStrategyBPageId);
+      }
+    }
+    return _pages[_activeIndex].controller.drawingNotifier;
+  }
+
   /// Build from `NoteStorage.pages`; falls back to a single page synthesised
   /// from the legacy `{document, ink}` shape when the note has no pages yet.
   factory PagedNoteController.fromNote({
