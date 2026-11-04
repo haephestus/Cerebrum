@@ -131,6 +131,18 @@ class _PageSurfaceState extends State<PageSurface> {
   int? _activeBlockIndex;
   List<Map<String, dynamic>> _activeChunks = const [];
 
+  // Minimal zoom controller for the "one page at a time" view — mirrors
+  // what FittedBox gave us (fit-to-window content scale), minus the
+  // letterboxing. 1.0 = 100%, 2.5 max. State survives rebuilds via a
+  // ValueNotifier the AnimatedBuilder below already listens to loosely;
+  // it stays within this surface so desktop zoom doesn't touch the
+  // executor, ink, or document-unit measurements.
+  final ValueNotifier<double> _zoom = ValueNotifier<double>(1.0);
+  final TransformationController _zoomController = TransformationController();
+  // First build computes the fit-width zoom; later builds keep the
+  // user's wheel/pinch adjustments.
+  bool _zoomInitialized = false;
+
   // Coalesce overflow checks to one per frame (edits fire many notifications).
   bool _overflowCheckScheduled = false;
 
@@ -164,6 +176,8 @@ class _PageSurfaceState extends State<PageSurface> {
   void dispose() {
     _driver?.selectionChanges.removeListener(_onSelectionChanged);
     widget.controller.removeListener(_scheduleOverflowCheck);
+    _zoom.dispose();
+    _zoomController.dispose();
     super.dispose();
   }
 
@@ -289,31 +303,73 @@ class _PageSurfaceState extends State<PageSurface> {
       // (its geometry anchored to this surface's Stack, which is gone).
       return LayoutBuilder(
         builder: (context, viewport) {
-          // Fixed canonical width, viewport height — the box must be
-          // BOUNDED in both axes (appflowy's overlay needs finite
-          // constraints) while letting the sheet column grow SCROLLABLE
-          // inside (see PageBlockComponent's shrinkWrapped ListView).
-          // Deliberately no FittedBox: the scale is exactly 1 — the sheets
-          // render at canonical size on every window, no letterbox zoom.
-          // `LayoutBuilder` yields infinity when an ancestor is
-          // unbounded (e.g. a scrollable paged list); fall back to the
-          // canonical A4 height in that case so constraints stay finite.
-          final double h = viewport.hasBoundedHeight
-              ? viewport.maxHeight
-              : kDocSheetWidth / kPageAspectRatio;
-          return Center(
-            child: SizedBox(
-              width: kDocSheetWidth,
-              height: h,
-              child: AnimatedBuilder(
-                animation: widget.controller,
-                builder:
-                    (context, _) => AbsorbPointer(
-                      absorbing: widget.drawingEnabled,
-                      child: widget.controller.driver.buildEditor(context),
+          final double w = viewport.hasBoundedWidth
+              ? viewport.maxWidth
+              : kDocSheetWidth;
+          // "" like the old FittedBox, but the user holds the wheel:
+          // fit-to-window by default, double-tap toggles 1x, wheel zooms.
+          double fit = w / kDocSheetWidth;
+          if (fit < 1.0) fit = 1.0;
+          // First build: adopt fit-width as the zoom (the old FittedBox
+          // UX — the page fills the window). Rebuilds preserve the
+          // user's current zoom.
+          if (!_zoomInitialized) {
+            _zoom.value = fit;
+            _zoomController.value *= Matrix4.diagonal3Values(fit, fit, 1.0);
+            _zoomInitialized = true;
+          }
+          return ValueListenableBuilder<double>(
+            valueListenable: _zoom,
+            builder: (context, zoom, _) {
+              // The canvas IS one page at canonical size; the viewer
+              // scales its paint. Ink/measure/executor stay in document
+              // units — the zoom is a transform on the painted surface,
+              // identical to changing the window size.
+              return Center(
+                child: InteractiveViewer(
+                  transformationController: _zoomController,
+                  panEnabled: zoom > 1.0,
+                  scaleEnabled: true,
+                  minScale: 1.0,
+                  maxScale: 2.5,
+                  onInteractionUpdate: (details) {
+                    // Keep our ValueNotifier in sync for future UI (view
+                    // menu readout) and pan gating above.
+                    final double s = _zoomController.value.getMaxScaleOnAxis();
+                    if ((_zoom.value - s).abs() > 0.005) {
+                      _zoom.value = s;
+                    }
+                  },
+                  child: GestureDetector(
+                    // Double-tap toggle: fit-to-window <-> 1x readout.
+                    onDoubleTap: () {
+                      final target = zoom > (fit - 0.05) ? 1.0 : fit;
+                      _zoomController.value = Matrix4.diagonal3Values(
+                        target,
+                        target,
+                        1.0,
+                      );
+                      _zoom.value = target;
+                    },
+                    child: SizedBox(
+                      width: kDocSheetWidth,
+                      height: viewport.hasBoundedHeight
+                          ? viewport.maxHeight
+                          : kDocSheetWidth / kPageAspectRatio,
+                      child: AnimatedBuilder(
+                        animation: widget.controller,
+                        builder:
+                            (context, _) => AbsorbPointer(
+                              absorbing: widget.drawingEnabled,
+                              child:
+                                  widget.controller.driver.buildEditor(context),
+                            ),
+                      ),
                     ),
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           );
         },
       );
@@ -348,7 +404,6 @@ class _PageSurfaceState extends State<PageSurface> {
             // is fine — the outer ClipRRect clips the box, and rounding never
             // overpaints it.
             child: FittedBox(
-              fit: BoxFit.contain,
               alignment: Alignment.topLeft,
               clipBehavior: Clip.none,
               child: SizedBox(
