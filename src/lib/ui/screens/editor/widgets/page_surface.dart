@@ -408,17 +408,14 @@ class _PageSurfaceState extends State<PageSurface> {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: context.cerebrum.surface.raised,
-            borderRadius: BorderRadius.circular(4),
             boxShadow: [
               BoxShadow(
                 color: context.cerebrum.editor.pageShadow,
-                blurRadius: 6,
                 offset: Offset(0, 2),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
             child: FittedBox(
               alignment: Alignment.topLeft,
               clipBehavior: Clip.none,

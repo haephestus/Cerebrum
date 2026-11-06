@@ -246,13 +246,8 @@ class _PageSheetState extends State<_PageSheet> {
       decoration: BoxDecoration(
         color: context.cerebrum.surface.raised,
         border: Border.all(color: context.cerebrum.editor.pageBorder),
-        borderRadius: BorderRadius.circular(6),
         boxShadow: [
-          BoxShadow(
-            color: context.cerebrum.editor.pageShadowSoft,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.transparent, offset: const Offset(0, 2)),
         ],
       ),
       // NOTE: no `padding:` on this Container any more. The paper margins are
