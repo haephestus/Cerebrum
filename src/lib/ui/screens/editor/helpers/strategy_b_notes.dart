@@ -38,12 +38,8 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 /// B note — that is deliberately a separate decision (semantic merge of
 /// the one document vs. mixed formats per page) and is not made in code
 /// without the storage contracts it concerns.
-
 class StrategyBNotation {
-  const StrategyBNotation({
-    required this.document,
-    required this.ink,
-  });
+  const StrategyBNotation({required this.document, required this.ink});
 
   /// The ONE document — a `'page'` root whose children carry `pageId`.
   final Map<String, dynamic> document;
@@ -54,13 +50,13 @@ class StrategyBNotation {
 
   /// The ONE-ELEMENT pages list the existing save pipeline consumes.
   List<Map<String, dynamic>> toPages() => [
-        {
-          'page_id': kStrategyBPageId,
-          'page_index': 0,
-          'document': document,
-          'ink': ink,
-        },
-      ];
+    {
+      'page_id': kStrategyBPageId,
+      'page_index': 0,
+      'document': document,
+      'ink': ink,
+    },
+  ];
 }
 
 /// The single page id every Strategy-B note uses. New top-level blocks are
@@ -114,7 +110,8 @@ StrategyBNotation fromPages(List<Map<String, dynamic>> pages) {
     final ink = _bInkOf(entry['ink'] as Map);
     if (!_isPaged(document)) {
       throw ArgumentError(
-          'fromPages: B-shape entry does not hold a paged document');
+        'fromPages: B-shape entry does not hold a paged document',
+      );
     }
     return StrategyBNotation(document: document, ink: ink);
   }
@@ -128,7 +125,8 @@ StrategyBNotation fromPages(List<Map<String, dynamic>> pages) {
     final document = _documentOf(entry);
     if (!_isPaged(document)) {
       throw ArgumentError(
-          'fromPages: legacy entry $pageId does not hold a document');
+        'fromPages: legacy entry $pageId does not hold a document',
+      );
     }
     for (final child in (document['children'] as List<dynamic>)) {
       if (child is! Map) continue;
@@ -147,15 +145,15 @@ StrategyBNotation fromPages(List<Map<String, dynamic>> pages) {
     if (legacyInk is List && legacyInk.isNotEmpty) {
       ink[pageId] = [
         for (final s in legacyInk)
-          if (s is Map<String, dynamic>) s else if (s is Map) Map<String, dynamic>.from(s),
+          if (s is Map<String, dynamic>)
+            s
+          else if (s is Map)
+            Map<String, dynamic>.from(s),
       ];
     }
   }
   final note = StrategyBNotation(
-    document: {
-      'type': 'page',
-      'children': children,
-    },
+    document: {'type': 'page', 'children': children},
     ink: ink,
   );
   return note;
@@ -204,3 +202,111 @@ InkMap _bInkOf(Map map) {
 
 bool _isPaged(Map<String, dynamic> document) =>
     document['type'] == 'page' && document['children'] is List;
+
+// ---------------------------------------------------------------------------
+// Reverse migration: B-shape save → A-shape pages list.
+//
+// A note saved while `kUseSingleDocumentPagination = true` was persisted as
+// ONE pages entry: `{page_id: 'main', document: <merged>, ink: <Map>}`.
+// Strategy A's loader below expects ONE entry PER PAGE with `ink` as a List
+// — fed a B-shape save without this step, every sheet's blocks land on a
+// single giant page and every sketch is silently dropped (PagedNoteController
+// `_inkOf` returns null for a Map).
+//
+// This splits the merged document back into per-`pageId` runs using the
+// SAME tag `fromPages` stamped during A→B migration, and restores the
+// per-page ink lists. Block ids, ink payloads, and page ids all survive
+// verbatim, so an A → (B save) → A round-trip recovers the original page
+// set exactly.
+//
+// Idempotent: A-shape input is returned unchanged. Safe to call on the
+// load path unconditionally — no exceptions thrown, malformed input is
+// left as-is (the note will just open in whatever state it's in).
+// ---------------------------------------------------------------------------
+
+/// Reverse a B-shape save back into an A-shape pages list.
+///
+/// Idempotent and shape-safe: A-shape input (any length) is returned
+/// unchanged. Malformed or unreadable B-shape input is also returned
+/// unchanged — this never throws, so it can be called unconditionally on
+/// the load path.
+List<Map<String, dynamic>> migrateBToAIfNeeded(
+  List<Map<String, dynamic>> pages,
+) {
+  if (!isBShape(pages)) return pages;
+
+  final entry = pages[0];
+  final doc = _documentOf(entry);
+  if (!_isPaged(doc)) return pages;
+
+  final inkMap = entry['ink'] as Map;
+
+  // Group blocks by their pageId tag, preserving first-seen order.
+  final order = <String>[];
+  final runs = <String, List<Map<String, dynamic>>>{};
+  for (final child in (doc['children'] as List)) {
+    if (child is! Map) continue;
+    final block = Map<String, dynamic>.from(child);
+    final data = (block['data'] as Map?) ?? <String, dynamic>{};
+    final tag = data['pageId'];
+    final pageId = (tag is String && tag.isNotEmpty) ? tag : 'p1';
+    if (!runs.containsKey(pageId)) {
+      order.add(pageId);
+      runs[pageId] = [];
+    }
+    runs[pageId]!.add(block);
+  }
+
+  // Nothing to reconstruct — return a single empty page so the note opens
+  // (and the user can still recover ink from the B map if it's there).
+  if (order.isEmpty) {
+    final fallbackId =
+        (entry['page_id'] as String?)?.isNotEmpty == true
+            ? entry['page_id'] as String
+            : 'p1';
+    return [
+      {
+        'page_id': fallbackId,
+        'page_index': 0,
+        'document': {
+          'type': 'page',
+          'children': [
+            {
+              'type': 'paragraph',
+              'data': {
+                'delta': [
+                  {'insert': ''},
+                ],
+              },
+            },
+          ],
+        },
+        'ink': _inkListOf(inkMap[fallbackId]),
+      },
+    ];
+  }
+
+  return [
+    for (var i = 0; i < order.length; i++)
+      {
+        'page_id': order[i],
+        'page_index': i,
+        'document': {'type': 'page', 'children': runs[order[i]]!},
+        'ink': _inkListOf(inkMap[order[i]]),
+      },
+  ];
+}
+
+/// Coerce a single page's B-shape ink payload (`[Sketch.toJson()]`) into
+/// the A-shape per-page `ink` slot. Tolerates null, empty, and under-typed
+/// Map entries so the loader sees a plain `List<Map<String, dynamic>>`.
+List<Map<String, dynamic>> _inkListOf(Object? raw) {
+  if (raw is! List) return const [];
+  return [
+    for (final s in raw)
+      if (s is Map<String, dynamic>)
+        s
+      else if (s is Map)
+        Map<String, dynamic>.from(s),
+  ];
+}

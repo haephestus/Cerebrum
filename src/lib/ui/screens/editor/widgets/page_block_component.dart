@@ -1,11 +1,19 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:provider/provider.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/page_runs.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/heading_level_tag.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
+
+/// Vertical margin applied ABOVE and BELOW every sheet. Also factored into
+/// PageSurface's outer SizedBox height (see `totalHeight` there) so the
+/// container exactly fits the stack of sheets — if you change this, the
+/// outer Column stops overflowing only as long as the two stay in sync,
+/// which is why it lives here as a single named constant.
+const double kSheetVerticalMargin = 12.0;
 
 /// Production "page" block component for Strategy B (single-document
 /// pagination).
@@ -29,24 +37,6 @@ import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
 /// note model (single EditorState per NOTE) is still behind the
 /// [kUseSingleDocumentPagination] flag; with null callbacks this renders
 /// and measures silently.
-/// Declines all scroll consumption while Ctrl is held — so Ctrl+wheel goes
-/// to the page-surface zoom handler, not to this sheets-column scroll view.
-/// Wheel without Ctrl scrolls the sheets as usual.
-class _NoZoomScrollPhysics extends ScrollPhysics {
-  const _NoZoomScrollPhysics({super.parent});
-
-  @override
-  ScrollPhysics applyTo(ScrollPhysics? ancestor) {
-    return _NoZoomScrollPhysics(parent: buildParent(ancestor));
-  }
-
-  @override
-  bool shouldAcceptUserOffset(ScrollMetrics metrics) {
-    if (HardwareKeyboard.instance.isControlPressed) return false;
-    return super.shouldAcceptUserOffset(metrics);
-  }
-}
-
 class PageBlockComponentBuilder extends BlockComponentBuilder {
   // Not const-constructible: BlockComponentBuilder has mutable fields
   // (validate) — same constraint EquationBlockComponentBuilder documents.
@@ -61,10 +51,18 @@ class PageBlockComponentBuilder extends BlockComponentBuilder {
   /// Forwarded to every sheet the component builds. Tests inject small
   /// sheet metrics so everything fits the default test viewport; production
   /// leaves both null → canonical page_space.dart geometry.
-  final void Function(String pageId, int fromBlockIndex,
-      {double? tableAvailableHeight})? onOverflow;
-  final void Function(String pageId, double freeHeight,
-      double? headBlockHeight)? onUnderfill;
+  final void Function(
+    String pageId,
+    int fromBlockIndex, {
+    double? tableAvailableHeight,
+  })?
+  onOverflow;
+  final void Function(
+    String pageId,
+    double freeHeight,
+    double? headBlockHeight,
+  )?
+  onUnderfill;
 
   /// Strategy-B ink rail (notifiers keyed by pageId, seeded from the
   /// per-pageId ink store; drawing-enabled toggled by the controller).
@@ -109,15 +107,23 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
   /// is a table — the vertical room the table head may keep on this sheet,
   /// so the executor can split at a row boundary instead of moving the
   /// whole block.
-  final void Function(String pageId, int fromBlockIndex,
-      {double? tableAvailableHeight})? onOverflow;
+  final void Function(
+    String pageId,
+    int fromBlockIndex, {
+    double? tableAvailableHeight,
+  })?
+  onOverflow;
 
   /// Fired when the sheet did NOT overflow: [freeHeight] is spare space
   /// below the last block, [headBlockHeight] the first block's height —
   /// the underfill pair the backward reflow pulls on. Null head means the
   /// first block never laid out.
-  final void Function(String pageId, double freeHeight,
-      double? headBlockHeight)? onUnderfill;
+  final void Function(
+    String pageId,
+    double freeHeight,
+    double? headBlockHeight,
+  )?
+  onUnderfill;
 
   /// Strategy-B ink rail shared with the builder (see
   /// [PageBlockComponentBuilder.inkSurface]). Forwarded to every sheet.
@@ -135,28 +141,24 @@ class PageBlockComponent extends BlockComponentStatelessWidget {
     final width = sheetWidth ?? kDocSheetWidth;
     final height = sheetHeight ?? kDocSheetWidth / kPageAspectRatio;
 
-    return ListView(
-      // The notes canvas is one bounded-height A4 viewport under Strategy B;
-      // consecutive sheets can outgrow it (some notes are hundreds of
-      // paragraphs), so the sheet column must be scrollable. shrinkWrap:
-      // the ListView reports the full document height to shrink-wrap
-      // parent layouts (the AppFlowy engine measures the Column as a
-      // shrink-wrapped scrollable child) — children keep their fixed
-      // canonical heights regardless.
-      shrinkWrap: true,
-      // Word-style Ctrl+wheel: zoom must take the wheel, not scroll — the
-      // surface handles the zoom; decline scroll consumption while Ctrl
-      // is held so the inner column doesn't scroll the sheets as the
-      // user zooms.
-      physics: const _NoZoomScrollPhysics(),
+    return Column(
+      // The column is the single scroll surface — the OUTER paged ScrollView
+      // is the only scrollable involving the user. No inner ListView, no
+      // inner scrollbar. Each sheet stays fixed at its canonical height and
+      // the column grows to fit however many sheets exist.
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final run in runs)
+        // Page numbers follow SHEET ORDER (1-based run position), not the
+        // pageId string — pageIds are stable identities ('p3' can sit second
+        // after a reflow), the number a reader sees must be positional.
+        for (final (i, run) in runs.indexed)
           _PageSheet(
             key: ValueKey('cerebrum-sheet-${run.nodes.first.id}'),
             inkSurface: inkSurface,
             editorState: editorState,
             nodes: run.nodes,
             pageId: run.pageId,
+            pageNumber: i + 1,
             globalStartIndex: run.start,
             sheetWidth: width,
             sheetHeight: height,
@@ -176,6 +178,7 @@ class _PageSheet extends StatefulWidget {
     required this.editorState,
     required this.nodes,
     required this.pageId,
+    required this.pageNumber,
     required this.globalStartIndex,
     required this.sheetWidth,
     required this.sheetHeight,
@@ -187,15 +190,28 @@ class _PageSheet extends StatefulWidget {
   final EditorState editorState;
   final List<Node> nodes;
   final String pageId;
+
+  /// 1-based position of this sheet in the note, painted in the bottom
+  /// margin. Chrome only — never part of the document.
+  final int pageNumber;
   final int globalStartIndex;
   final double sheetWidth;
   final double sheetHeight;
+
   /// Strategy-B ink rail shared with the component; null → no ink layer.
   final PageInkSurface? inkSurface;
-  final void Function(String pageId, int fromBlockIndex,
-      {double? tableAvailableHeight})? onOverflow;
-  final void Function(String pageId, double freeHeight,
-      double? headBlockHeight)? onUnderfill;
+  final void Function(
+    String pageId,
+    int fromBlockIndex, {
+    double? tableAvailableHeight,
+  })?
+  onOverflow;
+  final void Function(
+    String pageId,
+    double freeHeight,
+    double? headBlockHeight,
+  )?
+  onUnderfill;
 
   @override
   State<_PageSheet> createState() => _PageSheetState();
@@ -204,9 +220,10 @@ class _PageSheet extends StatefulWidget {
 class _PageSheetState extends State<_PageSheet> {
   bool _measureScheduled = false;
 
-  // Deliberately NOT clipped: overflowing content stays visible for the
-  // frame(s) before the executor moves it, matching the spike's choice —
-  // content that silently vanishes reads as a bug during a flow.
+  // Clipped to the sheet rect (clipBehavior on the Container) so an
+  // overflowing tail never paints outside the page chrome; the executor
+  // still moves the tail on the next settle — the clip only hides it for
+  // the one frame it's in flux.
   @override
   Widget build(BuildContext context) {
     // Every document transaction rebuilds the subtree; each rebuild is a
@@ -215,36 +232,105 @@ class _PageSheetState extends State<_PageSheet> {
     return Container(
       width: widget.sheetWidth,
       height: widget.sheetHeight,
-      margin: const EdgeInsets.symmetric(vertical: 12),
+      // Uses kSheetVerticalMargin (top-of-file constant) — the SAME value
+      // PageSurface.build factors into its totalHeight calculation, so the
+      // outer Column and the outer SizedBox stay in agreement. Hardcoding
+      // here once already broke that contract (48px overflow in the outer
+      // Column) when PageSurface was tightened. Keep them tied.
+      margin: const EdgeInsets.symmetric(vertical: kSheetVerticalMargin),
+      clipBehavior: Clip.hardEdge,
+      // Themed paper sheet: fill from the app surface/raised (matches the
+      // A-branch and the rest of the app chrome), border from the editor
+      // page colour, soft shadow. No hard-coded white/black that ignores
+      // the selected theme.
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.black12),
+        color: context.cerebrum.surface.raised,
+        border: Border.all(color: context.cerebrum.editor.pageBorder),
         borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: context.cerebrum.editor.pageShadowSoft,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: kBaseHorizontalPadding),
+      // NOTE: no `padding:` on this Container any more. The paper margins are
+      // applied to the TEXT layer only (see the Padding below) so the ink
+      // layer and the page number can span the WHOLE sheet — with the padding
+      // here, strokes were confined to the content box and the number had no
+      // margin to live in.
       child: AnimatedBuilder(
-        animation: widget.inkSurface?.drawingEnabled ??
+        animation:
+            widget.inkSurface?.drawingEnabled ??
             const AlwaysStoppedAnimation<bool>(false),
         builder: (context, _) {
           final drawing = widget.inkSurface?.drawingEnabled.value ?? false;
           return Stack(
+            // expand: every layer is sized to the full sheet box. The text
+            // layer insets itself with Padding; the ink layer and page number
+            // use the whole sheet, margins included.
             fit: StackFit.expand,
             children: [
               // Text layer — absorbs pointers while drawing so strokes
               // don't also move the caret (same pattern as PageSurface).
-              AbsorbPointer(
-                absorbing: drawing,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final node in widget.nodes)
-                      widget.editorState.renderer.build(context, node),
-                  ],
+              // Padded by the paper margins, and CLIPPED to the padded area
+              // so a transient overflowing tail (between "content grew" and
+              // "executor pushed it") never paints into the bottom margin
+              // where the page number sits.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  kBaseHorizontalPadding,
+                  kBaseVerticalPadding,
+                  kBaseHorizontalPadding,
+                  kBaseVerticalPadding,
+                ),
+                child: ClipRect(
+                  child: AbsorbPointer(
+                    absorbing: drawing,
+                    // OverflowBox: the sheet is FIXED-SIZE (one A4 page).
+                    // While the flow executor is between "content grew" and
+                    // "pushed the tail to the next sheet", the content Column
+                    // genuinely needs to be taller than the sheet. Without
+                    // this wrapper, RenderFlex asserts on that transient
+                    // frame; with it, the Column lays out to its natural
+                    // height, the OverflowBox reports the CONSTRAINED size up
+                    // to the Stack, the ClipRect above crops the overflow
+                    // visually, and the executor pushes the tail on the next
+                    // frame as usual.
+                    child: OverflowBox(
+                      alignment: Alignment.topCenter,
+                      minHeight: 0,
+                      maxHeight: double.infinity,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final node in widget.nodes)
+                            if (node.type == 'heading' &&
+                                (node.delta?.isNotEmpty ?? false))
+                              HeadingLevelTag(
+                                level:
+                                    (node.attributes['level'] as num?)
+                                        ?.toInt() ??
+                                    1,
+                                child: widget.editorState.renderer.build(
+                                  context,
+                                  node,
+                                ),
+                              )
+                            else
+                              widget.editorState.renderer.build(context, node),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
               // Ink layer — only receptive to pointers while drawing. Keyed
               // strictly by pageId, so a stroke follows [widget.pageId]'s
-              // run wherever the document decides that run lives.
+              // run wherever the document decides that run lives. Spans the
+              // FULL sheet (margins included).
               if (widget.inkSurface != null)
                 IgnorePointer(
                   ignoring: !drawing,
@@ -254,6 +340,21 @@ class _PageSheetState extends State<_PageSheet> {
                     eraserWidth: widget.inkSurface!.eraserWidth,
                   ),
                 ),
+              // Page number — bottom margin, bottom-right. Painted above the
+              // ink layer but ignores pointers so it never blocks drawing.
+              Positioned(
+                right: kBaseHorizontalPadding,
+                bottom: 4,
+                child: IgnorePointer(
+                  child: Text(
+                    '${widget.pageNumber}',
+                    style: TextStyle(
+                      color: context.cerebrum.text.disabled,
+                      fontSize: kBaseFontSize,
+                    ),
+                  ),
+                ),
+              ),
             ],
           );
         },
@@ -277,7 +378,19 @@ class _PageSheetState extends State<_PageSheet> {
     if (sheetBox is! RenderBox || !sheetBox.hasSize) return;
 
     const tolerance = 0.5; // document pixels
-    final pageBottom = sheetBox.size.height;
+    // Content area boundary — anything below this crosses into the
+    // footer margin and must push to the next page before painting over
+    // it.
+    //
+    // `sheetBox` is this State's OUTERMOST render object, which is the
+    // Container's MARGIN box (sheet + kSheetVerticalMargin above and below),
+    // and globalToLocal is relative to that box's origin — so the sheet's
+    // bottom edge sits at size.height - kSheetVerticalMargin, and the
+    // content boundary is the bottom padding above THAT. (Subtracting only
+    // the padding let blocks run kSheetVerticalMargin units into the bottom
+    // margin before being pushed.)
+    final pageBottom =
+        sheetBox.size.height - kSheetVerticalMargin - kBaseVerticalPadding;
 
     Rect? firstRect;
     Rect? lastRect;

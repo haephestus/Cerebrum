@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:cerebrum/api/bubbles_api.dart';
@@ -24,21 +25,10 @@ import 'package:gpt_markdown/gpt_markdown.dart';
 
 enum _TextEngine { appFlowy, superEditor }
 
-/// Everything that surrounds the editor: note loading/saving, autosave
-/// scheduling, the analysis panel + its API calls, the app bar, and the
-/// save FAB. This class only ever talks to the editor through
-/// [NoteEditorController], which itself only talks to [TextEditingDriver]
-/// — the AppFlowy/super_editor switch in the app bar below swaps the
-/// driver at runtime without this class needing to know either engine
-/// exists.
 class EditorScaffold extends StatefulWidget {
   final Map<String, dynamic> note;
   final Map<String, dynamic>? initialTextJson;
   final List<Map<String, dynamic>>? initialInkJson;
-
-  /// When set, the editor opens directly into analysis-review mode and jumps
-  /// to the chunk containing these blocks on [startPageId]. Used by the
-  /// priority gap card's "Review" button so the user lands on the gap.
   final List<String>? startBlockIds;
   final String? startPageId;
 
@@ -58,44 +48,91 @@ class EditorScaffold extends StatefulWidget {
 class _EditorScaffoldState extends State<EditorScaffold> {
   late final PagedNoteController _editorController;
   _TextEngine _currentEngine = _TextEngine.appFlowy;
+
   final FocusNode _readerFocus = FocusNode(debugLabel: 'floating reader');
-  // Captured ONCE at open from the note map, and used for every request instead
-  // of re-reading widget.note['bubble_id'] each time. The daemon's note response
-  // carries an EMPTY bubble_id (it's a computed field off manifest.bubble_id,
-  // which the note manifest doesn't persist), and `_save` merges that response
-  // back into widget.note — which would otherwise clobber the good bubble_id and
-  // send later saves to `/bubbles//notes/update/...` (404). This stable copy is
-  // immune to that clobber.
   String? _bubbleId;
 
-  /// Eraser mode, shared by the tool wheel (which toggles it) and every page's
-  /// ink layer (which reads it). Lives here so the choice is global across pages.
-  /// Defaults to partial (split) erase — the mode we built for note-taking.
+  /// Shared zoom transform for the Strategy-B single-document editor. Owned
+  /// here so the user's zoom survives PageSurface rebuilds.
+  final TransformationController _zoomController = TransformationController();
+
+  /// Latest viewport metrics reported by PageSurface:
+  ///  * [_fitWidthScale] — the default zoom (Ctrl+0), also the ceiling/5 basis
+  ///    for max zoom.
+  ///  * [_fitHeightScale] — the floor for zoom-out.
+  ///  * [_viewportSize] — center anchor for keyboard/menu zoom.
+  double _fitWidthScale = 1.0;
+  double _fitHeightScale = 0.3;
+  Size? _viewportSize;
+
+  static const double _zoomInFactor = 1.25;
+  static const double _zoomOutFactor = 1 / _zoomInFactor;
+
+  /// Zoom around the viewport center (Samsung Notes / browser convention).
+  /// Multiplies the current matrix by T(c) · S(f) · T(-c), which keeps the
+  /// point at c fixed while everything else scales away/toward it. Applied
+  /// to the LEFT of the current matrix so it operates in viewport space.
+  void _zoomAroundViewportCenter(double factor) {
+    final vp = _viewportSize;
+    if (vp == null) return;
+    final center = Offset(vp.width / 2, vp.height / 2);
+    _zoomAroundPoint(center, factor);
+  }
+
+  void _zoomAroundPoint(Offset focal, double factor) {
+    final current = _zoomController.value;
+    final currentScale = current.getMaxScaleOnAxis();
+    final target = (currentScale * factor).clamp(
+      math.min(_fitHeightScale, _fitWidthScale),
+      _fitWidthScale * 5.0,
+    );
+    if ((target - currentScale).abs() < 0.0001) return;
+    final f = target / currentScale;
+    _zoomController.value =
+        Matrix4.identity()
+          ..translate(focal.dx, focal.dy)
+          ..multiply(Matrix4.identity()..scale(f))
+          ..multiply(Matrix4.identity()..translate(-focal.dx, -focal.dy))
+          ..multiply(current);
+  }
+
+  void _zoomIn() => _zoomAroundViewportCenter(_zoomInFactor);
+  void _zoomOut() => _zoomAroundViewportCenter(_zoomOutFactor);
+
+  /// Ctrl+0: fit-width, top-aligned. Same as the initial transform.
+  void _resetZoom() {
+    _zoomController.value = Matrix4.identity()..scale(_fitWidthScale);
+  }
+
+  /// Ctrl+Shift+0: fit whole document in viewport, centered.
+  void _fitAllZoom() {
+    final vp = _viewportSize;
+    if (vp == null || _fitWidthScale <= 0 || _fitHeightScale <= 0) return;
+    // Content dims recovered from the fit scales:
+    //   fitWidth  = vp.width / contentWidth  → contentWidth  = vp.width  / fitWidth
+    //   fitHeight = vp.height / contentHeight → contentHeight = vp.height / fitHeight
+    final contentW = vp.width / _fitWidthScale;
+    final contentH = vp.height / _fitHeightScale;
+    final fitAllScale = math.min(vp.width / contentW, vp.height / contentH);
+    final scaledW = contentW * fitAllScale;
+    final scaledH = contentH * fitAllScale;
+    final dx = (vp.width - scaledW) / 2;
+    final dy = (vp.height - scaledH) / 2;
+    _zoomController.value =
+        Matrix4.identity()
+          ..translate(dx, dy)
+          ..scale(fitAllScale);
+  }
+
   final ValueNotifier<bool> _partialEraser = ValueNotifier(true);
-
-  /// Eraser diameter (logical px), shared by the tool wheel (which sizes it from
-  /// its size selector) and every page's ink layer (which erases by it). Lives
-  /// here so the choice is global across pages. Seeded from the persisted
-  /// [EditorSettings.eraserWidth] default; the wheel pushes the loaded value
-  /// once its settings load.
   final ValueNotifier<double> _eraserWidth = ValueNotifier(24);
-
-  /// SCAFFOLD — drives the vim "analysis" review mode: step through analysis
-  /// chunks, or open the full panel. Fed from [_analysisChunks] on load; the
-  /// per-chunk highlight/scroll is still a TODO inside the controller.
   final AnalysisModeController _analysisMode = AnalysisModeController();
 
-  // App-session default for which mode a note opens in. Lives only for
-  // the lifetime of the app process — flip it from the "More" menu and
-  // it applies to the next note you open. If you want it to survive an
-  // app relaunch, persist this alongside your other user settings
-  // (shared_preferences, or a user-settings API call) instead of a
-  // static field.
   static bool _defaultStartInDrawingMode = false;
 
   bool _showReader = false;
   String? _readerFingerprint;
-  static String? _lastReaderFingerprint; // remembered for this app session
+  static String? _lastReaderFingerprint;
 
   Future<void> _pickReaderFile() async {
     final fp = await showDialog<String>(
@@ -123,7 +160,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
 
   void _toggleReader() {
     if (_readerFingerprint == null) {
-      _pickReaderFile(); // opens, then focuses (see below)
+      _pickReaderFile();
       return;
     }
     setState(() => _showReader = !_showReader);
@@ -140,20 +177,15 @@ class _EditorScaffoldState extends State<EditorScaffold> {
 
   bool _onGlobalKey(KeyEvent event) {
     if (event is! KeyDownEvent || !mounted) return false;
-    // Only while this screen is on top (dialogs / other pages: leave keys alone).
     if (!(ModalRoute.of(context)?.isCurrent ?? false)) return false;
-    // Never steal letters from a text field.
     final fctx = FocusManager.instance.primaryFocus?.context;
     if (fctx != null &&
         (fctx.widget is EditableText ||
             fctx.findAncestorWidgetOfExactType<EditableText>() != null)) {
       return false;
     }
-
     final hk = HardwareKeyboard.instance;
     final key = event.logicalKey;
-
-    // Ctrl+w: swap focus between editor and reader.
     if (key == LogicalKeyboardKey.keyW &&
         hk.isControlPressed &&
         !hk.isAltPressed &&
@@ -162,8 +194,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       _readerFocus.hasFocus ? _focusEditor() : _focusReader();
       return true;
     }
-
-    // Plain r: toggle the reader (from the reader, or editor in vim normal/analysis).
     if (key == LogicalKeyboardKey.keyR &&
         !hk.isControlPressed &&
         !hk.isAltPressed &&
@@ -181,36 +211,17 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   bool _isSaving = false;
   String _lastSavedState = '';
 
-  String? _cachedAnalysis; // used only for error/empty/regenerate-raw messages
-  Map<String, dynamic>? _analysisData; // raw /fetch/analysis/full payload
-
-  /// The raw analysis payload, in case something outside the panel UI
-  /// (debugging, a future detail view, etc.) needs it. Not read anywhere
-  /// in this file itself — [_overviewMarkdown]/[_analysisChunks]/
-  /// [_cachedAnalysis] are the derived views the panel actually renders.
+  String? _cachedAnalysis;
+  Map<String, dynamic>? _analysisData;
   Map<String, dynamic>? get analysisData => _analysisData;
-  String?
-  _overviewMarkdown; // formatted note_overview, rendered once above the list
-  List<Map<String, dynamic>> _analysisChunks =
-      []; // flattened + numerically sorted
-
-  /// pageId → (stable block id → the analysis chunks covering it). Built from
-  /// `_analysisChunks` (each chunk carries `pageId` + `blockIds`, the daemon's
-  /// `source_block_ids`). Keyed by stable id, not position, so the mapping
-  /// survives edits/reorders. Drives the inline per-block popover — see
-  /// PageSurface.
+  String? _overviewMarkdown;
+  List<Map<String, dynamic>> _analysisChunks = [];
   Map<String, Map<String, List<Map<String, dynamic>>>> _blockAnalysis = {};
-  bool _hasAttemptedLoad =
-      false; // did we already try loading, vs. just toggling the panel
+  bool _hasAttemptedLoad = false;
   bool _isLoadingAnalysis = false;
   bool _showAnalysisPanel = false;
   bool _isGeneratingAnalysis = false;
-
-  /// True when the editor was opened with [EditorScaffold.startBlockIds] and
-  /// we haven't yet jumped to the initial chunk. Cleared after the first jump
-  /// (or after analysis loads with no matching chunk).
   bool _pendingInitialJump = false;
-
   late bool _analysisEnabled;
   bool _isTogglingAnalysis = false;
 
@@ -224,7 +235,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   @override
   void initState() {
     super.initState();
-
     final rawFilename = widget.note['filename'];
     final parsedNoteId = _noteIdFromFilename(rawFilename as String?);
     _bubbleId = widget.note['bubble_id'] as String?;
@@ -236,12 +246,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       '[EditorScaffold] Opening note. filename="$rawFilename" '
       'noteId="$parsedNoteId"',
     );
-
-    // Seed the toggle from the note payload (backend field: analyse_note).
     _analysisEnabled = widget.note['analyse_note'] as bool? ?? true;
     HardwareKeyboard.instance.addHandler(_onGlobalKey);
-    // "Opt to see the full analysis" from analysis-review mode → open the panel
-    // (loading it first if we haven't yet).
     _analysisMode.onOpenFullPanel = () {
       if (!_hasAttemptedLoad) {
         _loadAnalysis();
@@ -249,48 +255,31 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         setState(() => _showAnalysisPanel = true);
       }
     };
-
     _analysisMode.onFocusChunk = (ref) {
       _focusAnalysisChunk(ref);
     };
-
     final contentData =
         widget.initialTextJson ??
         widget.note['content'] as Map<String, dynamic>?;
     final docJson = contentData?['document'] as Map<String, dynamic>?;
-
     final inkJson =
         widget.initialInkJson ??
         (widget.note['ink'] != null
             ? List<Map<String, dynamic>>.from(widget.note['ink'])
             : null);
-
-    // TEMP DEBUG — remove once the ink-loading issue is confirmed/fixed.
     debugPrint(
       '[EditorScaffold] widget.note has "ink" key: '
       '${widget.note.containsKey('ink')}, '
       'inkJson length: ${inkJson?.length}, '
       'first-elem keys: ${inkJson?.firstOrNull?.keys.toList()}',
     );
-
-    // Ensure the note has a client-owned id up front, so images can be cached
-    // locally (and the note can persist) before the daemon ever assigns a
-    // filename.
     final noteId =
         (widget.note['note_id'] as String?) ?? parsedNoteId ?? Ulid.generate();
     widget.note['note_id'] = noteId;
-
-    // Prime the image resolver for this note (local cache paths + recorded
-    // daemon URLs). The open path awaits this before navigating; this refresh
-    // covers notes opened another way.
     final bid = _bubbleId;
     if (bid != null && bid.isNotEmpty) {
       NoteImageResolver.configureForNote(bubbleId: bid, noteId: noteId);
     }
-
-    // Loaded documents hold stable `cerebrum-image://` refs; swap them for
-    // loadable display values (local file path, else daemon URL) before the
-    // editor renders. `resolve` leaves legacy absolute URLs untouched.
     final rawPages =
         widget.note['pages'] != null
             ? List<Map<String, dynamic>>.from(widget.note['pages'])
@@ -302,19 +291,12 @@ class _EditorScaffoldState extends State<EditorScaffold> {
               rawPages,
               NoteImageResolver.resolve,
             );
-
     _editorController = PagedNoteController.fromNote(
       pages: loadedPages,
       legacyDocument: docJson,
       legacyInk: inkJson,
     );
     _editorController.addListener(_onEditorChanged);
-
-    // Let the 'n'/'N' keys (handled by the per-page vim driver) step the chunk
-    // cursor. Positive = next, negative = previous. MUST be set after
-    // `_editorController` is created — `_editorController` is a `late final`
-    // that initializes on first access, so touching it earlier would run the
-    // factory before its inputs (docJson/inkJson/loadedPages) exist.
     _editorController.stepAnalysisChunk = (delta) {
       if (delta > 0) {
         _analysisMode.next();
@@ -322,19 +304,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         _analysisMode.prev();
       }
     };
-
-    // 'n' in normal mode (via the per-page vim driver) enters analysis mode —
-    // lazy-load the analysis first (same as the More-menu path) so chunks are
-    // available even before the side panel has ever been opened.
     _editorController.enterAnalysisMode = _enterAnalysisMode;
-
-    // 'q' in normal/analysis mode (via the per-page vim driver) toggles the
-    // full analysis panel — the overview tab — without switching vim modes.
     _editorController.toggleAnalysisPanel = _toggleAnalysisPanel;
-
-    // Image uploads target this note's folder on the daemon. Reads filename
-    // dynamically (not captured) so it also works after a brand-new note gets
-    // its filename on first save.
     _editorController.imageUploader = (bytes, name) async {
       final bubbleId = _bubbleId;
       if (bubbleId == null || bubbleId.isEmpty) {
@@ -351,9 +322,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       final ext = name.contains('.') ? name.split('.').last : 'png';
       final imageName = '${Ulid.generate()}.$ext';
       try {
-        // Cache the bytes locally FIRST (works offline), then queue the upload.
-        // We hand the editor the local file path to render now; on save the doc
-        // stores a stable `cerebrum-image://` ref (see NoteImageResolver.toRef).
         final file = await NoteStore.writeImage(
           bubbleId,
           nId,
@@ -376,15 +344,9 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         return null;
       }
     };
-
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _updateLastSavedState(),
     );
-
-    // Deep-link (priority gap card "Review"): load the analysis immediately so
-    // the note opens already in analysis-review mode on the gap's chunk. The
-    // load itself populates chunks; the jump to the target chunk happens in
-    // [_loadAnalysis] once they're available.
     if (_pendingInitialJump) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _loadAnalysis(openPanel: false);
@@ -393,17 +355,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   }
 
   void _onEditorChanged() {
-    // Autosave scheduling needs to run on every driver change, no matter
-    // what. UI that reacts to every keystroke — the save indicator, the
-    // drawing-mode icon — used to be refreshed via a blanket
-    // `setState(() {})` here, which rebuilt the ENTIRE scaffold (app
-    // bar, analysis panel, everything) on every single character typed.
-    // That's now scoped to just those two widgets via their own
-    // `AnimatedBuilder(animation: _editorController, ...)` down in
-    // build() instead, so a keystroke no longer forces the whole
-    // scaffold — including the AppFlowyEditor subtree one level down —
-    // through a rebuild on top of AppFlowyEditor's own internal
-    // focus/selection handling for that same keystroke.
     _scheduleSave();
   }
 
@@ -424,41 +375,25 @@ class _EditorScaffoldState extends State<EditorScaffold> {
 
   Future<void> _save() async {
     if (_isSaving || !_hasUnsavedChanges()) return;
-
     final bubbleId = _bubbleId;
     if (bubbleId == null || bubbleId.isEmpty) {
-      // Without a bubble id the URL is `/bubbles//notes/update/...` (404). Don't
-      // hammer the daemon every autosave tick — bail quietly.
       debugPrint('[EditorScaffold] skipping save: missing bubble_id');
       return;
     }
-
     setState(() => _isSaving = true);
-
     try {
       final filename = widget.note['filename'] as String?;
       final title = widget.note['title'] ?? 'Untitled';
-
-      // Client-owned note id, so the note can persist locally before the daemon
-      // ever assigns it a filename. Minted in initState; kept here as a guard.
       var noteId =
           widget.note['note_id'] as String? ?? _noteIdFromFilename(filename);
       if (noteId == null || noteId.isEmpty) {
         noteId = Ulid.generate();
         widget.note['note_id'] = noteId;
       }
-
-      // The live doc holds loadable image srcs (local file paths / URLs); the
-      // persisted + pushed copy stores stable `cerebrum-image://` refs instead,
-      // so it survives base-URL changes and offline reloads.
       final pages = NoteImageResolver.mapPagesUrls(
         _editorController.toPagesJson(),
         NoteImageResolver.toRef,
       );
-
-      // 1) Local write FIRST — always succeeds, offline or not. This is the
-      // never-lose-a-write guarantee: the edit is durable before we ever touch
-      // the network.
       await NoteStore.writeNote(
         bubbleId: bubbleId,
         noteId: noteId,
@@ -473,13 +408,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         pages: pages,
       );
       await NoteStore.markDirty(bubbleId, noteId);
-      // The local copy is saved, so from the user's POV the note is saved.
       _updateLastSavedState();
-
-      // 2) Best-effort push through the outbox. Reconciles per page_id on the
-      // daemon (edits + adds + deletes, LWW); queued for retry if we're offline.
-      // On success SyncService persists the server-merged copy locally + clears
-      // the dirty flag, so we just adopt the merged fields into the live map.
       final merged = await SyncService.queueSave(
         bubbleId: bubbleId,
         noteId: noteId,
@@ -490,8 +419,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       );
       if (merged != null) {
         widget.note.addAll(merged);
-        // The daemon echoes an empty bubble_id — keep the real one in the map so
-        // anything still reading widget.note (and our own re-reads) stays valid.
         widget.note['bubble_id'] = bubbleId;
         widget.note['note_id'] = noteId;
       }
@@ -503,7 +430,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   Future<void> _toggleAnalysis(bool newValue) async {
     final bubbleId = _bubbleId;
     final filename = widget.note['filename'] as String?;
-
     if (bubbleId == null || filename == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -514,21 +440,16 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       }
       return;
     }
-
-    // Optimistically flip the UI, then reconcile with the server response.
     setState(() {
       _analysisEnabled = newValue;
       _isTogglingAnalysis = true;
     });
-
     try {
       final result = await BubbleNotesApi.toggleNoteAnalysis(
         bubbleId,
         filename,
       );
-
       widget.note.addAll(result);
-
       setState(() {
         _analysisEnabled = result['analyse_note'] as bool? ?? _analysisEnabled;
         _isTogglingAnalysis = false;
@@ -538,7 +459,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         _analysisEnabled = !newValue;
         _isTogglingAnalysis = false;
       });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -550,28 +470,18 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     }
   }
 
-  /// Loads the note's analysis and (unless [openPanel] is false) pops the
-  /// "Analysis Summary" panel. Entering ANALYSIS REVIEW mode calls with
-  /// [openPanel] false: the block analysis widgets — inline tints + per-block
-  /// findings — are the default surface during n/N navigation, and the summary
-  /// is opt-in. Every path that explicitly asks for the summary (the app-bar /
-  /// More-menu toggles, the bar's "Full analysis", 'q') leaves the default true.
   Future<void> _loadAnalysis({bool openPanel = true}) async {
     final bubbleId = _bubbleId;
     final noteId = _noteIdFromFilename(widget.note['filename'] as String?);
     final version = widget.note["version"];
-
     if (bubbleId == null || noteId == null) return;
-
     setState(() => _isLoadingAnalysis = true);
-
     try {
       final full = await LearningCenterApi.getFullCachedAnalysis(
         bubbleId: bubbleId,
         noteId: noteId,
         currentVersion: version is num ? version.toDouble() : null,
       );
-
       setState(() {
         _hasAttemptedLoad = true;
         if (full != null) {
@@ -590,16 +500,9 @@ class _EditorScaffoldState extends State<EditorScaffold> {
           _blockAnalysis = {};
           _cachedAnalysis = 'No cached analysis found for this note.';
         }
-        // openPanel false → entering analysis review must not force the summary.
         _showAnalysisPanel = openPanel;
         _isLoadingAnalysis = false;
       });
-
-      // Deep-link jump: after the chunk set is populated (the load above also
-      // auto-focused the first chunk), move the review cursor to the chunk the
-      // caller asked us to land on. Post-frame so the initial highlight has
-      // rendered before we re-focus — the re-focus clears it via the
-      // scaffold's existing prev-chunk bookkeeping.
       if (_pendingInitialJump && mounted) {
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => _jumpToInitialChunk(),
@@ -615,30 +518,18 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         _cachedAnalysis = 'Error loading analysis:\n$e';
         _showAnalysisPanel = openPanel;
         _isLoadingAnalysis = false;
-        // No data, no jump — swallow the pending deep-link so a later manual
-        // load doesn't try to re-focus a chunk that was never available.
         _pendingInitialJump = false;
       });
     }
   }
 
-  /// Lands the review cursor on the chunk matching [EditorScaffold.startBlockIds]
-  /// on [EditorScaffold.startPageId] — the gap the priority card's "Review"
-  /// button deep-linked. Called once after the analysis load that produced the
-  /// chunks; no-op when no chunk matches (the flag is swallowed so a later
-  /// manual load doesn't keep trying).
   void _jumpToInitialChunk() {
     if (!_pendingInitialJump) return;
     _pendingInitialJump = false;
-
     final blockIds = widget.startBlockIds ?? const <String>[];
     final pageId = widget.startPageId;
     final chunks = _analysisMode.chunks;
     if (chunks.isEmpty) return;
-
-    // pageId is authoritative (block ids can be regenerated across analyses);
-    // chunks on a different page never match. Pick the first chunk that shares
-    // any block with the caller's target.
     int? match;
     for (var i = 0; i < chunks.length; i++) {
       final c = chunks[i];
@@ -659,13 +550,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     _analysisMode.jumpTo(match);
   }
 
-  // Formats just the note-level overview (topic, mastery, concept map,
-  // priority study order, suggested sources) as markdown. Chunk-level
-  // findings are rendered separately as widgets, not text — see
-  // _flattenAndSortChunks and _ChunkExpansionTile below.
   String _formatOverviewMarkdown(Map<String, dynamic> data) {
     final buffer = StringBuffer();
-
     if (data['is_current'] == false && data['cached_version'] != null) {
       buffer.writeln(
         '> ⚠️ Showing cached analysis from **v${data['cached_version']}** '
@@ -673,10 +559,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       );
       buffer.writeln();
     }
-
     final overview = data['note_overview'] as Map<String, dynamic>?;
     if (overview == null) return buffer.toString();
-
     buffer.writeln('## ${overview['topic'] ?? 'Overview'}');
     buffer.writeln();
     if (overview['mastery_signal'] != null) {
@@ -686,13 +570,11 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       );
       buffer.writeln();
     }
-
     final conceptMap = overview['concept_map'] as Map<String, dynamic>?;
     if (conceptMap != null) {
       final strong = conceptMap['strong_areas'] as List<dynamic>? ?? [];
       final weak = conceptMap['weak_areas'] as List<dynamic>? ?? [];
       final confused = conceptMap['confused_links'] as List<dynamic>? ?? [];
-
       if (strong.isNotEmpty) {
         buffer.writeln('**Strong areas:**');
         for (final s in strong) buffer.writeln('- $s');
@@ -714,21 +596,18 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         buffer.writeln();
       }
     }
-
     final gaps = overview['knowledge_gaps_summary'] as List<dynamic>? ?? [];
     if (gaps.isNotEmpty) {
       buffer.writeln('**Knowledge gaps:**');
       for (final g in gaps) buffer.writeln('- $g');
       buffer.writeln();
     }
-
     final priority = overview['priority_study_areas'] as List<dynamic>? ?? [];
     if (priority.isNotEmpty) {
       buffer.writeln('**Priority study order:**');
       for (final p in priority) buffer.writeln('1. $p');
       buffer.writeln();
     }
-
     final sources = overview['suggested_sources'] as List<dynamic>? ?? [];
     if (sources.isNotEmpty) {
       buffer.writeln('**Suggested reading:**');
@@ -738,38 +617,25 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       }
       buffer.writeln();
     }
-
     return buffer.toString();
   }
 
-  // Flattens the nested chunk_diagnostics payload into one list per finding
-  // group, and sorts NUMERICALLY by the index embedded in chunk_id (e.g.
-  // "chunk_2" before "chunk_10") — the raw glob().sort() on the backend is
-  // a lexicographic string sort and gets this wrong past chunk_9.
   List<Map<String, dynamic>> _flattenAndSortChunks(List<dynamic> rawChunks) {
     final flattened = <Map<String, dynamic>>[];
-
     for (final outer in rawChunks) {
       final outerMap = outer as Map<String, dynamic>;
       final diagnostics = outerMap['chunk_diagnostics'] as List<dynamic>? ?? [];
-
       for (final diag in diagnostics) {
         final d = diag as Map<String, dynamic>;
         final chunkId = (d['chunk_id'] ?? 'chunk').toString();
         final match = RegExp(r'(\d+)').firstMatch(chunkId);
         final chunkIndex = match != null ? int.parse(match.group(1)!) : 1 << 30;
-
-        // Block linkage (added daemon-side): which page + which blocks this
-        // chunk's analysis covers. `source_block_ids` are STABLE block ids
-        // (AppFlowy node ids, or content-hash ids for id-less blocks) — keep
-        // them as-is; they key the per-block popover directly.
         final pageId = outerMap['page_id'] as String?;
         final blockIds =
             (outerMap['source_block_ids'] as List<dynamic>? ?? [])
                 .map((e) => e.toString())
                 .where((s) => s.isNotEmpty)
                 .toList();
-
         flattened.add({
           'chunkId': chunkId,
           'chunkIndex': chunkIndex,
@@ -780,23 +646,17 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         });
       }
     }
-
     flattened.sort(
       (a, b) => (a['chunkIndex'] as int).compareTo(b['chunkIndex'] as int),
     );
     return flattened;
   }
 
-  /// Analysis chunks covering the block with id [blockId] on page [pageId], or
-  /// null. Passed to PagedEditor as the inline-popover lookup while the panel is
-  /// open.
   List<Map<String, dynamic>>? _lookupBlockAnalysis(
     String pageId,
     String blockId,
   ) => _blockAnalysis[pageId]?[blockId];
 
-  /// Feed the flattened chunks to the analysis-review controller (SCAFFOLD).
-  /// Only chunks that actually map to a page/blocks are navigable.
   void _rebuildAnalysisModeChunks() {
     final refs = <AnalysisChunkRef>[
       for (final chunk in _analysisChunks)
@@ -815,7 +675,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     _analysisMode.setChunks(refs);
   }
 
-  /// Rebuild the pageId → blockId → chunks lookup from `_analysisChunks`.
   void _rebuildBlockAnalysis() {
     final map = <String, Map<String, List<Map<String, dynamic>>>>{};
     for (final chunk in _analysisChunks) {
@@ -833,7 +692,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   Future<void> _generateAnalysis() async {
     final bubbleId = _bubbleId;
     final filename = widget.note['filename'] as String?;
-
     if (bubbleId == null || filename == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -844,20 +702,13 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       }
       return;
     }
-
     setState(() => _isGeneratingAnalysis = true);
-
     try {
       final analysis = await LearningCenterApi.runActiveAnalysis(
         bubbleId: bubbleId,
         filename: filename,
       );
-
       setState(() {
-        // runActiveAnalysis returns raw text, not the structured
-        // chunk_diagnostics/note_overview payload — show it as a plain
-        // message until the next _loadAnalysis() call repopulates the
-        // structured view from the cache.
         _analysisData = null;
         _overviewMarkdown = null;
         _analysisChunks = [];
@@ -868,7 +719,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         _showAnalysisPanel = true;
         _isGeneratingAnalysis = false;
       });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -888,7 +738,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         _showAnalysisPanel = true;
         _isGeneratingAnalysis = false;
       });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -900,10 +749,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     }
   }
 
-  /// Whether the current driver has vim-style modal editing at all —
-  /// not every engine implements [VimModeAware] (see
-  /// text_editing_driver.dart), so the menu item below disables itself
-  /// rather than toggling something that doesn't exist.
   bool get _vimModeAvailable =>
       _editorController.activeController.driver is VimModeAware;
 
@@ -918,56 +763,24 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     if (driver is! VimModeAware) return;
     final vimAware = driver as VimModeAware;
     vimAware.vimMode.setEnabled(!vimAware.vimMode.isEnabled);
-    // vimMode notifies its own listeners, which _onEditorChanged is
-    // already wired to (driver -> controller -> this widget), so no
-    // separate setState is strictly required — but this menu is
-    // rebuilt from scratch on open each time anyway.
   }
 
-  /// Focuses the editor on the first block of an analysis chunk. If the chunk
-  /// is on a different page, it switches to that page first.
-  ///
-  /// Block highlighting is deliberately NOT applied here: the per-block
-  /// `bgColor` tint previously painted the whole chunk amber without a proper
-  /// bounding rect to accompany it. The review highlight now comes from the
-  /// chunk-anchored tint + border rect that PageSurface renders (keyed to the
-  /// chunk's recorded blockIds), so the editor focus here just needs to move
-  /// the selection into the chunk.
   void _focusAnalysisChunk(AnalysisChunkRef ref) {
     final pages = _editorController.pages;
     final targetPageIdx = pages.indexWhere((p) => p.pageId == ref.pageId);
-
     debugPrint(
       '[focusAnalysisChunk] chunk=${ref.chunkId} page=${ref.pageId} '
       'blockIds=${ref.blockIds} targetPageIdx=$targetPageIdx',
     );
     if (targetPageIdx == -1) return;
-
-    // 1. Switch to the correct page if needed (setActive is synchronous, so the
-    //    activeController below is already the target page's once we move on).
     if (_editorController.activeIndex != targetPageIdx) {
       _editorController.setActive(targetPageIdx);
     }
-
     final driver = _editorController.activeController.driver;
     if (driver is! AppFlowyTextDriver) return;
-
-    // 1b. Put the target page in analysis review. Chunk stepping can land on a
-    //     page that never itself entered analysis mode; without this the block
-    //     analysis widgets (gated on the page's vim mode) would stay silent on
-    //     cross-page navigation.
     if (!driver.vimMode.isAnalysis) {
       driver.vimMode.enterAnalysisMode();
     }
-
-    // 2. Select the chunk's first block — a WHOLE-BLOCK selection, not a typing
-    //    caret — so the review position is obvious and this block's findings
-    //    pop over (PageSurface anchors its inline widgets on the selection).
-    //    A selection is set UNCONDITIONALLY: the old `if (start != end)`
-    //    guard skipped the jump for empty blocks and left a stale/null
-    //    selection on the landing page — and a focused editor with a null
-    //    selection behaves exactly like the "page lost focus" bug (no caret,
-    //    every vim motion guards on selection == null).
     final document = driver.editorState.document;
     Selection? target;
     final firstBlockId = ref.blockIds.firstOrNull;
@@ -984,9 +797,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
       }
     }
     if (target == null && document.root.children.isNotEmpty) {
-      // Chunk's recorded block is gone from the page (stale chunk after a
-      // save/undo). Land the review cursor on the page's first block instead
-      // of leaving the page with no selection at all.
       final selectable = document.root.children.first.selectable;
       if (selectable != null) {
         target = Selection(start: selectable.start(), end: selectable.end());
@@ -998,19 +808,10 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         reason: SelectionUpdateReason.uiEvent,
       );
     }
-
-    // Hand the keyboard to the page that now holds the review cursor. Without
-    // this, tapping the chunk bar's ◀ ▶ buttons leaves focus on the BUTTON and
-    // 'n'/'N' continuation (and any other editor key) is dead until the user
-    // clicks the page again. The keyboard 'n'/'N' path lands here too, where
-    // requesting focus is a no-op because the editor already has it.
     final activeDriver = _editorController.activeController.driver;
     if (activeDriver is AppFlowyTextDriver) activeDriver.requestEditorFocus();
   }
 
-  /// Depth-first search for the node whose stable id equals [id], so nested
-  /// blocks (inside a table cell, a column, etc.) are found too — not just
-  /// top-level blocks.
   ({Node node, int depth})? _findNodeByStableId(Node root, String id) {
     Node? found;
     var foundDepth = 0;
@@ -1030,20 +831,12 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     return found == null ? null : (node: found!, depth: foundDepth);
   }
 
-  /// Enter analysis-review mode on the active page's driver (SCAFFOLD). Loads
-  /// the analysis first if we haven't yet, so there are chunks to step through.
-  /// Entering review mode does NOT open the Analysis Summary — the block
-  /// analysis widgets are the default surface here; the summary stays opt-in.
   void _enterAnalysisMode() {
     final driver = _editorController.activeController.driver;
     if (driver is! AppFlowyTextDriver) return;
     if (!driver.vimMode.isEnabled) return;
     if (!_hasAttemptedLoad) _loadAnalysis(openPanel: false);
     driver.vimMode.enterAnalysisMode();
-    // Re-assert the selection so it doesn't vanish on the mode-change rebuild
-    // (the keyboard 'n' path and stand-alone mode flip both land here).
-    // Analysis mode is highlight-only — a collapsed caret is expanded to the
-    // whole block, never left as an editable cursor.
     final sel = driver.editorState.selection;
     if (sel != null && sel.isCollapsed) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1063,10 +856,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     }
   }
 
-  /// 'q' in normal/analysis mode: toggle the full analysis panel (the
-  /// overview tab) without changing the vim mode. First open lazily loads
-  /// the analysis (same as [_analysisMode.onOpenFullPanel]); pressing 'q'
-  /// again closes the panel.
   void _toggleAnalysisPanel() {
     if (_showAnalysisPanel) {
       setState(() => _showAnalysisPanel = false);
@@ -1079,9 +868,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     }
   }
 
-  /// The Note/Analysis view switch. Only rendered when vim mode is OFF (or the
-  /// engine has no vim support) — while vim is enabled the analysis UI belongs
-  /// to the vim review flow and this toggle is hidden.
   Widget _analysisViewToggle() {
     return SegmentedButton<bool>(
       segments: const [
@@ -1103,15 +889,10 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     );
   }
 
-  /// SCAFFOLD toolbar shown while any page is in analysis-review mode: step
-  /// through chunks (◀ ▶) or open the full panel. The actual chunk highlight /
-  /// scroll is [AnalysisModeController.onFocusChunk] — still a TODO.
   Widget _analysisModeBar() {
     return AnimatedBuilder(
       animation: _editorController,
       builder: (context, _) {
-        // Vim-mode markers live in the TEXT modality — none of them may render
-        // over the drawing surface (same gate the app-bar badge uses).
         if (_editorController.drawingEnabled) return const SizedBox.shrink();
         final driver = _editorController.activeController.driver;
         if (driver is! VimModeAware) return const SizedBox.shrink();
@@ -1187,16 +968,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     );
   }
 
-  /// The vim NORMAL/INSERT badge (lives in the app bar). Collapses to nothing
-  /// when drawing, for non-vim engines, or when vim is disabled.
-  ///
-  /// Why TWO nested AnimatedBuilders: vim mode is PER-PAGE (each page's driver
-  /// owns its own VimModeController), so the badge has to watch two different
-  /// things. The OUTER one listens to the controller and fires when the ACTIVE
-  /// page changes — that's what re-points the badge at the new page's vimMode
-  /// (a single builder bound to one page's mode would go stale the moment you
-  /// switch pages). The INNER one listens to that resolved vimMode and fires when
-  /// the mode value itself flips (i / Esc). Neither alone is enough.
   Widget _vimModeBadge() {
     return AnimatedBuilder(
       animation: _editorController,
@@ -1239,20 +1010,57 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     );
   }
 
+  Widget _headingBadge() {
+    return AnimatedBuilder(
+      animation: _editorController,
+      builder: (context, _) {
+        final driver = _editorController.activeController.driver;
+        if (driver is! AppFlowyTextDriver) return const SizedBox.shrink();
+        final doc = driver.documentJson;
+        final children = (doc['children'] as List?) ?? const [];
+        final idx = driver.selectedBlockIndex;
+        if (idx == null) return const SizedBox.shrink();
+        int? level;
+        for (var i = idx; i >= 0 && i < children.length; i--) {
+          final b = children[i] as Map?;
+          if (b != null && b['type'] == 'heading') {
+            level = (b['data'] as Map?)?['level'] as int? ?? 1;
+            break;
+          }
+        }
+        if (level == null) return const SizedBox.shrink();
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: context.cerebrum.surface.sunken,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: context.cerebrum.surface.outline),
+          ),
+          child: Text(
+            'H$level',
+            style: TextStyle(
+              color: context.cerebrum.text.muted,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _switchEngine(_TextEngine engine) {
     if (engine == _currentEngine) return;
-
     final TextEditingDriver newDriver;
     switch (engine) {
       case _TextEngine.appFlowy:
-        // Reuse whatever content the previous driver reports, so
-        // switching back to AppFlowy after testing doesn't lose it.
         newDriver = AppFlowyTextDriver(
           initialDocumentJson: _editorController.activeController.documentJson,
         );
         break;
       case _TextEngine.superEditor:
-        // newDriver = SuperEditorTextDriver();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1265,10 +1073,8 @@ class _EditorScaffoldState extends State<EditorScaffold> {
         }
         break;
     }
-
     setState(() {
       _currentEngine = engine;
-      // _editorController.switchDriver(newDriver);
     });
   }
 
@@ -1279,6 +1085,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
     _partialEraser.dispose();
     _eraserWidth.dispose();
     _analysisMode.dispose();
+    _zoomController.dispose();
     _debounce?.cancel();
     HardwareKeyboard.instance.removeHandler(_onGlobalKey);
     _readerFocus.dispose();
@@ -1288,34 +1095,30 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   @override
   Widget build(BuildContext context) {
     return CallbackShortcuts(
-      // Ctrl+S / Cmd+S = save NOW, flushing past the 2-second autosave
-      // debounce. _save() carries its own guards (already-saving, no
-      // unsaved changes, missing bubble_id each bail quietly), so the
-      // binding needs none of those.
-      //
-      // WHY CallbackShortcuts and not an AppFlowy [CommandShortcutEvent]:
-      // (1) the shortcut lists handed to AppFlowyEditor are identity-stable
-      // by design (see appflowy_text_driver's caching rationale) — adding a
-      // save hook there means a driver-level callback plumbed across
-      // controller layers that never touch saving; (2) this binding is
-      // engine-agnostic — it keeps working if the super_editor driver is
-      // ever re-enabled; (3) binding precedence is safe: AppFlowyEditor's
-      // standard command/character shortcut lists hold no ctrl+s claim
-      // (verified against 6.0.0 source), so an unhandled ctrl+s IGNOREs
-      // through the editor's KeyboardServiceWidget focused node and lands
-      // here. This is at the SCAFFOLD level, so it fires everywhere in the
-      // editor — vim normal/insert/analysis, the analysis panel, empty
-      // pages — not only inside text blocks.
       bindings: {
         SingleActivator(LogicalKeyboardKey.keyS, control: true): () => _save(),
-        // macOS chord.
         SingleActivator(LogicalKeyboardKey.keyS, meta: true): () => _save(),
+        SingleActivator(LogicalKeyboardKey.equal, control: true): _zoomIn,
+        SingleActivator(LogicalKeyboardKey.equal, meta: true): _zoomIn,
+        SingleActivator(LogicalKeyboardKey.minus, control: true): _zoomOut,
+        SingleActivator(LogicalKeyboardKey.minus, meta: true): _zoomOut,
+        SingleActivator(LogicalKeyboardKey.digit0, control: true): _resetZoom,
+        SingleActivator(LogicalKeyboardKey.digit0, meta: true): _resetZoom,
+        SingleActivator(LogicalKeyboardKey.digit0, control: true, shift: true):
+            _fitAllZoom,
+        SingleActivator(LogicalKeyboardKey.digit0, meta: true, shift: true):
+            _fitAllZoom,
       },
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.note['title'] ?? 'Edit Note'),
           actions: [
-            // Vim mode indicator, in the app bar (Center → vertically aligned).
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: _headingBadge(),
+              ),
+            ),
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1335,15 +1138,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   color: context.cerebrum.editor.analysisBadge,
                 ),
               ),
-
-            // The primary mode switch: which view of this note you're
-            // looking at. Replaces the old bare analytics IconButton — same
-            // load-on-first-open / toggle-after behavior, just legible.
-            //
-            // While vim mode is ENABLED the analysis UI belongs to the vim
-            // review flow (chunk pill → Full analysis), so this app-bar toggle
-            // is hidden rather than redundant. It only shows when vim is off,
-            // keeping analysis reachable for non-vim editing.
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: AnimatedBuilder(
@@ -1352,7 +1146,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   final driver = _editorController.activeController.driver;
                   if (driver is! VimModeAware) return _analysisViewToggle();
                   final vimMode = (driver as VimModeAware).vimMode;
-
                   return AnimatedBuilder(
                     animation: vimMode,
                     builder: (context, __) {
@@ -1389,8 +1182,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                 );
               },
             ),
-
-            // Page layout: vertical scroll (default) ↔ horizontal slideshow.
             AnimatedBuilder(
               animation: _editorController,
               builder: (context, _) {
@@ -1406,12 +1197,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                 );
               },
             ),
-
-            // Secondary, settings-style actions that don't need to be
-            // permanently visible: whether analysis runs for this note at
-            // all (distinct from just viewing the panel above), and the
-            // editing-engine switch, which is a testing tool, not a
-            // day-to-day control.
             PopupMenuButton<String>(
               tooltip: 'More',
               icon: const Icon(Icons.more_vert),
@@ -1439,6 +1224,18 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   case 'enter_analysis_mode':
                     _enterAnalysisMode();
                     break;
+                  case 'zoom_in':
+                    _zoomIn();
+                    break;
+                  case 'zoom_out':
+                    _zoomOut();
+                    break;
+                  case 'reset_zoom':
+                    _resetZoom();
+                    break;
+                  case 'fit_all':
+                    _fitAllZoom();
+                    break;
                 }
               },
               itemBuilder:
@@ -1448,6 +1245,47 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                       checked: _analysisEnabled,
                       enabled: !_isTogglingAnalysis,
                       child: const Text('Analysis enabled for this note'),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'zoom_in',
+                      child: Row(
+                        children: const [
+                          Icon(Icons.zoom_in, size: 18),
+                          SizedBox(width: 8),
+                          Text('Zoom in      Ctrl + ='),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'zoom_out',
+                      child: Row(
+                        children: const [
+                          Icon(Icons.zoom_out, size: 18),
+                          SizedBox(width: 8),
+                          Text('Zoom out    Ctrl + -'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'reset_zoom',
+                      child: Row(
+                        children: const [
+                          Icon(Icons.fit_screen, size: 18),
+                          SizedBox(width: 8),
+                          Text('Fit width    Ctrl + 0'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem<String>(
+                      value: 'fit_all',
+                      child: Row(
+                        children: const [
+                          Icon(Icons.fullscreen, size: 18),
+                          SizedBox(width: 8),
+                          Text('Fit page     Ctrl + Shift + 0'),
+                        ],
+                      ),
                     ),
                     const PopupMenuDivider(),
                     PopupMenuItem<String>(
@@ -1512,12 +1350,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
           child: Stack(
             children: [
               Positioned.fill(
-                // Block analysis widgets (inline tint + findings popover) show
-                // whenever analysis is loaded AND (the summary panel is open OR
-                // the ACTIVE page is in analysis review mode). The outer builder
-                // re-resolves the active page's driver on page switches; the
-                // inner one reacts to that page's vim-mode flips — so pressing
-                // n/N shows the widgets BY DEFAULT without the summary being open.
                 child: AnimatedBuilder(
                   animation: _editorController,
                   builder: (context, _) {
@@ -1534,8 +1366,18 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                           (_showAnalysisPanel || (vimMode?.isAnalysis ?? false))
                               ? _lookupBlockAnalysis
                               : null,
+                      zoomController: _zoomController,
+                      onViewportChanged: (fitW, fitH, vp) {
+                        // Assign directly — do NOT setState here. PageSurface
+                        // calls this from a post-frame callback, and a
+                        // setState mid-frame would re-trigger the whole
+                        // editor rebuild; these fields are read lazily at
+                        // tap/zoom time, not during build.
+                        _fitWidthScale = fitW;
+                        _fitHeightScale = fitH;
+                        _viewportSize = vp;
+                      },
                     );
-                    // Non-vim engine: no mode to watch, panel state is enough.
                     if (vimMode == null) return pagedEditor();
                     return AnimatedBuilder(
                       animation: vimMode,
@@ -1544,14 +1386,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   },
                 ),
               ),
-
-              // Single screen-level drawing dial (was previously embedded once
-              // per page). Shown only in drawing mode and pointed at the ACTIVE
-              // page's ink notifier, so switching pages retargets the same dial.
-              // It floats above the whole page list; empty areas of the overlay
-              // don't absorb pointers, so strokes still reach the page canvas
-              // underneath. Positioned.fill is the direct Stack child (a Positioned
-              // returned from inside the AnimatedBuilder would break parent-data).
               Positioned.fill(
                 child: AnimatedBuilder(
                   animation: _editorController,
@@ -1560,31 +1394,23 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                       return const SizedBox.shrink();
                     }
                     return ToolDialHub(
-                      // A: the active page's own notifier; B: the ink
-                      // surface's notifier for the caret's sheet (undo/redo
-                      // must hit the strokes the user sees — controller
-                      // resolves it; see [PagedNoteController.dialNotifier]).
                       notifier: _editorController.dialNotifier,
-                      // Selecting a pen/highlighter/eraser follows across pages.
                       onSelectTool: _editorController.applyDrawingTool,
-                      // Re-tapping the eraser toggles this partial/whole flag.
                       partialEraser: _partialEraser,
-                      // The size selector sizes the eraser too (shared with pages).
                       eraserWidth: _eraserWidth,
                     );
                   },
                 ),
               ),
-
               if (_showAnalysisPanel && _hasAttemptedLoad)
                 Positioned(
                   right: 16,
-                  // Editor_settings pop up
+                  top: 16,
+                  bottom: 16,
                   child: Material(
                     elevation: 8,
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
-                      height: 900,
                       width: 800,
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -1606,7 +1432,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                                   ),
                                 ],
                               ),
-
                               Row(
                                 children: [
                                   TextButton.icon(
@@ -1636,9 +1461,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                                           : 'Re-analyse',
                                     ),
                                   ),
-
                                   const SizedBox(width: 8),
-
                                   IconButton(
                                     icon: const Icon(Icons.close),
                                     tooltip: 'Close',
@@ -1667,8 +1490,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                           Expanded(
                             child:
                                 _cachedAnalysis != null
-                                    // Error / empty / raw-regenerate-result states —
-                                    // no structured chunk data to build a list from.
                                     ? SingleChildScrollView(
                                       child: GptMarkdown(_cachedAnalysis!),
                                     )
@@ -1690,12 +1511,7 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                                               )
                                               : const SizedBox.shrink();
                                         }
-                                        // NOTE: this data is what is supposed to
-                                        // be loaded in to the chunk by chunk
-                                        // analysis viewer
-                                        //  return _ChunkExpansionTile(
-                                        //    chunk: _analysisChunks[index - 1],
-                                        //  );
+                                        return const SizedBox.shrink();
                                       },
                                     ),
                           ),
@@ -1704,12 +1520,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                     ),
                   ),
                 ),
-              // Passive save-status indicator, replacing the old bare Save
-              // FAB. Tapping it still forces an immediate save — it's the
-              // same _save() call — but at rest it now tells you whether
-              // there's anything to save at all, instead of always looking
-              // like an unpressed button.
-              // SCAFFOLD: analysis-review toolbar (only visible in analysis mode).
               Positioned(
                 left: 0,
                 right: 0,
@@ -1719,62 +1529,73 @@ class _EditorScaffoldState extends State<EditorScaffold> {
                   child: _analysisModeBar(),
                 ),
               ),
-
               Positioned(
                 right: 16,
-                bottom: 16,
-                child: AnimatedBuilder(
-                  animation: _editorController,
-                  builder: (context, _) {
-                    final hasUnsaved = _hasUnsavedChanges();
-                    return Material(
-                      color:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(20),
+                bottom: 6,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Material(
+                      color: context.cerebrum.surface.raised,
                       elevation: 2,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: _isSaving ? null : _save,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_isSaving)
-                                const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              else
-                                Icon(
-                                  hasUnsaved ? Icons.circle : Icons.check,
-                                  size: 14,
-                                  color:
-                                      hasUnsaved
-                                          ? context.cerebrum.editor.unsavedBadge
-                                          : context.cerebrum.editor.savedBadge,
-                                ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _isSaving
-                                    ? 'Saving…'
-                                    : (hasUnsaved
-                                        ? 'Unsaved changes'
-                                        : 'Saved'),
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ],
-                          ),
+                      shape: const CircleBorder(),
+                      child: Tooltip(
+                        preferBelow: false,
+                        message: 'Add Page',
+                        child: IconButton(
+                          icon: const Icon(Icons.note_add_outlined),
+                          onPressed: _editorController.addPage,
                         ),
                       ),
-                    );
-                  },
+                    ),
+                    const SizedBox(width: 8),
+                    AnimatedBuilder(
+                      animation: _editorController,
+                      builder: (context, _) {
+                        final hasUnsaved = _hasUnsavedChanges();
+                        return Material(
+                          color: context.cerebrum.surface.raised,
+                          elevation: 2,
+                          shape: const CircleBorder(),
+                          child: Tooltip(
+                            preferBelow: false,
+                            message:
+                                _isSaving
+                                    ? 'Saving…'
+                                    : hasUnsaved
+                                    ? 'Unsaved changes'
+                                    : 'Saved',
+                            child: IconButton(
+                              onPressed: _isSaving ? null : _save,
+                              icon:
+                                  _isSaving
+                                      ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : Icon(
+                                        hasUnsaved ? Icons.circle : Icons.check,
+                                        size: 14,
+                                        color:
+                                            hasUnsaved
+                                                ? context
+                                                    .cerebrum
+                                                    .editor
+                                                    .unsavedBadge
+                                                : context
+                                                    .cerebrum
+                                                    .editor
+                                                    .savedBadge,
+                                      ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
               if (_readerFingerprint != null)
@@ -1797,9 +1618,6 @@ class _EditorScaffoldState extends State<EditorScaffold> {
   }
 }
 
-/// One expandable list item per chunk. Collapsed shows the chunk id and a
-/// finding count; expanded shows the source excerpt plus each finding as
-/// its own nested expansion tile (see _FindingTile).
 class _ChunkExpansionTile extends StatelessWidget {
   final Map<String, dynamic> chunk;
 
@@ -1825,7 +1643,6 @@ class _ChunkExpansionTile extends StatelessWidget {
     final findings = chunk['findings'] as List<dynamic>? ?? [];
     final excerpt = chunk['excerpt'] as String?;
     final chunkId = chunk['chunkId'] as String? ?? 'chunk';
-
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ExpansionTile(
@@ -1872,13 +1689,9 @@ class _ChunkExpansionTile extends StatelessWidget {
   }
 }
 
-/// One expandable finding within a chunk. Collapsed shows a severity dot
-/// and the finding type; expanded shows claim / correct-understanding
-/// (only if it actually differs from the claim) / gap explanation.
 class _FindingTile extends StatelessWidget {
   final Map<String, dynamic> finding;
   final Color Function(BuildContext, String) severityColor;
-
   const _FindingTile({required this.finding, required this.severityColor});
 
   @override
@@ -1940,8 +1753,6 @@ class _FindingTile extends StatelessWidget {
   }
 }
 
-/// Dialog listing the user's uploaded documents (same source as FileLibrary).
-/// Pops with the chosen file's fingerprint.
 class _ReaderFilePicker extends StatefulWidget {
   final String? currentFingerprint;
   const _ReaderFilePicker({this.currentFingerprint});

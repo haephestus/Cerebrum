@@ -166,57 +166,105 @@ class _DesktopUIState extends State<DesktopUI> {
                             : colorScheme.onSurface.withAlpha(0),
                     borderRadius: BorderRadius.circular(12),
                   ),
+                  // Column split into a scrollable top group and a pinned
+                  // bottom group. The old single-column-with-Spacer layout
+                  // overflowed by 117px whenever the window's usable height
+                  // dropped below ~760px (the six buttons plus spacers can't
+                  // fit in less). Expanded + SingleChildScrollView lets the
+                  // top group compress and scroll on short windows; Settings
+                  // stays pinned to the bottom regardless. Removed the
+                  // Spacer entirely — Spacer inside a scrollable forces an
+                  // unbounded-height error, and Expanded now consumes the
+                  // slack Spacer used to.
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      SizedBox(height: 24),
-                      // Pin/unpin toggle — reserves its height even when
-                      // hidden so Home/Study Bubble/Learning Center below
-                      // it never shift position.
-                      Visibility(
-                        visible: _sidebarOpen,
-                        maintainSize: true,
-                        maintainAnimation: true,
-                        maintainState: true,
-                        child: SidebarButton(
-                          icon: _pinned ? Icons.menu_open : Icons.menu,
-                          label: _pinned ? 'Unpin' : 'Pin',
-                          selected: _pinned,
-                          collapsed: !_sidebarOpen,
-                          onPressed: () {
-                            setState(() => _pinned = !_pinned);
-                          },
+                      Expanded(
+                        child: ScrollConfiguration(
+                          // Collapsed rail is 24px wide; the desktop default
+                          // scrollbar (~14–16px) would occlude half the
+                          // icons. Hide it — content is short, scrolling is
+                          // an edge case for tiny windows.
+                          behavior: ScrollConfiguration.of(
+                            context,
+                          ).copyWith(scrollbars: false),
+                          child: SingleChildScrollView(
+                            // Force the scroll view's content to match the
+                            // rail's width. Without this,
+                            // SingleChildScrollView defaults to
+                            // Alignment.topLeft and the inner Column sizes
+                            // itself to its widest child (SidebarButton is
+                            // wider than the 24px collapsed rail), pushing
+                            // icons 18px to the right — right on top of the
+                            // content panel. With width: double.infinity
+                            // the inner Column is forced to 24px wide, and
+                            // CrossAxisAlignment.center centers the wide
+                            // buttons inside it exactly like the original
+                            // non-scrollable layout did.
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  const SizedBox(height: 24),
+                                  // Pin/unpin toggle — reserves its height
+                                  // even when hidden so Home/Study Bubble/
+                                  // Learning Center below it never shift
+                                  // position.
+                                  Visibility(
+                                    visible: _sidebarOpen,
+                                    maintainSize: true,
+                                    maintainAnimation: true,
+                                    maintainState: true,
+                                    child: SidebarButton(
+                                      icon:
+                                          _pinned
+                                              ? Icons.menu_open
+                                              : Icons.menu,
+                                      label: _pinned ? 'Unpin' : 'Pin',
+                                      selected: _pinned,
+                                      collapsed: !_sidebarOpen,
+                                      onPressed: () {
+                                        setState(() => _pinned = !_pinned);
+                                      },
+                                    ),
+                                  ),
+                                  SidebarButton(
+                                    icon: Icons.home,
+                                    label: 'Home',
+                                    selected: selectedPage == 0,
+                                    collapsed: !_sidebarOpen,
+                                    onPressed: () => changePage(0),
+                                  ),
+                                  SidebarButton(
+                                    icon: Icons.bubble_chart,
+                                    label: 'Study Bubble',
+                                    selected: selectedPage == 1,
+                                    collapsed: !_sidebarOpen,
+                                    onPressed: () => changePage(1),
+                                  ),
+                                  SidebarButton(
+                                    icon: Icons.book,
+                                    label: 'Learning Center',
+                                    selected: selectedPage == 2,
+                                    collapsed: !_sidebarOpen,
+                                    onPressed: () => changePage(2),
+                                  ),
+                                  SidebarButton(
+                                    icon: Icons.library_books,
+                                    label: 'File Library',
+                                    selected: selectedPage == 5,
+                                    collapsed: !_sidebarOpen,
+                                    onPressed: () => changePage(5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      SidebarButton(
-                        icon: Icons.home,
-                        label: 'Home',
-                        selected: selectedPage == 0,
-                        collapsed: !_sidebarOpen,
-                        onPressed: () => changePage(0),
-                      ),
-                      SidebarButton(
-                        icon: Icons.bubble_chart,
-                        label: 'Study Bubble',
-                        selected: selectedPage == 1,
-                        collapsed: !_sidebarOpen,
-                        onPressed: () => changePage(1),
-                      ),
-                      SidebarButton(
-                        icon: Icons.book,
-                        label: 'Learning Center',
-                        selected: selectedPage == 2,
-                        collapsed: !_sidebarOpen,
-                        onPressed: () => changePage(2),
-                      ),
-                      SidebarButton(
-                        icon: Icons.library_books,
-                        label: 'File Library',
-                        selected: selectedPage == 5,
-                        collapsed: !_sidebarOpen,
-                        onPressed: () => changePage(5),
-                      ),
-                      const Spacer(),
+                      // Settings pinned to the bottom, always reachable
+                      // even when the top group is scrolled or overflowing.
                       SidebarButton(
                         icon: Icons.settings,
                         label: 'Settings',

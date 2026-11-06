@@ -33,6 +33,12 @@ const double kBaseFontSize = 7.0;
 /// 100). Same rule as [kBaseFontSize]: constant, never scaled by consumers.
 const double kBaseHorizontalPadding = 40.0;
 
+/// Vertical editor padding, document units. AppFlowy's desktop default is 8;
+/// keep 20 (same ballpark as the horizontal 40) so text doesn't sit flush with
+/// the paper's top edge and the box isn't cramped vertically. Constant, like
+/// [kBaseFontSize] — never scaled by consumers.
+const double kBaseVerticalPadding = 20.0;
+
 /// Heading sizes as multiples of [kBaseFontSize], indexed by level - 1.
 ///
 /// TUNING KNOB — this is the answer to "headings are huge": the stock
@@ -70,7 +76,7 @@ double kHeadingFontSizeFor(int level) {
 /// the under-row slack shrinks, and PAGES HOLD MORE LINES — so the backward
 /// reflow will pull the next page's content up after the change. Stock
 /// desktop default 1.5; sweet-spot range for 8pt body ~1.3-1.5.
-const double kLineHeight = 1.25;
+const double kLineHeight = 1.0;
 
 /// List icon column sizing in body ems (multiples of [kBaseFontSize]).
 ///

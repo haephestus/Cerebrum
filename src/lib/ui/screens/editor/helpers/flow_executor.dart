@@ -8,14 +8,24 @@ import 'package:cerebrum/ui/screens/editor/helpers/table_splitter.dart';
 
 /// Strategy B feature flag: single-document pagination.
 ///
-/// When true, the `'page'` block renders through [PageBlockComponentBuilder]
-/// and overflow/backward-reflow run through [FlowTransactionExecutor]
-/// against ONE EditorState (the note is a single document; sheets are just
-/// runs of `pageId`-tagged blocks). The Strategy-B note model
-/// (fromNote/toPagesJson over one document + the page-local ink map) has
-/// landed behind this flag — legacy A-shape notes migrate in-memory on
-/// open and persist in B shape on save (see `strategy_b_notes.dart`; the
-/// sync contract reconciles the page-set shrink server-side).
+/// ENABLED. Single-document pagination is the live engine: one EditorState
+/// holds the whole note, sheets are rendered from `pageId` runs of
+/// top-level blocks, and the flow executor below moves blocks between
+/// sheets on overflow/underfill.
+///
+/// B mode owns two contracts Strategy A did not need:
+///
+///  * The B branch of `PageSurface.build` lays the editor out in a
+///    `SizedBox(width: 700, height: <sum-of-sheet-heights>)` inside the
+///    zoomable canvas (`_ZoomableCanvas`). The height is derived from the
+///    live document (contiguous pageId runs), so inserting or moving a
+///    block re-measures the container.
+///  * The canvas owns pan/zoom itself (no `InteractiveViewer`), clamps
+///    `Transform` translation to the content bounds, and follows the caret
+///    by translating the same matrix — see `PageSurface._followCaretIntoView`.
+///
+/// The original crash this comment once described (ungated infinite-height
+/// `_Theatre` assert) is fixed by the layout above — keep it bounded.
 const bool kUseSingleDocumentPagination = true;
 
 /// Spare document-pixel room a pulled head must clear on the receiver —
@@ -101,11 +111,53 @@ class FlowTransactionExecutor {
   /// the stable key. Cleared after every applied move, sweep, and push.
   final Map<String, ({double free, double? head})> _stats = {};
 
+  /// Ids of blocks that were pushed to another page in the last N
+  /// transactions. Prevents the same block ping-ponging between pages
+  /// across frames (push @33/pull p1<-p2 seam=33 in the log).
+  final List<String> _recentlyPushedIds = <String>[];
+  static const int _kMaxRecentlyPushed = 8;
+
+  void _recordRecentlyPushed(String id) {
+    _recentlyPushedIds.add(id);
+    while (_recentlyPushedIds.length > _kMaxRecentlyPushed) {
+      _recentlyPushedIds.removeAt(0);
+    }
+  }
+
   void dispose() {
     _settleTimer?.cancel();
     _settleTimer = null;
   }
 
+  /// Pages the user added explicitly. While such a page is still blank the
+  /// backward pull must not drain it (a blank, ink-free donor is otherwise
+  /// "pulled" away within ~600ms whenever the previous page has room).
+  final Set<String> _pinnedPageIds = <String>{};
+
+  /// Append a fresh empty sheet at the end of the note and put the caret in it.
+  void appendPage() {
+    if (_busy) return;
+    final children = _children();
+    final newId = _nextPageId(groupRunsByPageId(children));
+    _pinnedPageIds.add(newId);
+    final para = Node(
+      type: 'paragraph',
+      attributes: <String, dynamic>{
+        'delta': [
+          const {'insert': ''},
+        ],
+        'pageId': newId,
+      },
+    );
+    final tx = editorState.transaction;
+    tx.insertNode([children.length], para, deepCopy: false);
+    tx.afterSelection = Selection.collapsed(
+      Position(path: [children.length], offset: 0),
+    );
+    unawaited(
+      editorState.apply(tx, options: const ApplyOptions(recordUndo: false)),
+    );
+  }
   // -- measurement in -------------------------------------------------------
 
   /// Forward overflow report (the page block's per-sheet measurement): the
@@ -135,6 +187,11 @@ class FlowTransactionExecutor {
   /// notifies, or this loop feeds itself.
   void onUnderfill(String pageId, double freeHeight, double? headBlockHeight) {
     if (_busy) return;
+    if (kDebugMode) {
+      debugPrint(
+        '[flow-bprobe] underfill $pageId free=${freeHeight.toStringAsFixed(2)} head=${headBlockHeight?.toStringAsFixed(2) ?? 'null'}',
+      );
+    }
     // A full page reports no free space — but still legitimately reports
     // its own head-block height (what it would donate upward). Store the
     // pair either way; only an entry with NEITHER value is worthless.
@@ -216,13 +273,13 @@ class FlowTransactionExecutor {
       }
     }
 
-    final targetRun =
-        srcRunIdx + 1 < runs.length ? runs[srcRunIdx + 1] : null;
+    final targetRun = srcRunIdx + 1 < runs.length ? runs[srcRunIdx + 1] : null;
     final freshTarget = targetRun == null;
     final targetPageId = freshTarget ? _nextPageId(runs) : targetRun.pageId;
-    final nextJson = freshTarget
-        ? <FlowBlock>[]
-        : [for (final n in targetRun.nodes) _blockJson(n)];
+    final nextJson =
+        freshTarget
+            ? <FlowBlock>[]
+            : [for (final n in targetRun.nodes) _blockJson(n)];
 
     // Caret input for the planner — only when the caret lives in the
     // SOURCE run (the planner resolves targets by id inside kept/moved; a
@@ -233,11 +290,12 @@ class FlowTransactionExecutor {
     final rawCaret = _caret();
     final caretIsOnSrc =
         rawCaret != null && srcJson.any((b) => b['id'] == rawCaret.blockId);
-    final planCaret = !caretIsOnSrc
-        ? null
-        : (splitReseat
-            ? CaretTarget(rawCaret.blockId, 0)
-            : CaretTarget(rawCaret.blockId, rawCaret.offset));
+    final planCaret =
+        !caretIsOnSrc
+            ? null
+            : (splitReseat
+                ? CaretTarget(rawCaret.blockId, 0)
+                : CaretTarget(rawCaret.blockId, rawCaret.offset));
 
     final plans = planForwardOverflow(
       currentPage: srcJson,
@@ -267,6 +325,9 @@ class FlowTransactionExecutor {
       final data = (b['data'] as Map?) ?? <String, dynamic>{};
       data['pageId'] = targetPageId;
       if ((b['data'] as Map?) == null) b['data'] = data;
+      // A table split tail carries no id (deleted so a fresh nanoid is minted
+      // at materialize time) — remember the CLONED nodes' ids below instead.
+      if (b['id'] is String) _recordRecentlyPushed(b['id'] as String);
     }
 
     // Transaction.add TRANSFORMS every later op against the ops already
@@ -281,13 +342,13 @@ class FlowTransactionExecutor {
     final tx = editorState.transaction;
     final headClone =
         splitHeadJson != null ? _materialize(splitHeadJson) : null;
-    final movedClones = [
-      for (final b in targetPlan.moved) _materialize(b),
-    ];
-    final inserts = <Node>[
-      if (headClone != null) headClone,
-      ...movedClones,
-    ];
+    final movedClones = [for (final b in targetPlan.moved) _materialize(b)];
+    // Record the materialized ids too — the split tail only exists after
+    // _materialize mints its fresh id, and the ping-pong guard needs it.
+    for (final n in movedClones) {
+      _recordRecentlyPushed(n.id);
+    }
+    final inserts = <Node>[if (headClone != null) headClone, ...movedClones];
     if (inserts.isNotEmpty) {
       tx.insertNodes([fromBlockIndex], inserts, deepCopy: false);
     }
@@ -365,8 +426,36 @@ class FlowTransactionExecutor {
       final recvStats = _stats[recv.pageId];
       final donorStats = _stats[donor.pageId];
       final head = donorStats?.head;
-      if (recvStats == null || donorStats == null || head == null) continue;
-      if (recvStats.free < head + pullFitMargin) continue;
+      if (recvStats == null || donorStats == null || head == null) {
+        if (kDebugMode) {
+          debugPrint(
+            '[flow-bprobe] pull-skip ${runs[i].pageId}<-${donor.pageId} '
+            'recv=${recvStats?.free} donor=${donorStats?.head} head=$head',
+          );
+        }
+        continue;
+      }
+      if (recvStats.free < head + pullFitMargin) {
+        if (kDebugMode) {
+          debugPrint(
+            '[flow-bprobe] pull-skip ${runs[i].pageId}<-${donor.pageId} '
+            'recv.free=${recvStats.free.toStringAsFixed(2)} < head+${pullFitMargin}=${(head + pullFitMargin).toStringAsFixed(2)}',
+          );
+        }
+        continue;
+      }
+      // Don't pull a block we JUST pushed — that's the ping-pong. A
+      // block can only re-earn pull-eligibility after it has settled
+      // elsewhere long enough to prove it wasn't a transient push.
+      if (_recentlyPushedIds.contains(donor.nodes.first.id)) {
+        if (kDebugMode) {
+          debugPrint(
+            '[flow-bprobe] pull-skip ${runs[i].pageId}<-${donor.pageId} '
+            'head=${donor.nodes.first.id} was just pushed; pull unavailable this cycle',
+          );
+        }
+        continue;
+      }
       // Tables never travel backward — the forward splitter's output is
       // terminal (Strategy A rule, unchanged).
       if (donor.nodes.first.type == 'table') continue;
@@ -379,6 +468,12 @@ class FlowTransactionExecutor {
       if (donor.nodes.length == 1 &&
           _isEmptyNode(donor.nodes.first) &&
           pageHasInk(donor.pageId)) {
+        continue;
+      }
+      // A page the user added on purpose stays while it is blank.
+      if (_pinnedPageIds.contains(donor.pageId) &&
+          donor.nodes.length == 1 &&
+          _isEmptyNode(donor.nodes.first)) {
         continue;
       }
       return _applyPull(recv, donor, children);
@@ -585,7 +680,8 @@ class FlowTransactionExecutor {
     return Node(
       type: json['type'] as String,
       id: id is String && id.isNotEmpty ? id : null,
-      attributes: attrs is Map<String, dynamic> ? attrs : const <String, dynamic>{},
+      attributes:
+          attrs is Map<String, dynamic> ? attrs : const <String, dynamic>{},
       children: children,
     );
   }

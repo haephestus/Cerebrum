@@ -53,6 +53,10 @@
 //    toggle defers through addPostFrameCallback so the params swap never races
 //    the pointer/wheel event that triggered it. Only params change on toggle
 //    (textSelectionParams.enabled); the widget type and key never do.
+//  - GO-TO-PAGE DIALOG (crash fix): the TextEditingController is owned by the
+//    dialog's own State (_GoToPageDialog), NOT disposed right after
+//    `await showDialog` — the route's exit animation keeps rebuilding the
+//    TextField after the future completes, which hit a disposed controller.
 //  - POSITION INDICATOR: nothing floats over the page. The scroll thumb on the
 //    right edge keeps its simple page number; hovering it pops up the chapter
 //    breadcrumb (Part › Chapter › Section) and "Page X of Y". The breadcrumb
@@ -60,15 +64,21 @@
 //    page's section is the last outline entry starting at or before it. PDFs
 //    without an outline show only "Page X of Y". "Go to page" is an app-bar
 //    button.
+//  - JUMP HISTORY: pages you jump AWAY from (gg/G/{n}G, go-to-page, links,
+//    contents drawer) go into _recent (newest first, max 8, never contains the
+//    current page). The app-bar history button lists them with their section;
+//    ` (or ') swaps with the previous page, like vim's Ctrl+^. Plain scrolling,
+//    Ctrl+f/b and search stepping are NOT recorded. The list is a plain field
+//    read when the menu opens, so it never triggers a rebuild. Not persisted.
 //  - VIM KEYS: the Reader owns a Focus node (own, or one handed in by the host,
 //    e.g. FloatingReaderWindow) and handles keys while it has focus and no text
 //    field is being typed in. j/k/h/l scroll, Ctrl+d/u half page, Ctrl+f/b page,
 //    gg/G first/last page ("41G" = page 41, counts work on j/k/G/gg/Ctrl+f/b),
 //    / search + n/N next/prev match, : go to page, o contents, a annotate,
-//    u / Ctrl+r undo / redo, +/- zoom, Esc = clear / leave search / leave
-//    drawing / hand focus back to the host (onReleaseFocus), ? = cheat sheet.
-//    "r" (toggle the floating window) and Ctrl+w (swap focus with the editor)
-//    live in the HOST (editor scaffold), not here.
+//    u / Ctrl+r undo / redo, +/- zoom, ` jump back, Esc = clear / leave search /
+//    leave drawing / hand focus back to the host (onReleaseFocus), ? = cheat
+//    sheet. "r" (toggle the floating window) and Ctrl+w (swap focus with the
+//    editor) live in the HOST (editor scaffold), not here.
 //
 // Still TODO (see annotations.dart for details):
 //  - Device-verify stroke alignment after zooming, that stylus doesn't also pan
@@ -216,6 +226,59 @@ class _ReaderState extends State<Reader> {
   }
 
   // ---------------------------------------------------------------------------
+  // Jump history
+  // ---------------------------------------------------------------------------
+
+  static const _maxRecent = 8;
+  // Pages you jumped away from, most recent first. Never contains the current
+  // page. Read only when the menu opens, so it needs no setState / rebuilds.
+  final List<int> _recent = [];
+
+  void _pushRecent(int page) {
+    _recent.remove(page);
+    _recent.insert(0, page);
+    if (_recent.length > _maxRecent) _recent.removeLast();
+  }
+
+  // Call just before navigating to [target]: remembers where we are leaving.
+  void _noteDeparture(int target) {
+    final from = _controller.pageNumber;
+    if (from != null && from != target) _pushRecent(from);
+  }
+
+  void _goToPage(int page, {bool record = true}) {
+    if (!_controller.isReady) return;
+    final target = page.clamp(1, _controller.pageCount).toInt();
+    if (record) _noteDeparture(target);
+    _controller.goToPage(pageNumber: target);
+  }
+
+  Future<void> _goToDest(PdfDest dest) async {
+    final target = dest.pageNumber;
+    if (target != null) _noteDeparture(target);
+    await _controller.goToDest(dest);
+  }
+
+  // Jump to a page from the history; the page we leave becomes the newest
+  // entry, so picking the top item repeatedly toggles between two pages.
+  void _jumpToRecent(int target) {
+    if (!_controller.isReady) return;
+    _recent.remove(target);
+    final from = _controller.pageNumber;
+    if (from != null && from != target) _pushRecent(from);
+    _controller.goToPage(pageNumber: target);
+  }
+
+  void _jumpBack() {
+    if (_recent.isNotEmpty) _jumpToRecent(_recent.first);
+  }
+
+  String _recentLabel(int page) {
+    final section = _sectionFor(page)?.title;
+    return section == null ? 'Page $page' : 'p. $page  ·  $section';
+  }
+
+  // ---------------------------------------------------------------------------
   // Links
   // ---------------------------------------------------------------------------
 
@@ -225,7 +288,7 @@ class _ReaderState extends State<Reader> {
 
     final dest = link.dest;
     if (dest != null) {
-      await _controller.goToDest(dest);
+      await _goToDest(dest);
       return;
     }
     final url = link.url;
@@ -281,7 +344,7 @@ class _ReaderState extends State<Reader> {
     void jump() {
       Navigator.of(context).pop(); // close the end drawer
       final dest = node.dest;
-      if (dest != null) _controller.goToDest(dest);
+      if (dest != null) _goToDest(dest);
     }
 
     if (node.children.isEmpty) {
@@ -427,38 +490,15 @@ class _ReaderState extends State<Reader> {
   Future<void> _promptJumpToPage() async {
     if (!_controller.isReady) return;
     final pageCount = _controller.pageCount;
-    final field = TextEditingController();
+    // The dialog owns (and disposes) its own TextEditingController: disposing
+    // it here, right after showDialog returns, races the route's exit
+    // animation and crashes with "used after being disposed".
     final result = await showDialog<int>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Go to page'),
-            content: TextField(
-              controller: field,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(hintText: '1 – $pageCount'),
-              onSubmitted:
-                  (v) => Navigator.of(context).pop(int.tryParse(v.trim())),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed:
-                    () => Navigator.of(
-                      context,
-                    ).pop(int.tryParse(field.text.trim())),
-                child: const Text('Go'),
-              ),
-            ],
-          ),
+      builder: (_) => _GoToPageDialog(pageCount: pageCount),
     );
-    field.dispose();
     if (result != null && result >= 1 && result <= pageCount) {
-      _controller.goToPage(pageNumber: result);
+      _goToPage(result);
     }
   }
 
@@ -507,13 +547,6 @@ class _ReaderState extends State<Reader> {
     m.storage[12] -= dx; // translation x
     m.storage[13] -= dy; // translation y
     _controller.goTo(m, duration: const Duration(milliseconds: 80));
-  }
-
-  void _goToPage(int page) {
-    if (!_controller.isReady) return;
-    _controller.goToPage(
-      pageNumber: page.clamp(1, _controller.pageCount).toInt(),
-    );
   }
 
   double _viewportHeight() => context.size?.height ?? 600;
@@ -604,11 +637,11 @@ class _ReaderState extends State<Reader> {
         return handled;
       }
       if (key == LogicalKeyboardKey.keyF) {
-        _goToPage((_controller.pageNumber ?? 1) + _takeCount());
+        _goToPage((_controller.pageNumber ?? 1) + _takeCount(), record: false);
         return handled;
       }
       if (key == LogicalKeyboardKey.keyB) {
-        _goToPage((_controller.pageNumber ?? 1) - _takeCount());
+        _goToPage((_controller.pageNumber ?? 1) - _takeCount(), record: false);
         return handled;
       }
       if (key == LogicalKeyboardKey.keyR) {
@@ -692,6 +725,11 @@ class _ReaderState extends State<Reader> {
       _showVimHelp();
       return handled;
     }
+    if (ch == '`' || ch == "'") {
+      _count = '';
+      _jumpBack();
+      return handled;
+    }
     if (ch == '+' || ch == '=') {
       _controller.zoomUp();
       return handled;
@@ -726,6 +764,7 @@ class _ReaderState extends State<Reader> {
       ('Space', 'page down  (Shift+Space = up)'),
       ('gg / G', 'first / last page  (41G = page 41)'),
       (':', 'go to page'),
+      ('` / \'', 'jump back to previous page (toggles)'),
       ('/', 'search   (Enter = jump, Esc = close)'),
       ('n / N', 'next / previous match'),
       ('o', 'contents'),
@@ -802,6 +841,31 @@ class _ReaderState extends State<Reader> {
                   tooltip: 'Go to page',
                   icon: const Icon(Icons.pin_outlined),
                   onPressed: _promptJumpToPage,
+                ),
+                PopupMenuButton<int>(
+                  tooltip: 'Recent pages',
+                  icon: const Icon(Icons.history),
+                  onSelected: (p) {
+                    _jumpToRecent(p);
+                    _vimFocus.requestFocus();
+                  },
+                  onCanceled: _vimFocus.requestFocus,
+                  itemBuilder:
+                      (_) =>
+                          _recent.isEmpty
+                              ? const [
+                                PopupMenuItem<int>(
+                                  enabled: false,
+                                  child: Text('No recent pages'),
+                                ),
+                              ]
+                              : [
+                                for (final p in _recent)
+                                  PopupMenuItem<int>(
+                                    value: p,
+                                    child: Text(_recentLabel(p)),
+                                  ),
+                              ],
                 ),
                 if (_outline.isNotEmpty)
                   IconButton(
@@ -1089,6 +1153,50 @@ class _ReaderState extends State<Reader> {
           );
         },
       ),
+    );
+  }
+}
+
+/// "Go to page" dialog. Owns its TextEditingController so it is disposed only
+/// when the dialog is actually unmounted (after the exit animation), not when
+/// showDialog's future completes.
+class _GoToPageDialog extends StatefulWidget {
+  final int pageCount;
+  const _GoToPageDialog({required this.pageCount});
+
+  @override
+  State<_GoToPageDialog> createState() => _GoToPageDialogState();
+}
+
+class _GoToPageDialogState extends State<_GoToPageDialog> {
+  final _field = TextEditingController();
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.of(context).pop(int.tryParse(_field.text.trim()));
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Go to page'),
+      content: TextField(
+        controller: _field,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(hintText: '1 – ${widget.pageCount}'),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        TextButton(onPressed: _submit, child: const Text('Go')),
+      ],
     );
   }
 }

@@ -42,6 +42,7 @@ import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart'
     show kStrategyBPageId, stampPageIds;
+import 'package:cerebrum/ui/screens/editor/widgets/heading_level_tag.dart';
 
 /// AppFlowy-backed [TextEditingDriver]. This is the only file that should
 /// import `appflowy_editor` — everything above it (NoteEditorController,
@@ -205,8 +206,9 @@ class AppFlowyTextDriver extends ChangeNotifier
     if (!kUseSingleDocumentPagination) return null;
     final selection = _editorState.selection;
     if (selection == null || selection.start.path.isEmpty) return null;
-    final block =
-        _editorState.document.nodeAtPath([selection.start.path.first]);
+    final block = _editorState.document.nodeAtPath([
+      selection.start.path.first,
+    ]);
     if (block == null) return null;
     final tag = block.attributes['pageId'];
     return tag is String && tag.isNotEmpty ? tag : kStrategyBPageId;
@@ -767,6 +769,12 @@ class AppFlowyTextDriver extends ChangeNotifier
     );
   }
 
+  /// Strategy B: append a new empty sheet and focus it.
+  void appendPage() {
+    _flowExecutor.appendPage();
+    requestEditorFocus();
+  }
+
   @override
   /// This page's vim controller — SHARED across every page of one note when
   /// injected by PagedNoteController (see the constructor), so one mode exists
@@ -1186,7 +1194,7 @@ class AppFlowyTextDriver extends ChangeNotifier
   /// BlockComponentWidget — whose abstract getters/constructor shape vary
   /// between 5.x and 6.x. `blockWrapper` is typed as
   /// `Widget Function(BuildContext, {Node, Widget})` and accepts any Widget,
-  /// so it sidesteps the version-specific class entirely. See [_HeadingWithLevelTag].
+  /// so it sidesteps the version-specific class entirely. See [HeadingLevelTag].
   Widget _buildBlockWrapper(
     BuildContext context, {
     required Node node,
@@ -1197,7 +1205,7 @@ class AppFlowyTextDriver extends ChangeNotifier
       if (!isEmpty) {
         final level =
             (node.attributes[HeadingBlockKeys.level] as num?)?.toInt() ?? 1;
-        child = _HeadingWithLevelTag(level: level, child: child);
+        child = HeadingLevelTag(level: level, child: child);
       }
     }
     return _AnalysisTapCapture(
@@ -1508,56 +1516,6 @@ class _AnalysisTapCapture extends StatelessWidget {
     editorState.updateSelectionWithReason(
       Selection(start: selectable.start(), end: selectable.end()),
       reason: SelectionUpdateReason.uiEvent,
-    );
-  }
-}
-
-/// A faint "H1"/"H2"/… label drawn in the left gutter of a heading block.
-/// Rendered via [AppFlowyTextDriver._buildBlockWrapper] — NOT as part of the
-/// delta, so it never appears in the document text, in a copy, or in the
-/// saved JSON.
-///
-/// All sizes are DOCUMENT units: the page is laid out at canonical size inside
-/// a FittedBox (see page_space.dart), so the tag scales with the page exactly
-/// as the heading text does — no per-window/dpi math needed.
-///
-/// `fontSize` and `height` are pinned to the body's metrics so the tag reads
-/// as a caption, not a second heading. If the driver's DefaultTextStyle clamp
-/// in `buildEditor` is ever removed or moved, this stays visually correct
-/// instead of inheriting the heading's (huge) inherited style.
-class _HeadingWithLevelTag extends StatelessWidget {
-  const _HeadingWithLevelTag({required this.level, required this.child});
-
-  final int level;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          // 2px down so the tag lands on the heading's first baseline;
-          // 6px right so it never kisses the heading's first glyph.
-          padding: const EdgeInsets.only(top: 4, right: 3),
-          child: Opacity(
-            opacity: 0.8,
-            child: Text(
-              'H$level',
-              style: TextStyle(
-                fontSize: kBaseFontSize * 0.6,
-                height: kLineHeight,
-                fontWeight: FontWeight.w700,
-                color: context.cerebrum.brand.accent,
-              ),
-            ),
-          ),
-        ),
-        // Expanded, not Flexible: headings are full-width (their own
-        // textAlign decides where the glyphs sit), so the child needs the
-        // remaining space, not a shrink-wrap fit.
-        Expanded(child: child),
-      ],
     );
   }
 }

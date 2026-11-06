@@ -257,6 +257,7 @@ class PagedNoteController extends ChangeNotifier {
   /// renderer can never disagree about which page holds ink.
   PageInkStore? _inkStore;
   PageInkSurface? _inkSurface;
+
   /// The ink store the codec hands over; null in Strategy A.
   PageInkStore? get inkStore => _inkStore;
 
@@ -311,6 +312,17 @@ class PagedNoteController extends ChangeNotifier {
     Map<String, dynamic>? legacyDocument,
     List<Map<String, dynamic>>? legacyInk,
   }) {
+    // Reverse any B-shape save: a note written while
+    // kUseSingleDocumentPagination was true is a ONE-entry pages list
+    // whose `ink` is a Map. Strategy A's loader below expects one entry
+    // per page and a List ink slot — left un-migrated, the whole note
+    // would collapse onto a single sheet and its ink would be silently
+    // dropped (see `_inkOf`, which returns null for a Map). The migration
+    // is idempotent and shape-safe, so this is a no-op for A notes and
+    // for re-saves of already-migrated notes.
+    if (!kUseSingleDocumentPagination && pages != null) {
+      pages = migrateBToAIfNeeded(pages);
+    }
     if (kUseSingleDocumentPagination && pages != null && pages.isNotEmpty) {
       // Strategy B: ONE page in one EditorState carries the whole note;
       // sheets (and ink) key off pageId. Both legacy notes and B notes
@@ -413,7 +425,36 @@ class PagedNoteController extends ChangeNotifier {
       final d = page.controller.driver;
       if (d is AppFlowyTextDriver) d.requestEditorFocus();
     }
+    _watchPage(page.controller);
     return page;
+  }
+
+  /// Forward a page's rebuild signal: any transaction/keystroke on any
+  /// page re-arms the note's rebuild, so PageSurface's geometry
+  /// (totalHeight from the pageId run count, sheet order) recomputes its
+  /// LayoutBuilder instead of staying frozen at mount. Without it the
+  /// merged document grows new sheets inside a 700×1-sheet box: they
+  /// paint past the Stack's clip and are unhittable — the "can't scroll
+  /// past one page" report.
+  final Set<NoteEditorController> _watchedPages = <NoteEditorController>{};
+
+  void _watchPage(NoteEditorController c) {
+    if (_watchedPages.add(c)) {
+      c.addListener(notifyListeners);
+    }
+  }
+
+  void _unwatchPage(NoteEditorController c) {
+    if (_watchedPages.remove(c)) {
+      c.removeListener(notifyListeners);
+    }
+  }
+
+  /// Unwatch + dispose a page controller in one call — every page removal
+  /// path goes through here so the forward never fires on a dead page.
+  void _disposePageController(NoteEditorController c) {
+    _unwatchPage(c);
+    c.dispose();
   }
 
   void setActive(int index) {
@@ -489,6 +530,14 @@ class PagedNoteController extends ChangeNotifier {
   }
 
   void addPage() {
+    // Strategy B: the whole note is ONE editor, so a new page is a new sheet
+    // inside it (an empty paragraph with a fresh pageId), not a new NotePage.
+    if (kUseSingleDocumentPagination) {
+      final d = _pages[_activeIndex].controller.driver;
+      if (d is AppFlowyTextDriver) d.appendPage();
+      return;
+    }
+
     final idx = _pages.length;
     final page = _makePage(
       pageId: _nextPageId(),
@@ -504,7 +553,7 @@ class PagedNoteController extends ChangeNotifier {
 
   void removePage(int index) {
     if (_pages.length <= 1 || index < 0 || index >= _pages.length) return;
-    _pages.removeAt(index).controller.dispose();
+    _disposePageController(_pages.removeAt(index).controller);
     if (_activeIndex >= _pages.length) _activeIndex = _pages.length - 1;
     notifyListeners();
   }
@@ -629,7 +678,7 @@ class PagedNoteController extends ChangeNotifier {
       autoFocus: !caretMoved && srcCaretBlock != null,
       seedCaret: false,
     );
-    page.controller.dispose();
+    _disposePageController(page.controller);
     _pages[pageIndex] = trimmed;
     _initPage(trimmed);
 
@@ -654,7 +703,7 @@ class PagedNoteController extends ChangeNotifier {
         autoFocus: caretMoved,
         seedCaret: false,
       );
-      next.controller.dispose();
+      _disposePageController(next.controller);
       _pages[pageIndex + 1] = target;
     } else {
       // Last page overflowed → spill onto a fresh page.
@@ -983,7 +1032,7 @@ class PagedNoteController extends ChangeNotifier {
     debugPrint(
       '[flow] pull rebuilt receiver=$pageIndex ${(newReceiver.controller.documentJson['children'] as List).map((e) => e['type']).toList()}',
     );
-    page.controller.dispose();
+    _disposePageController(page.controller);
     _pages[pageIndex] = newReceiver;
     _initPage(newReceiver);
     // DONOR rebuild: what's left after the head. When every remaining block
@@ -1004,11 +1053,11 @@ class PagedNoteController extends ChangeNotifier {
           document: _emptyDoc(),
           ink: next.controller.inkJson,
         );
-        next.controller.dispose();
+        _disposePageController(next.controller);
         _pages[pageIndex + 1] = emptied;
         _initPage(emptied);
       } else {
-        next.controller.dispose();
+        _disposePageController(next.controller);
         _pages.removeAt(pageIndex + 1);
         donorRemoved = true;
       }
@@ -1021,9 +1070,8 @@ class PagedNoteController extends ChangeNotifier {
         index: pageIndex + 1,
         document: {'type': 'page', 'children': rest},
         ink: next.controller.inkJson,
-        caretBlockIndex: caretStaysOnDonor
-            ? (donorCaret!.path.first - 1)
-            : null,
+        caretBlockIndex:
+            caretStaysOnDonor ? (donorCaret!.path.first - 1) : null,
         caretOffset: caretStaysOnDonor ? donorCaretOffset : null,
         autoFocus: caretStaysOnDonor,
         seedCaret: false,
@@ -1031,7 +1079,7 @@ class PagedNoteController extends ChangeNotifier {
       debugPrint(
         '[flow] pull donor rebuilt=$pageIndex ${(donor.controller.documentJson['children'] as List).map((e) => e['type']).toList()}',
       );
-      next.controller.dispose();
+      _disposePageController(next.controller);
       _pages[pageIndex + 1] = donor;
       _initPage(donor);
     }
@@ -1128,7 +1176,9 @@ class PagedNoteController extends ChangeNotifier {
       ...prevDoc,
       'children': [...prevChildren, ...curChildren],
     };
-    debugPrint('[flow] merge p$index-1->$index prev=${prevChildren.map((e)=>e['type']).toList()} cur=${curChildren.map((e)=>e['type']).toList()} merged=${(mergedDoc['children'] as List).map((e)=>e['type']).toList()}');
+    debugPrint(
+      '[flow] merge p$index-1->$index prev=${prevChildren.map((e) => e['type']).toList()} cur=${curChildren.map((e) => e['type']).toList()} merged=${(mergedDoc['children'] as List).map((e) => e['type']).toList()}',
+    );
 
     // Rebuild the PREVIOUS page with the merged text. Its OWN ink is passed back
     // through untouched — ink is never combined across pages.
@@ -1140,7 +1190,7 @@ class PagedNoteController extends ChangeNotifier {
       caretBlockIndex: seamIndex,
       autoFocus: true,
     );
-    prev.controller.dispose();
+    _disposePageController(prev.controller);
     _pages[index - 1] = newPrev;
     _initPage(newPrev);
 
@@ -1152,12 +1202,12 @@ class PagedNoteController extends ChangeNotifier {
         document: _emptyDoc(),
         ink: cur.controller.inkJson,
       );
-      cur.controller.dispose();
+      _disposePageController(cur.controller);
       _pages[index] = emptied;
       _initPage(emptied);
     } else {
       // No ink → nothing left on the page, so the page break is removed.
-      cur.controller.dispose();
+      _disposePageController(cur.controller);
       _pages.removeAt(index);
     }
 
@@ -1208,14 +1258,15 @@ class PagedNoteController extends ChangeNotifier {
   /// writeNote/outbox path is shape-blind.
   List<Map<String, dynamic>> toPagesJson() {
     if (kUseSingleDocumentPagination) {
-      final json = _pages.isNotEmpty ? _pages[0].controller.documentJson : <String, dynamic>{
-        'type': 'page',
-        'children': <dynamic>[],
-      };
+      final json =
+          _pages.isNotEmpty
+              ? _pages[0].controller.documentJson
+              : <String, dynamic>{'type': 'page', 'children': <dynamic>[]};
       return StrategyBNotation(
         document: json,
-        ink: (_inkStore?.toJson() ?? {})
-            .map((k, v) => MapEntry(k, List<Map<String, dynamic>>.from(v))),
+        ink: (_inkStore?.toJson() ?? {}).map(
+          (k, v) => MapEntry(k, List<Map<String, dynamic>>.from(v)),
+        ),
       ).toPages();
     }
     return [
@@ -1233,7 +1284,7 @@ class PagedNoteController extends ChangeNotifier {
   void dispose() {
     _reflowTimer?.cancel();
     for (final p in _pages) {
-      p.controller.dispose();
+      _disposePageController(p.controller);
     }
     // Strategy B: the surface (and its per-pageId notifiers) is ours.
     _inkSurface?.dispose();

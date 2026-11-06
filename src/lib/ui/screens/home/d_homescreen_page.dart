@@ -169,17 +169,37 @@ class _DHomescreenState extends State<DHomescreen> {
                         const SizedBox(height: 16),
                         PriorityGapCard(onReview: _handleReviewGap),
                         const SizedBox(height: 16),
-                        // Label moved here from the card
+                        // Label moved here from the card.
+                        //
+                        // Layout note: an earlier version used
+                        // `Row(mainAxisAlignment: spaceBetween)` with a bare
+                        // Text and TextButton child. Neither side was
+                        // flexible, so on a mid-width window (sideColumn
+                        // ~318px) the label (27 chars @ 12pt w600) plus the
+                        // button's intrinsic width came to ~332px — 14px
+                        // over, RenderFlex overflowed. Two things forced it:
+                        // (a) the button's minimumSize/tapTargetSize are
+                        // already Size.zero/shrinkWrap so it can't shrink
+                        // further; (b) the Text had no maxLines/overflow so
+                        // it sized to intrinsic width. Fix: drop
+                        // spaceBetween (Expanded handles the push-right
+                        // role) and give the Text Expanded + maxLines:1 +
+                        // ellipsis — it now shrinks in narrow windows,
+                        // ellipsizing instead of asserting. On wide
+                        // windows nothing changes visually.
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              //better label? idk?
-                              'Your favorite study bubbles',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: context.cerebrum.text.faint,
+                            Expanded(
+                              child: Text(
+                                //better label? idk?
+                                'Your favorite study bubbles',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.cerebrum.text.faint,
+                                ),
                               ),
                             ),
                             TextButton(

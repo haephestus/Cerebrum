@@ -1,70 +1,22 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show ValueListenable;
-import 'package:cerebrum/ui/themes/theme_access.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart' show PointerScrollEvent, PointerSignalEvent;
-import 'package:flutter/services.dart' show HardwareKeyboard;
+import 'package:flutter/services.dart';
+import 'package:cerebrum/ui/themes/theme_access.dart';
 import 'package:cerebrum/ui/screens/editor/blocks/table/table_page_bounds.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/note_editor_controller.dart';
 import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
 import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
     show kUseSingleDocumentPagination;
 import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
+import 'package:cerebrum/ui/screens/editor/widgets/page_block_component.dart'
+    show kSheetVerticalMargin;
 import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
 import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart'
-    show BlockAnalysisLookup;
+    show BlockAnalysisLookup, followScrollDelta;
 
-/// One page of a note: a fixed-aspect "sheet" (A4 portrait) holding the text
-/// editor + ink layer, stacked — the paged equivalent of EditorSurface, bounded
-/// to a page instead of filling the screen.
-///
-/// **Fixed document space, fitted view.** The page's content is laid out
-/// ONCE, at the canonical size ([kDocSheetWidth] wide, A4 aspect — see
-/// page_space.dart), and a [FittedBox] paints it scaled to whatever space the
-/// window gives this page. That single transform is the whole scaling story:
-/// text, ink, block chrome and popovers are laid out in document units, so the
-/// same amount of text occupies the same fraction of a page at any window
-/// size, layout mode, or DPI — the FittedBox cannot change layout, only paint.
-/// (An earlier attempt scaled font sizes per-widget instead; one clamped or
-/// unscaled metric reintroduced spills, and resize/mode-switch frame races
-/// against the overflow detector force-created pages.)
-///
-/// FittedBox applies the inverse transform to hit tests, so pointer positions
-/// arriving in the editor and in the ink layer are already in CANONICAL
-/// document coordinates — strokes are captured and stored at their document
-/// position, independent of the zoom they were drawn at. (Strokes recorded
-/// before this change carry whatever sheet-pixel coordinates the capturing
-/// window had and are NOT migratable: there is no draw-time width to rescale
-/// from.)
-///
-/// **Why the overflow detection lives HERE, not in the controller.** The
-/// controller decides *what* to move on overflow ([PagedNoteController.pushOverflow]),
-/// but it can't tell *whether* the page overflows — that's a rendered-layout
-/// question, and only the widget can see the layout. So this widget measures each
-/// block's rect against the sheet's bottom edge and reports the first
-/// block that spills over (via [onOverflow]). The measurement runs in a
-/// post-frame callback (a block's rect only exists after layout) and is coalesced
-/// to once per frame (typing fires many notifications). Because a rebuild remounts
-/// this widget (`ObjectKey(controller)`), the check re-runs on the new page and
-/// naturally *cascades* forward until every page fits. All measurements are in
-/// document units (rects from the engine arrive global — screen px including
-/// the zoom — and are mapped back through the page's box), so a window resize
-/// or a zoom change CANNOT disturb them: nothing about the document layout
-/// changed.
-///
-/// **Why the sheet is fixed-height even though content can exceed it.** Keeping
-/// the A4 `AspectRatio` is what makes "the page fills → spill forward" meaningful;
-/// the alternative (let the sheet grow) isn't a paged model. Overflow beyond the
-/// sheet is transient — it's detected and pushed to the next page next frame.
-///
-/// In analysis-review mode ([analysisForBlock] non-null), the caret landing in a
-/// block that has analysis tints the block and shows an inline popover of its
-/// findings, anchored to the block. Chunks are looked up by the block's STABLE id
-/// (`selectedBlockId`), which round-trips save/load, so the mapping survives
-/// edits/reorders; the block index is kept only to position the highlight rect.
-///
-/// UNVERIFIED (no device run here) — the overflow measurement and the analysis
-/// overlay geometry (globalToLocal positioning under the fitted zoom) need a
-/// smoke test on a real page.
 class PageSurface extends StatefulWidget {
   const PageSurface({
     super.key,
@@ -77,91 +29,49 @@ class PageSurface extends StatefulWidget {
     this.onUnderfill,
     this.partialEraser,
     this.eraserWidth,
-    this.aspectRatio = kPageAspectRatio, // A4 portrait
+    this.aspectRatio = kPageAspectRatio,
+    this.zoomController,
+    this.onViewportChanged,
   });
 
   final NoteEditorController controller;
   final bool drawingEnabled;
-
-  /// Eraser mode (partial vs whole-stroke), forwarded to this page's ink layer.
   final ValueNotifier<bool>? partialEraser;
-
-  /// Eraser diameter (logical px), forwarded to this page's ink layer.
   final ValueListenable<double>? eraserWidth;
-
   final int? pageNumber;
   final String? pageId;
   final BlockAnalysisLookup? analysisForBlock;
-
-  /// Called with the index of the first top-level block that spills past the
-  /// bottom of the sheet, so the controller can move that block (and everything
-  /// after it) onto the next page. Null disables overflow flow.
-  ///
-  /// For a TABLE block, [tableAvailableHeight] carries the measured vertical
-  /// space the table head may occupy (`pageBottom - tableTop`) so the
-  /// controller can SPLIT the table at a row boundary instead of moving the
-  /// whole block — the piece that keeps a page from becoming scrollable.
   final void Function(int fromBlockIndex, {double? tableAvailableHeight})?
   onOverflow;
-
-  /// Called after EVERY placed-out check in which this page did NOT overflow,
-  /// with two locally-measured DOCUMENT-unit numbers that feed the controller's
-  /// backward reflow:
-  ///  * [freeHeight] — spare space below this page's last block; how much a
-  ///    PREVIOUS page could hand up.
-  ///  * [headHeight] — this page's own first block's height (what a PREVIOUS
-  ///    page would receive if it pulled from here). Null when the first block
-  ///    never laid out.
-  /// Both sides of the move measure on their own page at the same canonical
-  /// width, so heights are directly comparable without cross-page math. Null
-  /// disables backward reflow. Reports are silent (never notify): the
-  /// controller re-checks on a settle timer instead — see its reflow comment.
   final void Function(double freeHeight, double? headHeight)? onUnderfill;
-
   final double aspectRatio;
+  final TransformationController? zoomController;
+  final void Function(double fitWidth, double fitHeight, Size viewport)?
+  onViewportChanged;
 
   @override
   State<PageSurface> createState() => _PageSurfaceState();
 }
 
 class _PageSurfaceState extends State<PageSurface> {
-  // On the Stack so we can convert a block's GLOBAL rect (from the driver) into
-  // this page's local coordinates to position the highlight + popover.
   final GlobalKey _stackKey = GlobalKey();
 
   AppFlowyTextDriver? _driver;
   int? _activeBlockIndex;
   List<Map<String, dynamic>> _activeChunks = const [];
 
-  // Minimal zoom controller for the "one page at a time" view — mirrors
-  // what FittedBox gave us (fit-to-window content scale), minus the
-  // letterboxing. 1.0 = 100%, 2.5 max. State survives rebuilds via a
-  // ValueNotifier the AnimatedBuilder below already listens to loosely;
-  // it stays within this surface so desktop zoom doesn't touch the
-  // executor, ink, or document-unit measurements.
-  // Word-style Ctrl+wheel zoom: ~15% zoom step per notch, clamped
-  // 1.0..2.5. When Ctrl is held the signal is swallowed before the
-  // inner sheet ListView sees it (focus for zoom, not scroll).
-  void _onPointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent) return;
-    if (!HardwareKeyboard.instance.isControlPressed) return;
-    if (event.scrollDelta.dy == 0) return;
-    final double zoom = _zoom.value;
-    final double step = event.scrollDelta.dy.sign * 0.15;
-    final double target = (zoom - step).clamp(1.0, 2.5);
-    if (target == zoom) return;
-    _zoomController.value = Matrix4.diagonal3Values(target, target, 1.0);
-    _zoom.value = target;
-  }
-
-  final ValueNotifier<double> _zoom = ValueNotifier<double>(1.0);
-  final TransformationController _zoomController = TransformationController();
-  // First build computes the fit-width zoom; later builds keep the
-  // user's wheel/pinch adjustments.
-  bool _zoomInitialized = false;
-
-  // Coalesce overflow checks to one per frame (edits fire many notifications).
   bool _overflowCheckScheduled = false;
+  bool _initialTransformSet = false;
+
+  Size? _lastReportedSize;
+  double? _lastReportedFitW;
+
+  /// B-branch content metrics, refreshed per build — the zoomable canvas's
+  /// pan/zoom clamp and the caret follow read these.
+  Size? _contentSize;
+  Size? _viewportSize;
+  final GlobalKey _canvasKey = GlobalKey(debugLabel: 'strategy-b-canvas');
+  bool _followScheduled = false;
 
   @override
   void initState() {
@@ -171,17 +81,19 @@ class _PageSurfaceState extends State<PageSurface> {
       _driver = d;
       d.selectionChanges.addListener(_onSelectionChanged);
     }
-    // Content changes (typing, paste) can push the last block past the sheet —
-    // re-check overflow after the resulting layout settles.
     widget.controller.addListener(_scheduleOverflowCheck);
-    _scheduleOverflowCheck(); // also catch content that's already too tall on open
+    // PageUp / PageDown scroll the canvas like the mouse wheel (see _onKey).
+    // A HardwareKeyboard handler, not a focus-tree one: the editor owns
+    // keyboard focus, so a Focus widget up here would never see the key.
+    if (kUseSingleDocumentPagination) {
+      HardwareKeyboard.instance.addHandler(_onKey);
+    }
+    _scheduleOverflowCheck();
   }
 
   @override
   void didUpdateWidget(PageSurface oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Panel toggled or lookup swapped: recompute WITHOUT setState (a rebuild is
-    // already in flight from the parent).
     if (!identical(widget.analysisForBlock, oldWidget.analysisForBlock)) {
       final next = _resolveActive();
       _activeBlockIndex = next?.$1;
@@ -191,15 +103,48 @@ class _PageSurfaceState extends State<PageSurface> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _driver?.selectionChanges.removeListener(_onSelectionChanged);
     widget.controller.removeListener(_scheduleOverflowCheck);
-    _zoom.dispose();
-    _zoomController.dispose();
     super.dispose();
   }
 
-  /// Measure once per frame, after layout, whether this page overflows the
-  /// sheet — and if not, publish the fill stats the backward reflow pairs on.
+  /// PageDown / PageUp: pan the canvas by ~90% of the viewport height — the
+  /// same matrix write the mouse wheel does, so it is independent of the
+  /// caret and can walk past the last block into the empty paper below
+  /// (j/k only ever move between blocks). Returns true to consume the key so
+  /// AppFlowy's own page-up/down command doesn't also act on it.
+  bool _onKey(KeyEvent event) {
+    if (event is KeyUpEvent) return false;
+    final key = event.logicalKey;
+    final down = key == LogicalKeyboardKey.pageDown;
+    if (!down && key != LogicalKeyboardKey.pageUp) return false;
+    final hk = HardwareKeyboard.instance;
+    if (hk.isControlPressed || hk.isAltPressed || hk.isMetaPressed) {
+      return false;
+    }
+    if (!mounted) return false;
+    // Only the visible route reacts (a pushed screen/dialog keeps this
+    // surface mounted underneath).
+    if (ModalRoute.of(context)?.isCurrent == false) return false;
+    final tc = widget.zoomController;
+    final viewport = _viewportSize;
+    final content = _contentSize;
+    if (tc == null || viewport == null || content == null) return false;
+
+    final dy = viewport.height * 0.9 * (down ? 1 : -1);
+    final moved =
+        Matrix4.identity()
+          ..translate(0.0, -dy)
+          ..multiply(tc.value);
+    tc.value = _ZoomableCanvas.clampCanvasMatrix(
+      moved,
+      viewport: viewport,
+      content: content,
+    );
+    return true;
+  }
+
   void _scheduleOverflowCheck() {
     if (_overflowCheckScheduled ||
         (widget.onOverflow == null && widget.onUnderfill == null)) {
@@ -219,29 +164,12 @@ class _PageSurfaceState extends State<PageSurface> {
     if ((onOverflow == null && widget.onUnderfill == null) || driver == null) {
       return;
     }
-
     final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null || !stackBox.hasSize) return;
-    // Document units. The Stack is laid out inside the fitted document space,
-    // so its LOCAL size IS the sheet's canonical content bounds — a constant
-    // that no window size or layout mode can influence. `rectOfBlock` returns
-    // GLOBAL rects (screen px, carrying the fitted zoom), so each block is
-    // mapped back through the page's box; because the zoom is a uniform
-    // axis-aligned scale, converting top-left and bottom-left pins the
-    // document-space height exactly, and the pageBottom comparison is stable
-    // across resizes rather than racing the FittedBox against the editor.
     final pageBottomLocal = stackBox.size.height;
-
     final blocks =
         (widget.controller.documentJson['children'] as List?) ?? const [];
-    // A rasterized table taller than the sheet is now split at the row level
-    // (via the tableAvailableHeight budget → the controller's splitter), so a
-    // TABLE at index 0 is handled too. A NON-table block at index 0 that's
-    // taller than the whole sheet can't be divided by this model, so it's left
-    // to overflow rather than loop forever.
-    const tolerance = 0.5; // document pixels
-    // Fill stats gathered in the same pass — no overflow means ONE extra
-    // local-vs-local subtraction per pair, all in document units.
+    const tolerance = 0.5;
     double? headHeight;
     double? lastBottomLocal;
     for (var i = 0; i < blocks.length; i++) {
@@ -261,20 +189,13 @@ class _PageSurfaceState extends State<PageSurface> {
         return;
       }
     }
-
-    // No overflow → publish the fill stats for the backward reflow. An empty
-    // document still lays out its filler paragraph, so lastBottom exists
-    // whenever there's anything at all; skip the report on a non-laid-out
-    // page (no lastBottom = nothing to receive on either side).
     final onUnderfill = widget.onUnderfill;
     if (onUnderfill == null || lastBottomLocal == null) return;
     final free = pageBottomLocal - lastBottomLocal;
-    if (free <= 0) return; // full page; nothing to receive happens either way
+    if (free <= 0) return;
     onUnderfill(free, headHeight);
   }
 
-  /// The (blockIndex, chunks) the caret currently implies, or null when there's
-  /// no analysis to show (not in review mode, no caret, or the block has none).
   (int, List<Map<String, dynamic>>)? _resolveActive() {
     final lookup = widget.analysisForBlock;
     final pageId = widget.pageId;
@@ -283,22 +204,86 @@ class _PageSurfaceState extends State<PageSurface> {
     final idx = driver.selectedBlockIndex;
     final blockId = driver.selectedBlockId;
     if (idx == null || blockId == null) return null;
-    // Look up by the STABLE block id; keep idx only to draw the highlight rect.
     final chunks = lookup(pageId, blockId);
     if (chunks == null || chunks.isEmpty) return null;
     return (idx, chunks);
   }
 
   void _onSelectionChanged() {
+    _scheduleFollow();
     final next = _resolveActive();
-    // Only rebuild when the highlighted block actually changes — the selection
-    // notifier fires on every caret move.
     if (next?.$1 == _activeBlockIndex) return;
     if (!mounted) return;
     setState(() {
       _activeBlockIndex = next?.$1;
       _activeChunks = next?.$2 ?? const [];
     });
+  }
+
+  /// If the view was sitting at fit-width, stay at fit-width for the new
+  /// viewport (keeping roughly the same vertical position). If the user had
+  /// zoomed to something else, keep their zoom and just re-clamp.
+  void _refitAfterResize(double? previousFit, double newFit, Size viewport) {
+    final tc = widget.zoomController;
+    final content = _contentSize;
+    if (tc == null || content == null) return;
+    final current = tc.value;
+    final scale = current.getMaxScaleOnAxis();
+    Matrix4 next = current;
+    if (previousFit != null && (scale - previousFit).abs() < 0.001) {
+      next = Matrix4.identity()..scale(newFit);
+      next.storage[13] = current.storage[13] * (newFit / scale);
+    }
+    tc.value = _ZoomableCanvas.clampCanvasMatrix(
+      next,
+      viewport: viewport,
+      content: content,
+    );
+  }
+
+  /// Strategy-B caret follow. Under Strategy A the outer ListView owns the
+  /// viewport and PagedEditor scrolls it; under B the zoomable canvas owns
+  /// it — the follow lives here, one bounded transform write per caret move.
+  void _scheduleFollow() {
+    if (_followScheduled) return;
+    _followScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _followScheduled = false;
+      _followCaretIntoView();
+    });
+  }
+
+  void _followCaretIntoView() {
+    if (!mounted) return;
+    if (widget.drawingEnabled) return;
+    final tc = widget.zoomController;
+    final viewport = _viewportSize;
+    final contentSize = _contentSize;
+    if (tc == null || viewport == null || contentSize == null) return;
+    final driver = _driver;
+    if (driver == null) return;
+    final rects = driver.editorState.selectionRects();
+    if (rects.isEmpty) return;
+    final caretRect = rects.last;
+
+    final box = _canvasKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    final viewportRect = box.localToGlobal(Offset.zero) & box.size;
+
+    final delta = followScrollDelta(
+      caretRect: caretRect,
+      viewportRect: viewportRect,
+    );
+    if (delta == null) return;
+    final moved =
+        Matrix4.identity()
+          ..translate(0.0, -delta)
+          ..multiply(tc.value);
+    tc.value = _ZoomableCanvas.clampCanvasMatrix(
+      moved,
+      viewport: viewport,
+      content: contentSize,
+    );
   }
 
   void _dismiss() {
@@ -312,86 +297,107 @@ class _PageSurfaceState extends State<PageSurface> {
   @override
   Widget build(BuildContext context) {
     if (kUseSingleDocumentPagination) {
-      // Strategy B: ONE editor per note, paginated by the page block
-      // itself (sheets are the paper chrome). This surface is a bare
-      // wrapper — the per-sheet pointer absorb + ink live inside the
-      // sheets, overlaid on the same document. No onOverflow/onUnderfill
-      // measurements here (the driver does its own), no analysis overlay
-      // (its geometry anchored to this surface's Stack, which is gone).
+      final doc = widget.controller.documentJson;
+      final children = (doc['children'] as List?) ?? const [];
+
+      // Count CONTIGUOUS RUNS, not unique pageIds. PageBlockComponent stacks
+      // one _PageSheet per contiguous run of same-pageId blocks (see
+      // groupRunsByPageId in page_block_component.dart) — so an interleaved
+      // pattern like `main, main, p1, p1, main, main` (a block pushed forward
+      // by overflow, then more content typed at the original page's tail)
+      // produces 3 SHEETS from 2 UNIQUE ids. Counting ids understated
+      // totalHeight by exactly one sheet's worth and overflowed the outer
+      // Column by ~1014px. Mirroring the run-grouping here keeps the two
+      // measurements in exact agreement — no cross-file coupling to
+      // groupRunsByPageId's internal shape, just the same counting rule.
+      final runCount = _countPageRuns(children);
+      final pageCount = math.max(1, runCount);
+      final sheetHeight = kDocSheetWidth / kPageAspectRatio;
+      final totalHeight = pageCount * (sheetHeight + kSheetVerticalMargin * 2);
+      _contentSize = Size(kDocSheetWidth, totalHeight);
+
+      final editorContent = SizedBox(
+        width: kDocSheetWidth,
+        height: totalHeight,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedBuilder(
+              animation: widget.controller,
+              // No AbsorbPointer here: under Strategy B the ink layers live
+              // INSIDE the editor (one per sheet), so absorbing at this level
+              // also blocks the strokes. Each _PageSheet already absorbs
+              // pointers on its own text layer while drawing.
+              builder:
+                  (context, _) => widget.controller.driver.buildEditor(context),
+            ),
+          ],
+        ),
+      );
+
       return LayoutBuilder(
         builder: (context, viewport) {
-          final double w = viewport.hasBoundedWidth
-              ? viewport.maxWidth
-              : kDocSheetWidth;
-          // "" like the old FittedBox, but the user holds the wheel:
-          // fit-to-window by default, double-tap toggles 1x, wheel zooms.
-          double fit = w / kDocSheetWidth;
-          if (fit < 1.0) fit = 1.0;
-          // First build: adopt fit-width as the zoom (the old FittedBox
-          // UX — the page fills the window). Rebuilds preserve the
-          // user's current zoom.
-          if (!_zoomInitialized) {
-            _zoom.value = fit;
-            _zoomController.value *= Matrix4.diagonal3Values(fit, fit, 1.0);
-            _zoomInitialized = true;
+          if (!viewport.hasBoundedHeight || !viewport.maxHeight.isFinite) {
+            return Center(
+              child: FittedBox(
+                fit: BoxFit.fitWidth,
+                alignment: Alignment.topCenter,
+                clipBehavior: Clip.none,
+                child: editorContent,
+              ),
+            );
           }
-          return ValueListenableBuilder<double>(
-            valueListenable: _zoom,
-            builder: (context, zoom, _) {
-              // The canvas IS one page at canonical size; the viewer
-              // scales its paint. Ink/measure/executor stay in document
-              // units — the zoom is a transform on the painted surface,
-              // identical to changing the window size.
-              return Center(
-                child: Listener(
-                  // Outside InteractiveViewer so the wheel signal arrives
-                  // BEFORE any child handler, and we can swallow it.
-                  onPointerSignal: _onPointerSignal,
-                  child: InteractiveViewer(
-                    transformationController: _zoomController,
-                  panEnabled: zoom > 1.0,
-                  scaleEnabled: true,
-                  minScale: 1.0,
-                  maxScale: 2.5,
-                  onInteractionUpdate: (details) {
-                    // Keep our ValueNotifier in sync for future UI (view
-                    // menu readout) and pan gating above.
-                    final double s = _zoomController.value.getMaxScaleOnAxis();
-                    if ((_zoom.value - s).abs() > 0.005) {
-                      _zoom.value = s;
-                    }
-                  },
-                  child: GestureDetector(
-                    // Double-tap toggle: fit-to-window <-> 1x readout.
-                    onDoubleTap: () {
-                      final target = zoom > (fit - 0.05) ? 1.0 : fit;
-                      _zoomController.value = Matrix4.diagonal3Values(
-                        target,
-                        target,
-                        1.0,
-                      );
-                      _zoom.value = target;
-                    },
-                    child: SizedBox(
-                      width: kDocSheetWidth,
-                      height: viewport.hasBoundedHeight
-                          ? viewport.maxHeight
-                          : kDocSheetWidth / kPageAspectRatio,
-                      child: AnimatedBuilder(
-                        animation: widget.controller,
-                        builder:
-                            (context, _) => AbsorbPointer(
-                              absorbing: widget.drawingEnabled,
-                              child:
-                                  widget.controller.driver.buildEditor(context),
-                            ),
-                      ),
-                    ),
-                  ),
-                ),
-                ),
+
+          final size = Size(viewport.maxWidth, viewport.maxHeight);
+          final fitWidthScale = viewport.maxWidth / kDocSheetWidth;
+          final fitHeightScale = viewport.maxHeight / totalHeight;
+          final minScale = math.min(fitHeightScale, fitWidthScale);
+          final maxScale = fitWidthScale * 5.0;
+
+          if (_lastReportedSize != size || _lastReportedFitW != fitWidthScale) {
+            final previousFit = _lastReportedFitW;
+            _lastReportedSize = size;
+            _lastReportedFitW = fitWidthScale;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              widget.onViewportChanged?.call(
+                fitWidthScale,
+                fitHeightScale,
+                size,
               );
-            },
+              _refitAfterResize(previousFit, fitWidthScale, size);
+            });
+          }
+
+          final tc = widget.zoomController;
+          if (tc != null && !_initialTransformSet) {
+            _initialTransformSet = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              tc.value = Matrix4.identity()..scale(fitWidthScale);
+            });
+          }
+
+          if (tc == null) {
+            return Center(
+              child: FittedBox(
+                fit: BoxFit.fitWidth,
+                alignment: Alignment.topCenter,
+                clipBehavior: Clip.none,
+                child: editorContent,
+              ),
+            );
+          }
+
+          _viewportSize = size;
+          return _ZoomableCanvas(
+            key: _canvasKey,
+            controller: tc,
+            viewportSize: size,
+            contentSize: Size(kDocSheetWidth, totalHeight),
+            minScale: minScale,
+            maxScale: maxScale,
+            child: editorContent,
           );
         },
       );
@@ -413,18 +419,6 @@ class _PageSurfaceState extends State<PageSurface> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            // The ASPECT RATIO is set on the on-screen box; the document space
-            // has the SAME aspect at its canonical size, so the FittedBox's
-            // scale is exactly onScreenWidth/700 both axes — no residual gaps,
-            // no letterboxing.
-            //
-            // FittedBox lays its child out UNCONSTRAINED first (== intrinsic),
-            // so the inner SizedBox is what imposes the canonical TIGHT size on
-            // the editor subtree: 700 wide, same A4 aspect. Text wraps at 700,
-            // ink captures (inverse-transformed hit tests) are in document
-            // units, and paint is then scaled to the on-screen box. Clip.none
-            // is fine — the outer ClipRRect clips the box, and rounding never
-            // overpaints it.
             child: FittedBox(
               alignment: Alignment.topLeft,
               clipBehavior: Clip.none,
@@ -437,12 +431,6 @@ class _PageSurfaceState extends State<PageSurface> {
                     return Stack(
                       key: _stackKey,
                       children: [
-                        // Text layer — absorbs pointers while drawing so strokes
-                        // don't also move the caret (same pattern as EditorSurface).
-                        // The PagedTableBounds exposes this page's sheet geometry to
-                        // deep block widgets (the forked table) so they can cap
-                        // their own growth against the page — in DOCUMENT units,
-                        // which is what makes those caps stable across windows.
                         PagedTableBounds(
                           sheetKey: _stackKey,
                           child: AbsorbPointer(
@@ -452,13 +440,6 @@ class _PageSurfaceState extends State<PageSurface> {
                             ),
                           ),
                         ),
-                        // Ink layer — only receptive to pointers while drawing.
-                        // Positions here are document units: a stroke drawn at
-                        // overview zoom records exactly where it LOOKS in the
-                        // page's own space, not where the pointer was on screen.
-                        // Chrome sized for the HAND (eraser cursor, scribble
-                        // width) therefore looks proportionally smaller at
-                        // overview zoom — correct: the page is zoomed out.
                         IgnorePointer(
                           ignoring: !widget.drawingEnabled,
                           child: NoteDrawingLayer(
@@ -481,7 +462,6 @@ class _PageSurfaceState extends State<PageSurface> {
                               ),
                             ),
                           ),
-                        // Analysis-review overlay: tint the block + inline popover.
                         ..._analysisOverlay(),
                       ],
                     );
@@ -495,22 +475,41 @@ class _PageSurfaceState extends State<PageSurface> {
     );
   }
 
+  /// Mirror of `groupRunsByPageId`'s counting logic on the JSON side.
+  ///
+  /// A "run" is a maximal contiguous block of top-level children sharing the
+  /// same `data.pageId`. The outer Column in PageBlockComponent stacks one
+  /// _PageSheet per run — so this is the unit its natural height is measured
+  /// in, and the unit totalHeight in build() must be computed in.
+  ///
+  /// Missing `pageId` falls back to 'main', matching stampPageIds' default
+  /// before it has run on a freshly-inserted block.
+  int _countPageRuns(List<dynamic> children) {
+    var runs = 0;
+    String? prev;
+    for (final c in children) {
+      final id = ((c as Map?)?['data'] as Map?)?['pageId'] as String? ?? 'main';
+      if (id != prev) {
+        runs++;
+        prev = id;
+      }
+    }
+    return runs;
+  }
+
   List<Widget> _analysisOverlay() {
     final idx = _activeBlockIndex;
     if (idx == null || widget.drawingEnabled || _driver == null) {
       return const [];
     }
-
     final inAnalysis = _driver!.vimMode.isAnalysis;
     final chunks = _activeChunks;
-
     final coveredIds = <String>{
       for (final chunk in chunks)
         for (final id
             in (chunk['blockIds'] as List?)?.cast<String>() ?? const [])
           id,
     };
-
     Rect? sectionRect;
     var staleCount = 0;
     if (inAnalysis) {
@@ -526,33 +525,24 @@ class _PageSurfaceState extends State<PageSurface> {
       }
     }
     if (sectionRect == null) return const [];
-
     final stackBox = _stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (stackBox == null) return const [];
-
-    // Convert vertical bounds from global (screen px with fitted zoom) to local document units
     final localTopLeft = stackBox.globalToLocal(sectionRect.topLeft);
     final localBottomRight = stackBox.globalToLocal(sectionRect.bottomRight);
-
-    // Set horizontal bounds to full content column width
     const double leftInset = kBaseHorizontalPadding;
     const double contentWidth = kDocSheetWidth - (2 * kBaseHorizontalPadding);
-
     final blockRect = Rect.fromLTWH(
       leftInset,
       localTopLeft.dy,
       contentWidth,
       (localBottomRight.dy - localTopLeft.dy).clamp(1.0, double.infinity),
     );
-
     final pageSize = stackBox.size;
     const gap = 6.0;
     const estPopoverHeight = 220.0;
-
     final belowSpace = pageSize.height - blockRect.bottom;
     final placeBelow =
         belowSpace >= estPopoverHeight || belowSpace >= blockRect.top;
-
     final popoverWidth = blockRect.width;
     final left = blockRect.left;
     final top =
@@ -562,10 +552,8 @@ class _PageSurfaceState extends State<PageSurface> {
               0.0,
               double.infinity,
             );
-
     final stale = staleCount > 0;
     return [
-      // Highlight tint spanning the full text content area
       Positioned.fromRect(
         rect: blockRect,
         child: IgnorePointer(
@@ -587,7 +575,6 @@ class _PageSurfaceState extends State<PageSurface> {
           ),
         ),
       ),
-      // Findings popover attached to the block section
       Positioned(
         left: left,
         top: top,
@@ -602,14 +589,9 @@ class _PageSurfaceState extends State<PageSurface> {
     ];
   }
 
-  /// Union rect of every top-level block on this page whose stable id appears
-  /// in the recorded `blockIds` of [chunks]. The recorded ids are the AUTHORITY
-  /// for the group — this is why the highlight holds still while the caret moves
-  /// within a chunk. Returns null when nothing resolves.
   Rect? _chunkGroupRect(List<Map<String, dynamic>> chunks) {
     final driver = _driver;
     if (driver == null) return null;
-
     final blocks =
         (widget.controller.documentJson['children'] as List?) ?? const [];
     final ids = <String>{
@@ -619,7 +601,6 @@ class _PageSurfaceState extends State<PageSurface> {
           id,
     };
     if (ids.isEmpty) return null;
-
     Rect? result;
     for (var i = 0; i < blocks.length; i++) {
       final id = (blocks[i] as Map?)?['id']?.toString();
@@ -631,8 +612,6 @@ class _PageSurfaceState extends State<PageSurface> {
     return result;
   }
 
-  /// How many of [ids] are NOT top-level blocks on the current page — i.e. the
-  /// analysis references blocks that have been deleted or moved off this page.
   int _countMissingOnPage(Set<String> ids) {
     if (ids.isEmpty) return 0;
     final present = <String>{
@@ -643,39 +622,203 @@ class _PageSurfaceState extends State<PageSurface> {
     return ids.where((id) => !present.contains(id)).length;
   }
 
-  /// Walks the semantic section under [startIdx] — the block and every
-  /// subsequent top-level block until the next heading — returning the union
-  /// rect (null if nothing laid out) and the walked blocks' stable ids.
   (Rect?, List<String>) _sectionWalk(int startIdx) {
     final driver = _driver;
     if (driver == null) return (null, const []);
-
     final blocks =
         (widget.controller.documentJson['children'] as List?) ?? const [];
     Rect? result;
     final ids = <String>[];
-
     for (var i = startIdx; i < blocks.length; i++) {
-      // After the first block, stop *before* accumulating the next heading —
-      // it starts a new section.  Check first, accumulate second.
       if (i > startIdx) {
         final type = (blocks[i] as Map?)?['type']?.toString() ?? '';
         if (type == 'heading') break;
       }
-
       final id = (blocks[i] as Map?)?['id']?.toString();
       if (id != null) ids.add(id);
-
       final rect = driver.rectOfBlock(i);
       if (rect == null) continue;
       result = result == null ? rect : result.expandToInclude(rect);
     }
-
     return (result, ids);
   }
 }
 
-/// Compact inline card listing the findings for the tapped block's chunk(s).
+/// Custom zoomable/scrollable canvas.
+///
+/// Why not `InteractiveViewer`: InteractiveViewer's internal scroll handling
+/// runs deeper than any wrapper we can put above it, so `PointerSignalResolver`
+/// always hands it the pan — Ctrl+wheel would pan like a plain wheel. This
+/// canvas owns the scroll handler directly so Ctrl+wheel → zoom.
+class _ZoomableCanvas extends StatelessWidget {
+  const _ZoomableCanvas({
+    super.key,
+    required this.controller,
+    required this.viewportSize,
+    required this.contentSize,
+    required this.minScale,
+    required this.maxScale,
+    required this.child,
+  });
+
+  final TransformationController controller;
+  final Size viewportSize;
+
+  /// Document size in document units (pre-transform). The pan/zoom clamp
+  /// uses it to keep the content covering the viewport — walking the
+  /// Unclamped matrix far enough scrolled the sheets out from under the
+  /// cursor, and the wheel died with the clipped-away page.
+  final Size contentSize;
+  final double minScale;
+  final double maxScale;
+  final Widget child;
+
+  static const double _zoomScrollSensitivity = 0.0015;
+
+  /// Clamp [m] so the content stays covering the viewport along each axis
+  /// (content larger than the viewport), or slides within it (smaller —
+  /// e.g. ctrl-wheel-zooming way out). Applied everywhere the matrix is
+  /// written, so no code path can park the paper off-screen.
+  static Matrix4 clampCanvasMatrix(
+    Matrix4 m, {
+    required Size viewport,
+    required Size content,
+  }) {
+    final scale = m.getMaxScaleOnAxis();
+    final store = List<double>.from(m.storage);
+    store[12] = _clampAxis(
+      store[12],
+      content.width * scale,
+      viewport.width,
+      centerWhenSmaller: true,
+    );
+    store[13] = _clampAxis(store[13], content.height * scale, viewport.height);
+    return Matrix4.fromList(store);
+  }
+
+  static double _clampAxis(
+    double t,
+    double span,
+    double viewport, {
+    bool centerWhenSmaller = false,
+  }) {
+    if (span >= viewport) {
+      return t.clamp(viewport - span, 0.0);
+    }
+    if (centerWhenSmaller) return (viewport - span) / 2;
+    return t.clamp(0.0, viewport - span);
+  }
+
+  static Matrix4 _clampedPan(
+    Offset delta,
+    Matrix4 current,
+    Size viewport,
+    Size content,
+  ) {
+    final panned =
+        Matrix4.identity()
+          ..translate(-delta.dx, -delta.dy)
+          ..multiply(current);
+    return clampCanvasMatrix(panned, viewport: viewport, content: content);
+  }
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final hk = HardwareKeyboard.instance;
+    final ctrl = hk.isControlPressed || hk.isMetaPressed;
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (e) {
+      final scroll = e as PointerScrollEvent;
+      if (ctrl) {
+        _zoomCentered(scroll.scrollDelta.dy);
+      } else {
+        _panBy(scroll.scrollDelta);
+      }
+    });
+  }
+
+  void _onPointerPanZoomUpdate(PointerPanZoomUpdateEvent event) {
+    _panBy(event.panDelta);
+  }
+
+  void _zoomCentered(double scrollDeltaDy) {
+    final factor = math.exp(-scrollDeltaDy * _zoomScrollSensitivity);
+    _zoomAroundPoint(viewportSize.center(Offset.zero), factor);
+  }
+
+  void _panBy(Offset delta) {
+    controller.value = _clampedPan(
+      delta,
+      controller.value,
+      viewportSize,
+      contentSize,
+    );
+  }
+
+  void _zoomAroundPoint(Offset focal, double factor) {
+    final current = controller.value;
+    final currentScale = current.getMaxScaleOnAxis();
+    final target = (currentScale * factor).clamp(minScale, maxScale);
+    if ((target - currentScale).abs() < 0.0001) return;
+    final f = target / currentScale;
+    final zoomed =
+        Matrix4.identity()
+          ..translate(focal.dx, focal.dy)
+          ..multiply(Matrix4.identity()..scale(f))
+          ..multiply(Matrix4.identity()..translate(-focal.dx, -focal.dy))
+          ..multiply(current);
+    controller.value = clampCanvasMatrix(
+      zoomed,
+      viewport: viewportSize,
+      content: contentSize,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerSignal: _onPointerSignal,
+      onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
+      child: ClipRect(
+        // The Stack reports viewport size to its parent (so pointer events
+        // inside the viewport reach us). Positioned gives its child TIGHT
+        // document-size constraints regardless of the viewport, which a plain
+        // SizedBox can't do under a tight parent (it was being forced to
+        // viewport size, squeezing the editor into ~612px and overflowing the
+        // sheet Column). Transform doesn't bounds-check hit tests, so taps map
+        // through the matrix into the full document.
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              width: contentSize.width,
+              height: contentSize.height,
+              child: AnimatedBuilder(
+                animation: controller,
+                builder: (context, child) {
+                  return Transform(
+                    transform: clampCanvasMatrix(
+                      controller.value,
+                      viewport: viewportSize,
+                      content: contentSize,
+                    ),
+                    alignment: Alignment.topLeft,
+                    child: child,
+                  );
+                },
+                child: child,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AnalysisPopover extends StatelessWidget {
   const _AnalysisPopover({
     required this.chunks,
@@ -687,9 +830,6 @@ class _AnalysisPopover extends StatelessWidget {
   final List<Map<String, dynamic>> chunks;
   final double maxHeight;
   final VoidCallback onClose;
-
-  /// Number of blocks this analysis references that no longer match the note
-  /// (recorded blocks deleted / content added since the analysis ran).
   final int staleCount;
 
   static Color _severityColor(BuildContext context, String severity) {
