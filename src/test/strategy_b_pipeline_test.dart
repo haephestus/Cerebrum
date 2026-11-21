@@ -1,8 +1,8 @@
 import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/paged_note_controller.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart';
+import 'package:cerebrum/features/editor/helpers/paged_note_controller.dart';
+import 'package:cerebrum/features/editor/helpers/strategy_b_notes.dart';
 
 /// Headless smoke for the production path the flag flip makes real: a
 /// legacy note loads through [PagedNoteController.fromNote] (which migrates

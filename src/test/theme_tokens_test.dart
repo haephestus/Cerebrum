@@ -1,8 +1,10 @@
-import 'package:cerebrum/ui/themes/default.dart';
-import 'package:cerebrum/ui/themes/extensions.dart';
-import 'package:cerebrum/ui/themes/theme_access.dart';
-import 'package:cerebrum/ui/themes/theme_provider.dart';
-import 'package:cerebrum/ui/themes/tokens/default_palette.dart';
+import 'package:cerebrum/common/themes/default.dart';
+import 'package:cerebrum/common/themes/extensions.dart';
+import 'package:cerebrum/common/themes/theme_access.dart';
+import 'package:cerebrum/common/themes/theme_provider.dart';
+import 'package:cerebrum/common/themes/tokens/default_palette.dart';
+import 'package:cerebrum/common/themes/tokens/gruvbox_palette.dart';
+import 'package:cerebrum/common/themes/tokens/tokyo_night_palette.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -169,6 +171,29 @@ void main() {
         isTrue,
         reason: 'shadow tokens must carry their own alpha',
       );
+
+      // The editor page tints composite over the text. An opaque value hides
+      // the text entirely -- a 9-digit ARGB literal (0x1FFFFC107) shipped
+      // once and did exactly that. Every palette, not just the default, has
+      // to stay translucent.
+      final palettes = <String, CerebrumColors>{
+        'defaultLight': cerebrumLightTokens,
+        'defaultDark': cerebrumDarkTokens,
+        'gruvboxDark': gruvboxDarkTokens,
+        'tokyoNight': tokyoNightTokens,
+      };
+      palettes.forEach((name, tokens) {
+        expect(
+          tokens.editor.analysisTint.a,
+          lessThan(1.0),
+          reason: '$name analysisTint must be translucent',
+        );
+        expect(
+          tokens.editor.staleTint.a,
+          lessThan(1.0),
+          reason: '$name staleTint must be translucent',
+        );
+      });
     });
 
     test('copyWith with no arguments is identity', () {

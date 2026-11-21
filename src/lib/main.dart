@@ -1,11 +1,11 @@
-import 'package:cerebrum/ui/themes/theme_provider.dart';
+import 'package:cerebrum/common/themes/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 // import './responsive_layout.dart';
 import 'package:cerebrum/api/api_config.dart';
 import 'package:cerebrum/services/sync_service.dart';
 import 'package:cerebrum/services/engram_sync_service.dart';
-import 'package:cerebrum/ui/app_entry.dart';
+import 'package:cerebrum/common/app_entry.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {

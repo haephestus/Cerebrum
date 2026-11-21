@@ -1,6 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
+import 'package:cerebrum/features/editor/helpers/appflowy_text_driver.dart';
 
 /// Regression tests for the analysis-highlight stopgap (§7.1(b)).
 ///

@@ -1,7 +1,7 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
+import 'package:cerebrum/features/editor/widgets/page_space.dart';
 
 /// SPIKE (two-sheet single-document pagination — Strategy B probe).
 ///

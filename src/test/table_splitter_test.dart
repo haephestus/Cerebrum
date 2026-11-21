@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/table_splitter.dart' as ts;
+import 'package:cerebrum/features/editor/helpers/table_splitter.dart' as ts;
 
 /// Regression guard for table splitting in the paged editor. The first attempt
 /// at splitting tables re-indexed cells into a shape AppFlowy's `TableNode`

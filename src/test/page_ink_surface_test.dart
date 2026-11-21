@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scribble/scribble.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
+import 'package:cerebrum/features/editor/helpers/page_ink_store.dart';
+import 'package:cerebrum/features/editor/helpers/page_ink_surface.dart';
 
 /// PageInkSurface — one ScribbleNotifier per pageId, seeded from the store,
 /// persisted back on change, fans the drawing tool out to all sheets.

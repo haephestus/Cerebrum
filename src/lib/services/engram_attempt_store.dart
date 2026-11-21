@@ -185,6 +185,11 @@ class EngramAttemptStore {
     return row == null ? null : _fromRow(row);
   }
 
+  /// Drop local attempts for a voided engram. The daemon keeps its own rows
+  /// (voided, not regraded), but the client must stop showing the old grade.
+  static Future<int> deleteForEngram(String engramId) =>
+      _db.deleteAttemptsForEngram(engramId);
+
   /// Count of graded-but-unseen results — the notification/badge number.
   static Future<int> unseenGradedCount() => _db.unseenGradedCount();
 

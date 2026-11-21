@@ -15,7 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scribble/scribble.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cerebrum/ui/screens/readings/annotations.dart';
+import 'package:cerebrum/features/reader/annotations.dart';
 
 Map<String, dynamic> roundTripJson(PageAnnotation a) =>
     jsonDecode(jsonEncode(a.toJson())) as Map<String, dynamic>;

@@ -10,7 +10,7 @@
 // viewer must be hit too, while the overlay still receives the pointers it
 // claims (drawing).
 
-import 'package:cerebrum/ui/screens/readings/reader_ink_layer.dart';
+import 'package:cerebrum/features/reader/reader_ink_layer.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

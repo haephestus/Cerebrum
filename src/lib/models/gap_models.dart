@@ -83,7 +83,17 @@ class GapEvidence {
   final List<String>
   blockIds; // stable block ids this gap's source chunk covers
   final String? pageId; // page the source chunk lives on
-  final String? sourceLink; // for suggestedReading: the link_or_citation from note_overview
+  final String? sourceLink; // citation/url/fingerprint used to open the reading
+
+  /// For suggestedReading gaps: the canonical row's durable document identity
+  /// and 1-indexed PDF page. When present the reader opens directly instead
+  /// of re-resolving the citation through the daemon.
+  final String? fileFingerprint;
+  final int? page;
+
+  /// Analysis retrieval refs this reading was built from (context-origin
+  /// rows), kept for "why this was suggested" provenance.
+  final List<Map<String, dynamic>> contextRefs;
 
   const GapEvidence({
     required this.noteId,
@@ -95,6 +105,9 @@ class GapEvidence {
     this.blockIds = const [],
     this.pageId,
     this.sourceLink,
+    this.fileFingerprint,
+    this.page,
+    this.contextRefs = const [],
   });
 }
 
@@ -139,6 +152,9 @@ class GapItem {
           if (e.blockIds.isNotEmpty) 'blockIds': e.blockIds,
           if (e.pageId != null) 'pageId': e.pageId,
           if (e.sourceLink != null) 'sourceLink': e.sourceLink,
+          if (e.fileFingerprint != null) 'fileFingerprint': e.fileFingerprint,
+          if (e.page != null) 'page': e.page,
+          if (e.contextRefs.isNotEmpty) 'contextRefs': e.contextRefs,
         },
     ],
   };
@@ -160,6 +176,12 @@ class GapItem {
           blockIds: (e['blockIds'] as List?)?.cast<String>() ?? const [],
           pageId: e['pageId'] as String?,
           sourceLink: e['sourceLink'] as String?,
+          fileFingerprint: e['fileFingerprint'] as String?,
+          page: (e['page'] as num?)?.toInt(),
+          contextRefs: [
+            for (final ref in (e['contextRefs'] as List? ?? const []))
+              if (ref is Map) Map<String, dynamic>.from(ref),
+          ],
         ),
     ],
   );

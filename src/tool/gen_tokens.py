@@ -118,7 +118,7 @@ GROUPS = [
        ("pageShadow",        "42000000", "80000000", "Drop shadow under a page."),
        ("pageShadowSoft",    "24000000", "4D000000", "Ambient shadow under a page."),
        ("staleTint",         "24FFA000", "2EFFA000", "Page wash when the analysis is stale."),
-       ("analysisTint",      "2EFFC107", "33FFC107", "Page wash while analysis is in flight."),
+       ("analysisTint",      "1CFFC107", "1FFFC107", "Page wash while analysis is in flight."),
        ("staleBadge",        "FFE65100", "FFFF8A65", "Stale-state icon and label."),
        ("analysisBadge",     "FFF9A825", "FFFDD835", "In-flight analysis icon and label."),
        ("savedBadge",        "FF2E7D32", "FF66BB6A", "Saved-state dot and label."),

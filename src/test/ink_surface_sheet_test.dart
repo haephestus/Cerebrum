@@ -1,10 +1,10 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/page_ink_surface.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/page_block_component.dart'
+import 'package:cerebrum/features/editor/helpers/page_ink_surface.dart';
+import 'package:cerebrum/features/editor/helpers/page_ink_store.dart';
+import 'package:cerebrum/features/editor/widgets/drawing_layer.dart';
+import 'package:cerebrum/features/editor/widgets/page_block_component.dart'
     as cerebrum_page;
 
 /// The per-sheet ink overlay: renders a drawing layer keyed by each run's

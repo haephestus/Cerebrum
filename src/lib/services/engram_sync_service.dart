@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import 'package:cerebrum/api/api_exception.dart';
-import 'package:cerebrum/api/learning_center_api.dart';
+import 'package:cerebrum/features/learning_center/api/learning_center_api.dart';
 import 'package:cerebrum/services/engram_attempt_store.dart';
 import 'package:cerebrum/services/id.dart';
 import 'package:cerebrum/services/notifications.dart';

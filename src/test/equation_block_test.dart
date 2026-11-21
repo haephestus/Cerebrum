@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:cerebrum/ui/themes/default.dart';
-import 'package:cerebrum/ui/themes/tokens/default_palette.dart';
-import 'package:cerebrum/ui/screens/editor/blocks/equation/equation_block_component.dart';
+import 'package:cerebrum/common/themes/default.dart';
+import 'package:cerebrum/common/themes/tokens/default_palette.dart';
+import 'package:cerebrum/features/editor/blocks/equation/equation_block_component.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

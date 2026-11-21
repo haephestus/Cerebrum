@@ -2,9 +2,9 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/editor_commands.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
+import 'package:cerebrum/features/editor/helpers/vim_move_controller.dart';
+import 'package:cerebrum/features/editor/helpers/editor_commands.dart';
+import 'package:cerebrum/features/editor/widgets/page_space.dart';
 
 import 'spike/two_sheet_page_block.dart';
 

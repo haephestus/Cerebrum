@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/editor_commands.dart'
+import 'package:cerebrum/features/editor/helpers/vim_move_controller.dart';
+import 'package:cerebrum/features/editor/helpers/editor_commands.dart'
     as commands;
 
 /// Regression guard for vim normal-mode navigation inside a table cell.

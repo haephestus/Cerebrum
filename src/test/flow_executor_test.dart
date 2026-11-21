@@ -3,9 +3,9 @@ import 'dart:convert' show jsonDecode, jsonEncode;
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/page_block_component.dart'
+import 'package:cerebrum/features/editor/helpers/flow_executor.dart';
+import 'package:cerebrum/features/editor/helpers/page_ink_store.dart';
+import 'package:cerebrum/features/editor/widgets/page_block_component.dart'
     // Prefixed: appflowy_editor exports a same-named stock builder.
     as cerebrum_page;
 

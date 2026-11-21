@@ -1,4 +1,4 @@
-import 'package:cerebrum/ui/screens/home/gap_extract.dart';
+import 'package:cerebrum/features/home/helpers/gap_extract.dart';
 import 'package:cerebrum/models/gap_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 

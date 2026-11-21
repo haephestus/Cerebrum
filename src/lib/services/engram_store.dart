@@ -51,6 +51,13 @@ class EngramStore {
     }
   }
 
+  /// Drop a retired engram from the offline cache. Paired with the daemon's
+  /// void-and-regenerate: the old key must not survive as an offline quiz.
+  static Future<int> removeCached({
+    required String userId,
+    required String engramId,
+  }) => _db.deleteCachedEngram(userId, engramId);
+
   /// Rebuild an [EngramListResponse] from the local cache (offline listing).
   static Future<EngramListResponse> cachedResponse({
     required String userId,

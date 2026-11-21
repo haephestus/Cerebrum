@@ -1,8 +1,8 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/editor_commands.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/greek_letters.dart';
+import 'package:cerebrum/features/editor/helpers/vim_move_controller.dart';
+import 'package:cerebrum/features/editor/helpers/editor_commands.dart';
+import 'package:cerebrum/features/editor/helpers/greek_letters.dart';
 
 /// Headless verification of the Greek `\name` + space substitution.
 ///

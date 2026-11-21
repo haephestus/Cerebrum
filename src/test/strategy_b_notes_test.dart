@@ -1,6 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart';
+import 'package:cerebrum/features/editor/helpers/strategy_b_notes.dart';
 
 /// Strategy-B note codec — legacy A-shape pages list ↔ one paged document +
 /// pageId-keyed ink map. Migration must not touch ids, deltas or ink.

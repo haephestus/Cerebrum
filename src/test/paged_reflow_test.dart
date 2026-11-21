@@ -1,5 +1,5 @@
-import 'package:cerebrum/ui/screens/editor/controllers/paged_note_controller.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/flow_executor.dart'
+import 'package:cerebrum/features/editor/helpers/paged_note_controller.dart';
+import 'package:cerebrum/features/editor/helpers/flow_executor.dart'
     show kUseSingleDocumentPagination;
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';

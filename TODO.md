@@ -57,6 +57,7 @@
 
 ## features
 
+- [/] Shared keyboard navigation (browse surfaces) — composition layer (`lib/common/keyboard_nav`: intents/actions, linear+grid selection controllers, focus-aware `KeyboardNavScope` with `hjkl/gg/G/Enter/Esc//`, editable-text opt-out). Incremental rollout (excludes editor modal vim and reader key handling, which stay domain-owned): [x] desktop shell rail, [x] study bubbles grid, [x] bubble notes page, [x] home dashboard, [/] learning center (region focus + carousel h/l paging; inner engram/plan lists still partial), [x] settings sidebar.
 - [ ] Engram generation
 - [ ] Hierarchical retrieval
 - [ ] Improved summarisation before context injection

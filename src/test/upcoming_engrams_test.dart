@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cerebrum/models/engram_models.dart';
-import 'package:cerebrum/ui/screens/home/upcoming_engrams.dart';
+import 'package:cerebrum/features/home/widgets/upcoming_engrams.dart';
 
 String _isoToday() {
   final n = DateTime.now();

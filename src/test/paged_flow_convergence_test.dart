@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/paged_note_controller.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/strategy_b_notes.dart';
+import 'package:cerebrum/features/editor/helpers/paged_note_controller.dart';
+import 'package:cerebrum/features/editor/widgets/paged_editor.dart';
+import 'package:cerebrum/features/editor/helpers/strategy_b_notes.dart';
 
 /// Regression guard for the production note stack under B (the device
 /// "blank note" bug): pump the REAL stack (PagedNoteController.fromNote →

@@ -177,6 +177,12 @@ class OfflineMastery {
     await _write(rec);
   }
 
+  /// Reset a retired engram's provisional schedule. Paired with the daemon's
+  /// void-and-regenerate: no locally computed grade may carry over.
+  static Future<void> reset(String engramId) async {
+    await _write(_fresh(engramId));
+  }
+
   // -- store (Drift; see docs/drift-migration.md) ------------------------
 
   static AppDatabase get _db => AppDatabase.instance;

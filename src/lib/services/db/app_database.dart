@@ -133,6 +133,11 @@ class AppDatabase extends _$AppDatabase {
     return row.read(count) ?? 0;
   }
 
+  /// Remove local attempts for a voided engram. The daemon keeps its audit
+  /// rows (marked void); the client must not rehydrate the old grade on reopen.
+  Future<int> deleteAttemptsForEngram(String engramId) =>
+      (delete(engramAttempts)..where((t) => t.engramId.equals(engramId))).go();
+
   // -- mastery -----------------------------------------------------------
 
   Future<EngramMasteryRow?> mastery(String engramId) =>
@@ -146,6 +151,13 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> upsertCachedEngram(CachedEngramsCompanion row) =>
       into(cachedEngrams).insertOnConflictUpdate(row);
+
+  /// Drop a retired engram from the offline content cache. Called after a
+  /// successful void-and-regenerate so the old key cannot be replayed.
+  Future<int> deleteCachedEngram(String userId, String engramId) =>
+      (delete(cachedEngrams)
+            ..where((t) => t.userId.equals(userId) & t.id.equals(engramId)))
+          .go();
 
   /// Cached engrams for a scope (mirrors the daemon's list scoping): user, and
   /// optionally a bubble and/or note.

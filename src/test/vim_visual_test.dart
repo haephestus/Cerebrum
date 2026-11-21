@@ -1,9 +1,9 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/blocks/table/table_keys.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/vim_move_controller.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/editor_commands.dart';
+import 'package:cerebrum/features/editor/blocks/table/table_keys.dart';
+import 'package:cerebrum/features/editor/helpers/vim_move_controller.dart';
+import 'package:cerebrum/features/editor/helpers/editor_commands.dart';
 
 /// Headless verification of vim `v` — character-wise visual select.
 ///
@@ -21,8 +21,9 @@ import 'package:cerebrum/ui/screens/editor/helpers/editor_commands.dart';
 ///     is a swallowed no-op.
 ///
 /// NOT headlessly testable (widget-backed `node.selectable`): the word
-/// motions `w`/`b` — their visual branch shares the same extension path
-/// but the stepping itself is live-only, exactly like normal-mode w/b.
+/// motions `w`/`e` (backward renamed from `b`) — their visual branch
+/// shares the same extension path but the stepping itself is live-only,
+/// exactly like normal-mode w/e.
 ///
 /// Handlers are invoked directly on the events produced by
 /// [VimCharacterShortcuts.getCharacterShortcuts] — the same limitation as

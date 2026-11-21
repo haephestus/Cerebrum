@@ -134,6 +134,43 @@ class KnowledgebaseApi {
     return jsonDecode(response.body);
   }
 
+  /// TOC sidecar as `[{level, title, page}]` (1-indexed pages), synthesized
+  /// or extracted at ingest time. The reader uses it ONLY as a navigation
+  /// fallback when the PDF ships no embedded outline — embedded is always
+  /// preferred when present. Returns an empty list when the file is not
+  /// yet converted or has no headings; a broken outline must never block
+  /// reading, so callers treat failure as "no TOC".
+  static Future<List<Map<String, dynamic>>> fetchToc(
+    String fileFingerprint,
+  ) async {
+    try {
+      final response = await http.get(
+        Uri.parse("$knowledgebaseEndpoint/files/$fileFingerprint/toc"),
+        headers: await ApiConfig.headers(json: false),
+      );
+      if (response.statusCode != 200) return const [];
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final raw = (decoded['toc'] as List? ?? const []).cast<dynamic>();
+      return [
+        for (final e in raw)
+          if (e is List && e.length >= 3)
+            {
+              'level': (e[0] as num?)?.toInt() ?? 1,
+              'title': e[1].toString(),
+              'page': (e[2] as num?)?.toInt() ?? 0,
+            }
+          else if (e is Map)
+            {
+              'level': (e['level'] as num?)?.toInt() ?? 1,
+              'title': (e['title'] ?? '').toString(),
+              'page': (e['page'] as num?)?.toInt() ?? 0,
+            },
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   static Future<dynamic> deleteFiles(String fileFingerprint) async {
     // Deletes from file registry, disk, markdown artifacts, chunk rows,
     // figures, concepts, and the vector store in one call.

@@ -1,7 +1,7 @@
 import 'package:flutter/painting.dart' show Offset;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scribble/scribble.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/drawing_layer.dart';
+import 'package:cerebrum/features/editor/widgets/drawing_layer.dart';
 
 /// Verifies the partial (split) eraser: it removes points under the eraser and
 /// splits the surviving points into sub-strokes, leaving untouched strokes and

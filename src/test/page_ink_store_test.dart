@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/helpers/page_ink_store.dart';
+import 'package:cerebrum/features/editor/helpers/page_ink_store.dart';
 
 /// PageInkStore — Strategy-B ink bookkeeping. hasInk must be the exact
 /// Strategy-A `_pageHasInk` semantics, pageId-keyed: inked = a sketch with a

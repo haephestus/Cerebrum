@@ -3,12 +3,12 @@ import 'package:appflowy_editor/appflowy_editor.dart'
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/appflowy_text_driver.dart';
-import 'package:cerebrum/ui/screens/editor/controllers/paged_note_controller.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/paged_editor.dart';
-import 'package:cerebrum/ui/screens/editor/widgets/page_block_component.dart'
+import 'package:cerebrum/features/editor/helpers/appflowy_text_driver.dart';
+import 'package:cerebrum/features/editor/helpers/paged_note_controller.dart';
+import 'package:cerebrum/features/editor/widgets/paged_editor.dart';
+import 'package:cerebrum/features/editor/widgets/page_block_component.dart'
     show kSheetVerticalMargin;
-import 'package:cerebrum/ui/screens/editor/widgets/page_space.dart';
+import 'package:cerebrum/features/editor/widgets/page_space.dart';
 
 /// Regression guard for the Strategy-B zoomable canvas's pointer handling,
 /// caret-follow and wheel routing.

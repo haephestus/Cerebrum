@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cerebrum/models/engram_models.dart';
-import 'package:cerebrum/ui/widgets/learning_center/due_today_strip.dart';
+import 'package:cerebrum/features/learning_center/widgets/learning_center/dash/due_today_strip.dart';
 
 void main() {
   final longStem =
